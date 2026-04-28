@@ -627,6 +627,12 @@ def _validate_provider_flags(
       "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
     )
 
+  if provider == "openai" and resolution == "1K" and aspect_ratio in ("16:9", "9:16"):
+    _die(
+      "OpenAI: 1K + 16:9/9:16 falls below the 655k pixel min. "
+      "Use 2K + 16:9/9:16, or drop --resolution to default to 1K square (1024x1024)."
+    )
+
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
