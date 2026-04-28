@@ -15,20 +15,23 @@ from openai import APIStatusError, AuthenticationError, NotFoundError
 from ..auth.openai import get_client
 from ..interfaces import GenerateRequest, IImageGen, ProbeResult
 
-# 2D map: (resolution, aspect) → WxH for gpt-image-2.
-# All edges are multiples of 16, max edge ≤3840, total px in [655k, 8.3M].
-# 4K + 4:3/3:4 is rejected upstream in _validate_provider_flags (would exceed 8.3M cap).
+# 2D map: (resolution, aspect) → WxH for gpt-image-2. Each entry honors the
+# requested aspect EXACTLY (no 3:2 substitutions for 4:3 or 16:9).
+# Constraints: edges mult of 16, max edge ≤3840, total px in [655_360, 8_294_400].
+# Combos NOT in this map are rejected by _validate_provider_flags (CLI) and
+# _size_for() (library callers) so neither path silently substitutes a wrong size.
 _SIZE_MAP = {
+  # 1K (~1024 long edge). 16:9 / 9:16 at 1K would be <655k px, rejected upstream.
   ("1K", "1:1"):  "1024x1024",
-  ("1K", "4:3"):  "1536x1024",
-  ("1K", "3:4"):  "1024x1536",
-  ("1K", "16:9"): "1536x1024",
-  ("1K", "9:16"): "1024x1536",
+  ("1K", "4:3"):  "1024x768",
+  ("1K", "3:4"):  "768x1024",
+  # 2K family — full aspect set.
   ("2K", "1:1"):  "2048x2048",
   ("2K", "4:3"):  "2048x1536",
   ("2K", "3:4"):  "1536x2048",
   ("2K", "16:9"): "2048x1152",
   ("2K", "9:16"): "1152x2048",
+  # 4K family — 4:3/3:4 would exceed 8.3M px cap, rejected upstream.
   ("4K", "1:1"):  "2880x2880",
   ("4K", "16:9"): "3840x2160",
   ("4K", "9:16"): "2160x3840",
@@ -43,10 +46,17 @@ class OpenAIImageGen(IImageGen):
     return get_client(force=self.force_auth)
 
   def _size_for(self, req: GenerateRequest) -> str:
-    """Pick OpenAI size honoring BOTH resolution and aspect_ratio when given."""
+    """Pick OpenAI size honoring BOTH resolution and aspect_ratio. Raises on unsupported combos
+    so library callers (who bypass CLI _validate_provider_flags) don't silently get a 1024² fallback."""
     res = req.resolution or "1K"
     ar = req.aspect_ratio or "1:1"
-    return _SIZE_MAP.get((res, ar), "1024x1024")
+    size = _SIZE_MAP.get((res, ar))
+    if size is None:
+      raise RuntimeError(
+        f"OpenAI: ({res}, {ar}) is not a supported size combo. "
+        f"Supported: {sorted(_SIZE_MAP.keys())}"
+      )
+    return size
 
   def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
     client = self._client()
