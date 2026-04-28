@@ -1,0 +1,31 @@
+# Build / packaging
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# venvs
+.venv/
+.env
+
+# uv
+.uv/
+
+# tests / artifacts
+output.png
+output_*.png
+.pytest_cache/
+.coverage
+htmlcov/
+
+# editor
+.DS_Store
+.vscode/
+.idea/
+
+# transient
+.claude/plans/
+.claude/specs/
+.claude/worktrees/
