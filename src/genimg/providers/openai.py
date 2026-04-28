@@ -15,15 +15,23 @@ from openai import APIStatusError, AuthenticationError, NotFoundError
 from ..auth.openai import get_client
 from ..interfaces import GenerateRequest, IImageGen, ProbeResult
 
-# Resolution preset → WxH for OpenAI sizes (gpt-image-2 supports up to 3840 max edge).
-_RES_TO_SIZE = {"1K": "1024x1024", "2K": "2048x2048", "4K": "3840x2160"}
-# Aspect ratio overrides resolution preset when both given (aspect wins for shape).
-_ASPECT_TO_SIZE = {
-  "1:1":  "1024x1024",
-  "4:3":  "1536x1024",
-  "3:4":  "1024x1536",
-  "16:9": "1536x1024",
-  "9:16": "1024x1536",
+# 2D map: (resolution, aspect) → WxH for gpt-image-2.
+# All edges are multiples of 16, max edge ≤3840, total px in [655k, 8.3M].
+# 4K + 4:3/3:4 is rejected upstream in _validate_provider_flags (would exceed 8.3M cap).
+_SIZE_MAP = {
+  ("1K", "1:1"):  "1024x1024",
+  ("1K", "4:3"):  "1536x1024",
+  ("1K", "3:4"):  "1024x1536",
+  ("1K", "16:9"): "1536x1024",
+  ("1K", "9:16"): "1024x1536",
+  ("2K", "1:1"):  "2048x2048",
+  ("2K", "4:3"):  "2048x1536",
+  ("2K", "3:4"):  "1536x2048",
+  ("2K", "16:9"): "2048x1152",
+  ("2K", "9:16"): "1152x2048",
+  ("4K", "1:1"):  "2880x2880",
+  ("4K", "16:9"): "3840x2160",
+  ("4K", "9:16"): "2160x3840",
 }
 
 
@@ -35,11 +43,10 @@ class OpenAIImageGen(IImageGen):
     return get_client(force=self.force_auth)
 
   def _size_for(self, req: GenerateRequest) -> str:
-    if req.aspect_ratio and req.resolution in (None, "1K"):
-      return _ASPECT_TO_SIZE[req.aspect_ratio]
-    if req.resolution:
-      return _RES_TO_SIZE[req.resolution]
-    return "1024x1024"
+    """Pick OpenAI size honoring BOTH resolution and aspect_ratio when given."""
+    res = req.resolution or "1K"
+    ar = req.aspect_ratio or "1:1"
+    return _SIZE_MAP.get((res, ar), "1024x1024")
 
   def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
     client = self._client()

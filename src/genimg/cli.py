@@ -615,6 +615,18 @@ def _validate_provider_flags(
       f"Drop the flag, switch to -m oai:gi2, or use Imagen (-m gdm:imagen4)."
     )
 
+  if model_id and model_id.startswith("imagen-") and (input or refs):
+    _die(
+      "Imagen does not support --input or reference images (text-to-image only). "
+      "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
+    )
+
+  if provider == "openai" and resolution == "4K" and aspect_ratio in ("4:3", "3:4"):
+    _die(
+      "OpenAI: 4K + 4:3/3:4 exceeds total pixel cap (8.3M). "
+      "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
+    )
+
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:

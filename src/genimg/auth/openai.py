@@ -26,10 +26,15 @@ def _azure() -> AzureOpenAI:
   return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
 
 
-def _direct() -> OpenAI:
-  if not os.getenv("OPENAI_API_KEY"):
+def _direct(*, ignore_base_url: bool = False) -> OpenAI:
+  """Direct OpenAI client. With ignore_base_url=True, force api.openai.com (used by --auth direct
+  to guarantee bypass of any Azure/proxy URL set in OPENAI_BASE_URL)."""
+  api_key = os.getenv("OPENAI_API_KEY")
+  if not api_key:
     raise RuntimeError("Direct OpenAI mode requires OPENAI_API_KEY.")
-  return OpenAI()
+  if ignore_base_url:
+    return OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
+  return OpenAI()  # honors OPENAI_BASE_URL for non-Azure proxies (LiteLLM, OpenRouter, ...)
 
 
 def get_client(*, force: str | None = None) -> OpenAI | AzureOpenAI:
@@ -37,7 +42,7 @@ def get_client(*, force: str | None = None) -> OpenAI | AzureOpenAI:
   if force == "azure":
     return _azure()
   if force == "direct":
-    return _direct()
+    return _direct(ignore_base_url=True)  # explicit bypass of OPENAI_BASE_URL
 
   enabled = _cfg.load().get("enabled_providers", [])
   if "openai_azure" in enabled:
