@@ -621,17 +621,20 @@ def _validate_provider_flags(
       "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
     )
 
-  if provider == "openai" and resolution == "4K" and aspect_ratio in ("4:3", "3:4"):
-    _die(
-      "OpenAI: 4K + 4:3/3:4 exceeds total pixel cap (8.3M). "
-      "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
-    )
-
-  if provider == "openai" and resolution == "1K" and aspect_ratio in ("16:9", "9:16"):
-    _die(
-      "OpenAI: 1K + 16:9/9:16 falls below the 655k pixel min. "
-      "Use 2K + 16:9/9:16, or drop --resolution to default to 1K square (1024x1024)."
-    )
+  if provider == "openai":
+    # Use the effective resolution (1K is the implicit default in _size_for) so bare
+    # --aspect-ratio without --resolution gets the same upstream error as the explicit form.
+    effective_res = resolution or "1K"
+    if effective_res == "4K" and aspect_ratio in ("4:3", "3:4"):
+      _die(
+        "OpenAI: 4K + 4:3/3:4 exceeds total pixel cap (8.3M). "
+        "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
+      )
+    if effective_res == "1K" and aspect_ratio in ("16:9", "9:16"):
+      _die(
+        "OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. "
+        "Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default."
+      )
 
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
