@@ -54,23 +54,56 @@ def get_client(*, force: str | None = None) -> OpenAI | AzureOpenAI:
   return _azure() if is_azure() else _direct()
 
 
-def auth_info() -> dict[str, str]:
-  """Structured auth status: {mode, endpoint, credential, source}."""
+def auth_info() -> dict[str, object]:
+  """Structured auth status: {mode, source, endpoint, credential, ok, hint}.
+
+  Azure mode requires BOTH an endpoint (OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT) and
+  an api key. `ok` is False (and `hint` populated) when either is missing — surfaces
+  the failure at audit time instead of letting it explode at request time.
+  """
   enabled = _cfg.load().get("enabled_providers", [])
   in_config = "openai_azure" in enabled or "openai_direct" in enabled
   source = "config" if in_config else "env"
 
   if "openai_azure" in enabled or (not in_config and is_azure()):
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL") or "-"
-    cred = "AZURE_OPENAI_API_KEY" if os.getenv("AZURE_OPENAI_API_KEY") else "OPENAI_API_KEY"
-    return {"mode": "azure", "source": source, "endpoint": endpoint, "credential": cred}
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL")
+    has_key = bool(os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY"))
+    cred = (
+      "AZURE_OPENAI_API_KEY" if os.getenv("AZURE_OPENAI_API_KEY")
+      else "OPENAI_API_KEY" if os.getenv("OPENAI_API_KEY")
+      else "-"
+    )
+    ok = bool(endpoint) and has_key
+    missing = []
+    if not endpoint:
+      missing.append("endpoint (OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT)")
+    if not has_key:
+      missing.append("api key (AZURE_OPENAI_API_KEY or OPENAI_API_KEY)")
+    hint = "" if ok else (
+      "Azure mode needs " + " and ".join(missing)
+      + ". Set in env (e.g. OPENAI_BASE_URL=https://<resource>.openai.azure.com) "
+      + "or switch to openai_direct via `genimg setup`."
+    )
+    return {
+      "mode": "azure", "source": source,
+      "endpoint": endpoint or "-",
+      "credential": cred,
+      "ok": ok, "hint": hint,
+    }
   if "openai_direct" in enabled or (not in_config and os.getenv("OPENAI_API_KEY")):
+    ok = bool(os.getenv("OPENAI_API_KEY"))
     return {
       "mode": "direct", "source": source,
       "endpoint": os.getenv("OPENAI_BASE_URL") or "https://api.openai.com",
-      "credential": "OPENAI_API_KEY",
+      "credential": "OPENAI_API_KEY" if ok else "-",
+      "ok": ok,
+      "hint": "" if ok else "Direct mode needs OPENAI_API_KEY in env.",
     }
-  return {"mode": "unset", "source": "-", "endpoint": "-", "credential": "-"}
+  return {
+    "mode": "unset", "source": "-", "endpoint": "-", "credential": "-",
+    "ok": False,
+    "hint": "Run `genimg setup` or set OPENAI_API_KEY (direct) or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY (Azure).",
+  }
 
 
 def auth_mode() -> str:

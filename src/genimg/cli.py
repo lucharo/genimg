@@ -366,15 +366,31 @@ def auth_cmd(
   table.add_column("source", style="dim")
   table.add_column("endpoint")
   table.add_column("credential", style="dim")
+  table.add_column("ready", justify="center")
   table.add_column("models", justify="right")
 
   for name, info, prefix in rows:
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
-    ok = sum(1 for s in cohort if s == "working")
-    summary = f"{ok}/{len(cohort)} working" if cohort else "[yellow]no cache[/yellow]"
-    table.add_row(name, info["mode"], info.get("source", "-"), info["endpoint"], info["credential"], summary)
+    ok_probes = sum(1 for s in cohort if s == "working")
+    summary = f"{ok_probes}/{len(cohort)} working" if cohort else "[yellow]no cache[/yellow]"
+    cred_cell = (
+      f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
+      else "[red]✗ unset[/red]"
+    )
+    endpoint_cell = (
+      info["endpoint"] if info["endpoint"] != "-"
+      else "[red]✗ not set[/red]" if info["mode"] == "azure"
+      else "-"
+    )
+    ready_cell = "[green]✓[/green]" if info["ok"] else "[red]✗[/red]"
+    table.add_row(name, info["mode"], info.get("source", "-"),
+                  endpoint_cell, cred_cell, ready_cell, summary)
 
   console.print(table)
+  for name, info, _ in rows:
+    if not info["ok"] and info.get("hint"):
+      console.print(f"  [yellow]{name}[/yellow] · {info['hint']}")
+
   unset_count = sum(1 for _, info, _ in rows if info["mode"] == "unset")
   if unset_count == len(rows):
     console.print("[yellow]no providers configured.[/yellow] Run [bold]genimg setup[/bold] to get started.")

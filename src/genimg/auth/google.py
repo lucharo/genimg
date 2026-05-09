@@ -55,27 +55,64 @@ def get_client(region: str = "global", project: str | None = None) -> genai.Clie
   )
 
 
-def auth_info() -> dict[str, str]:
-  """Structured auth status: {mode, endpoint, credential, source}."""
+def auth_info() -> dict[str, object]:
+  """Structured auth status: {mode, source, endpoint, credential, ok, hint}.
+
+  `ok` is True iff the credentials needed for the resolved mode are actually present
+  in env (preflight check, not a live API probe). `hint` is empty when ok, otherwise
+  a one-line description of what's missing.
+  """
   enabled = _cfg.load().get("enabled_providers", [])
-  source = "config" if ("google_vertex" in enabled or "google_direct" in enabled) else "env"
+  in_config = "google_vertex" in enabled or "google_direct" in enabled
+  source = "config" if in_config else "env"
 
   if "google_vertex" in enabled or os.getenv("CLAUDE_GCP_CRED"):
+    cred_var = (
+      "CLAUDE_GCP_CRED" if os.getenv("CLAUDE_GCP_CRED")
+      else "GOOGLE_APPLICATION_CREDENTIALS" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+      else "-"
+    )
+    ok = cred_var != "-"
     return {
       "mode": "vertex", "source": source,
       "endpoint": _cfg.load().get("gcp_project") or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") or ORG_DEFAULT_PROJECT,
-      "credential": "CLAUDE_GCP_CRED" if os.getenv("CLAUDE_GCP_CRED") else "GOOGLE_APPLICATION_CREDENTIALS",
+      "credential": cred_var,
+      "ok": ok,
+      "hint": "" if ok else (
+        "Vertex needs CLAUDE_GCP_CRED or GOOGLE_APPLICATION_CREDENTIALS pointing at a "
+        "service-account JSON. Set one or switch to google_direct via `genimg setup`."
+      ),
     }
   if "google_direct" in enabled or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
-    cred = "GEMINI_API_KEY" if os.getenv("GEMINI_API_KEY") else "GOOGLE_API_KEY"
-    return {"mode": "direct", "source": source, "endpoint": "generativelanguage.googleapis.com", "credential": cred}
+    cred = (
+      "GEMINI_API_KEY" if os.getenv("GEMINI_API_KEY")
+      else "GOOGLE_API_KEY" if os.getenv("GOOGLE_API_KEY")
+      else "-"
+    )
+    ok = cred != "-"
+    return {
+      "mode": "direct", "source": source,
+      "endpoint": "generativelanguage.googleapis.com",
+      "credential": cred,
+      "ok": ok,
+      "hint": "" if ok else "Direct API needs GOOGLE_API_KEY or GEMINI_API_KEY in env.",
+    }
   if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true"}:
     return {
       "mode": "vertex", "source": "env",
       "endpoint": os.getenv("GOOGLE_CLOUD_PROJECT") or ORG_DEFAULT_PROJECT,
       "credential": "GOOGLE_APPLICATION_CREDENTIALS",
+      "ok": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
+      "hint": "" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") else (
+        "GOOGLE_GENAI_USE_VERTEXAI is set but no credentials file. "
+        "Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json."
+      ),
     }
-  return {"mode": "unset", "source": "-", "endpoint": "-", "credential": "-"}
+  return {
+    "mode": "unset", "source": "-", "endpoint": "-", "credential": "-",
+    "ok": False,
+    "hint": "Run `genimg setup` or set GOOGLE_API_KEY (direct) or CLAUDE_GCP_CRED (Vertex).",
+  }
 
 
 def auth_mode() -> str:
