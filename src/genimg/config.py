@@ -1,4 +1,15 @@
-"""User config (~/.config/genimg/config.json). Currently: default model alias."""
+"""User config at ~/.config/genimg/config.json.
+
+Schema (all optional, additive):
+  enabled_providers: list[str]      # {google_direct, google_vertex, google_vertex_adc, openai_native, openai_azure}
+  default_model:     str            # alias or canonical id
+  gcp_project:       str            # for Vertex modes
+  gcp_region:        str            # for Vertex modes
+  openai_base_url:   str            # Azure resource URL or proxy (non-secret)
+  azure_api_version: str            # optional override for Azure api-version
+
+Secrets (API keys, service-account JSON paths) live in env, never here.
+"""
 from __future__ import annotations
 
 import json
@@ -9,11 +20,19 @@ from typing import Any
 CONFIG_PATH = Path(os.getenv("GENIMG_CONFIG_HOME") or Path.home() / ".config" / "genimg") / "config.json"
 
 
+def _migrate(data: dict[str, Any]) -> dict[str, Any]:
+  """Read-time renames. Mutates the dict in place. Re-saved lazily on next setup."""
+  enabled = data.get("enabled_providers")
+  if isinstance(enabled, list) and "openai_direct" in enabled:
+    data["enabled_providers"] = ["openai_native" if e == "openai_direct" else e for e in enabled]
+  return data
+
+
 def load() -> dict[str, Any]:
   if not CONFIG_PATH.exists():
     return {}
   try:
-    return json.loads(CONFIG_PATH.read_text())
+    return _migrate(json.loads(CONFIG_PATH.read_text()))
   except (json.JSONDecodeError, OSError):
     return {}
 
