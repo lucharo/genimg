@@ -29,25 +29,26 @@ genimg "a robot on a beach" -n 4 -g --open
 
 ## Auth — how it's resolved
 
-`genimg auth` shows current state. Resolution is automatic:
+`genimg auth` shows current state. `genimg setup` walks through configuration interactively (detect → fetch → validate → save). The saved config (`~/.config/genimg/config.json`) wins; env is a fallback when nothing is saved.
 
-**Google (Gemini / Imagen):**
+**Google (Gemini / Imagen):** three modes.
 
-| If env var set | Mode | Endpoint |
+| Mode (config) | What it needs | Endpoint |
 |---|---|---|
-| `CLAUDE_GCP_CRED` | Vertex AI | `gsk-rd-oaiml-kgapoc1-dev` (override with `--project`) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Vertex AI | uses `GOOGLE_CLOUD_PROJECT` |
-| `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Direct | `generativelanguage.googleapis.com` |
+| `google_direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `generativelanguage.googleapis.com` |
+| `google_vertex` | `CLAUDE_GCP_CRED` or `GOOGLE_APPLICATION_CREDENTIALS` (service-account JSON) | Vertex AI in saved `gcp_project` / `gcp_region` |
+| `google_vertex_adc` | `gcloud auth application-default login` (user creds) | Vertex AI in saved `gcp_project` / `gcp_region` |
 
-**OpenAI (gpt-image-*):**
+**OpenAI (gpt-image-*):** two modes.
 
-| If env var | Mode | Endpoint |
+| Mode (config) | What it needs | Endpoint |
 |---|---|---|
-| `OPENAI_BASE_URL` contains `azure.com` | Azure | uses `OPENAI_API_KEY` |
-| `AZURE_OPENAI_ENDPOINT` set | Azure | uses `AZURE_OPENAI_API_KEY` |
-| `OPENAI_API_KEY` only | Direct | `https://api.openai.com` |
+| `openai_native` | `OPENAI_API_KEY` | `https://api.openai.com` |
+| `openai_azure` | `AZURE_OPENAI_API_KEY` (or `OPENAI_API_KEY`) **and** an endpoint — saved as `openai_base_url` in config, or `OPENAI_BASE_URL` / `AZURE_OPENAI_ENDPOINT` env | the saved/env Azure resource URL |
 
-To use plain OpenAI / Gemini API instead of corporate proxies: just unset the corporate env vars and export the public-API key. `genimg --auth direct` forces direct OpenAI when `OPENAI_BASE_URL` is set to Azure but you want to bypass.
+Secrets (API keys, JSON paths) live in env / shell rc — never in the config file. Non-secret values (endpoint URL, project, region, api version) are stored in `config.json`.
+
+`--auth direct` on the CLI forces `api.openai.com` for a single call when `OPENAI_BASE_URL` is set to Azure but you want to bypass.
 
 ## Models (`-m`)
 

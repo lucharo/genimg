@@ -1,126 +1,326 @@
-"""Interactive `genimg setup` wizard. Detect → confirm → optionally probe → save."""
+"""Interactive `genimg setup` wizard. Detect → fetch → validate → save (per provider).
+
+Goals: feel automatic, never save a broken state. Hierarchical detection per provider;
+guided fetch flow opens the right signup page, prompts for the value, optionally writes
+`export VAR=...` to the user's shell rc. Live `client.models.list()` preflight before save.
+"""
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
+import webbrowser
 from pathlib import Path
+from typing import Callable
 
 import questionary
 from rich.console import Console
 
 from . import config
+from .auth import google as auth_google
+from .auth import openai as auth_openai
 
 console = Console()
 
-_DETECTED_VARS = (
-  "CLAUDE_GCP_CRED",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "GEMINI_API_KEY",
-  "GOOGLE_API_KEY",
-  "OPENAI_API_KEY",
-  "OPENAI_BASE_URL",
-  "AZURE_OPENAI_ENDPOINT",
-  "AZURE_OPENAI_API_KEY",
-)
+_SIGNUP_URLS = {
+  "gemini": "https://aistudio.google.com/apikey",
+  "openai": "https://platform.openai.com/api-keys",
+  "azure":  "https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI",
+  "vertex_sa": "https://console.cloud.google.com/iam-admin/serviceaccounts",
+}
 
 
-def _detect_env() -> dict[str, str]:
-  return {k: v for k in _DETECTED_VARS if (v := os.getenv(k))}
+# ────────────────────── helpers ──────────────────────
+
+def _is_remote() -> bool:
+  return bool(os.getenv("SSH_CONNECTION") or os.getenv("SSH_CLIENT"))
 
 
-def _detect_gcloud() -> tuple[str | None, str | None]:
+def _shell_rc_path() -> Path | None:
+  shell = os.getenv("SHELL", "")
+  home = Path.home()
+  if "fish" in shell:
+    rc = home / ".config" / "fish" / "config.fish"
+    rc.parent.mkdir(parents=True, exist_ok=True)
+    return rc
+  if "zsh" in shell or (home / ".zshrc").exists():
+    return home / ".zshrc"
+  if "bash" in shell or (home / ".bashrc").exists():
+    return home / ".bashrc"
+  return None
+
+
+def _format_export(rc: Path, var: str, value: str) -> str:
+  return f"set -gx {var} {value}\n" if rc.name == "config.fish" else f"export {var}={value}\n"
+
+
+def _has_export(text: str, var: str) -> bool:
+  return any(
+    line.lstrip().startswith(f"export {var}=") or line.lstrip().startswith(f"set -gx {var} ")
+    for line in text.splitlines()
+  )
+
+
+def _append_export(var: str, value: str) -> Path | None:
+  """Append `export VAR=value` to the user's shell rc (idempotent). Sets os.environ too.
+
+  If a different value already exists for VAR in the rc, leave it alone (don't clobber).
+  """
+  os.environ[var] = value
+  rc = _shell_rc_path()
+  if rc is None:
+    console.print(f"[yellow]couldn't detect shell rc — set this yourself:[/yellow]  export {var}=...")
+    return None
+  rc.touch(exist_ok=True)
+  text = rc.read_text() if rc.exists() else ""
+  if _has_export(text, var):
+    console.print(f"[yellow]{rc.name} already exports {var} — left untouched (edit if it needs updating).[/yellow]")
+    return rc
+  with rc.open("a") as f:
+    f.write(_format_export(rc, var, value))
+  console.print(f"[green]added {var} to {rc}[/green]  [dim](active this session; new shells: source it)[/dim]")
+  return rc
+
+
+def _open_signup(name: str) -> None:
+  url = _SIGNUP_URLS.get(name)
+  if not url:
+    return
+  if _is_remote():
+    console.print(f"[dim]Open in your browser: {url}[/dim]")
+  else:
+    console.print(f"[dim]Opening {url}...[/dim]")
+    webbrowser.open(url)
+
+
+def _detected_gcp_project() -> str | None:
   if not shutil.which("gcloud"):
-    return None, None
+    return None
   try:
-    project = subprocess.run(
-      ["gcloud", "config", "get-value", "project"], capture_output=True, text=True, timeout=5,
-    ).stdout.strip()
-    region = subprocess.run(
-      ["gcloud", "config", "get-value", "compute/region"], capture_output=True, text=True, timeout=5,
-    ).stdout.strip()
-    return (project or None), (region or None)
+    r = subprocess.run(
+      ["gcloud", "config", "get-value", "project"],
+      capture_output=True, text=True, timeout=5,
+    )
+    return r.stdout.strip() or None
   except (subprocess.TimeoutExpired, FileNotFoundError):
-    return None, None
+    return None
 
 
-def _truncate(s: str, n: int = 60) -> str:
-  return s if len(s) <= n else s[: n - 3] + "..."
+def _run_validation(label: str, validate_fn: Callable[[], tuple[bool, str]]) -> bool:
+  """Run a live validation; allow retry/skip/cancel on failure."""
+  while True:
+    with console.status(f"validating {label}..."):
+      ok, err = validate_fn()
+    if ok:
+      console.print(f"[green]✓ {label} validated[/green]")
+      return True
+    console.print(f"[red]✗ {label} validation failed:[/red] {err}")
+    choice = questionary.select(
+      "What now?",
+      choices=["Retry", "Skip this provider", "Cancel setup"],
+    ).ask()
+    if choice in (None, "Cancel setup"):
+      raise KeyboardInterrupt
+    if choice == "Skip this provider":
+      return False
 
+
+def _fetch_secret(provider_url_key: str, var: str, label: str) -> bool:
+  """Open signup page, prompt for value, optionally write to shell rc. Returns True iff captured."""
+  console.print(f"[dim]No {var} found. Get one:[/dim]")
+  _open_signup(provider_url_key)
+  val = questionary.password(f"Paste your {label} (or empty to skip):").ask()
+  if not val:
+    return False
+  persist = questionary.confirm(
+    f"Save `export {var}=...` to your shell rc? (no = session-only)",
+    default=True,
+  ).ask()
+  if persist:
+    _append_export(var, val)
+  else:
+    os.environ[var] = val
+    console.print(f"[dim]session-only — won't persist after this terminal closes[/dim]")
+  return True
+
+
+def _fetch_sa_json() -> bool:
+  console.print("[dim]Vertex needs a service-account JSON.[/dim]")
+  _open_signup("vertex_sa")
+  raw = questionary.path("Path to service-account JSON (or empty to skip):").ask()
+  if not raw:
+    return False
+  p = Path(raw).expanduser()
+  if not p.exists():
+    console.print(f"[red]not found: {p}[/red]")
+    return False
+  persist = questionary.confirm(
+    f"Save `export GOOGLE_APPLICATION_CREDENTIALS={p}` to your shell rc?", default=True,
+  ).ask()
+  if persist:
+    _append_export("GOOGLE_APPLICATION_CREDENTIALS", str(p))
+  else:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(p)
+  return True
+
+
+# ────────────────────── per-provider steps ──────────────────────
+
+def _setup_google(cfg: dict) -> bool:
+  has_direct = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+  has_sa = bool(os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+  has_adc = auth_google.adc_token_present()
+
+  console.print("\n[bold cyan]Google[/bold cyan] (Gemini Image / Imagen)")
+  detected = []
+  if has_direct: detected.append("Gemini API key")
+  if has_sa: detected.append("Vertex SA JSON")
+  if has_adc: detected.append("gcloud ADC")
+  if detected:
+    console.print(f"  [dim]detected:[/dim] {', '.join(detected)}")
+  else:
+    console.print("  [dim]nothing detected[/dim]")
+
+  def _label(text: str, ready: bool, missing: str) -> str:
+    return f"{text}  {'[green][ready][/green]' if ready else f'[dim][{missing}][/dim]'}"
+
+  pick = questionary.select(
+    "Pick a Google auth path (or skip):",
+    choices=[
+      questionary.Choice(_label("Direct API (Gemini key)", has_direct, "needs key"), value="google_direct"),
+      questionary.Choice(_label("Vertex (service account JSON)", has_sa, "needs JSON"), value="google_vertex"),
+      questionary.Choice(_label("Vertex (gcloud user creds, ADC)", has_adc, "needs gcloud login"), value="google_vertex_adc"),
+      questionary.Choice("Skip Google", value="skip"),
+    ],
+  ).ask()
+  if pick in (None, "skip"):
+    return False
+
+  if pick == "google_direct" and not has_direct:
+    if not _fetch_secret("gemini", "GEMINI_API_KEY", "Gemini API key"):
+      return False
+  elif pick == "google_vertex" and not has_sa:
+    if not _fetch_sa_json():
+      return False
+  elif pick == "google_vertex_adc" and not has_adc:
+    console.print("[yellow]ADC needs a one-time login. Run this in another terminal, then re-run `genimg setup`:[/yellow]")
+    console.print("  [bold]gcloud auth application-default login[/bold]")
+    return False
+
+  if pick in ("google_vertex", "google_vertex_adc"):
+    detected_proj = _detected_gcp_project() or cfg.get("gcp_project")
+    proj = questionary.text(
+      "GCP project ID for Vertex (leave empty for SDK default):",
+      default=detected_proj or "",
+    ).ask()
+    if proj:
+      cfg["gcp_project"] = proj
+
+  enabled = cfg.setdefault("enabled_providers", [])
+  for other in ("google_direct", "google_vertex", "google_vertex_adc"):
+    if other != pick and other in enabled:
+      enabled.remove(other)
+  if pick not in enabled:
+    enabled.append(pick)
+
+  ok = _run_validation("Google", lambda: auth_google.validate(mode=pick, project=cfg.get("gcp_project")))
+  if not ok:
+    enabled.remove(pick)
+    return False
+  return True
+
+
+def _setup_openai(cfg: dict) -> bool:
+  has_key = bool(os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY"))
+  env_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT") or (
+    os.getenv("OPENAI_BASE_URL") if "azure" in os.getenv("OPENAI_BASE_URL", "").lower() else None
+  )
+  cfg_endpoint = cfg.get("openai_base_url")
+  has_azure_endpoint = bool(env_endpoint or cfg_endpoint)
+
+  console.print("\n[bold cyan]OpenAI[/bold cyan] (gpt-image-*)")
+  detected = []
+  if has_key: detected.append("API key")
+  if has_azure_endpoint: detected.append("Azure endpoint")
+  if detected:
+    console.print(f"  [dim]detected:[/dim] {', '.join(detected)}")
+  else:
+    console.print("  [dim]nothing detected[/dim]")
+
+  native_ready = has_key and not env_endpoint  # OPENAI_BASE_URL not pointing at Azure
+  azure_ready = has_key and has_azure_endpoint
+
+  def _label(text: str, ready: bool, missing: str) -> str:
+    return f"{text}  {'[green][ready][/green]' if ready else f'[dim][{missing}][/dim]'}"
+
+  pick = questionary.select(
+    "Pick an OpenAI auth path (or skip):",
+    choices=[
+      questionary.Choice(_label("OpenAI native (api.openai.com)", native_ready, "needs OPENAI_API_KEY"), value="openai_native"),
+      questionary.Choice(_label("OpenAI via Azure", azure_ready, "needs key + endpoint"), value="openai_azure"),
+      questionary.Choice("Skip OpenAI", value="skip"),
+    ],
+  ).ask()
+  if pick in (None, "skip"):
+    return False
+
+  if pick == "openai_native" and not os.getenv("OPENAI_API_KEY"):
+    if not _fetch_secret("openai", "OPENAI_API_KEY", "OpenAI API key"):
+      return False
+
+  if pick == "openai_azure":
+    if not has_key:
+      if not _fetch_secret("azure", "AZURE_OPENAI_API_KEY", "Azure OpenAI API key"):
+        return False
+    if not has_azure_endpoint:
+      url = questionary.text(
+        "Azure resource endpoint (e.g. https://my-resource.openai.azure.com):",
+      ).ask()
+      if not url:
+        return False
+      cfg["openai_base_url"] = url.strip()
+
+  enabled = cfg.setdefault("enabled_providers", [])
+  for other in ("openai_native", "openai_azure"):
+    if other != pick and other in enabled:
+      enabled.remove(other)
+  if pick not in enabled:
+    enabled.append(pick)
+
+  ok = _run_validation(
+    "OpenAI",
+    lambda: auth_openai.validate(mode=pick, endpoint=cfg.get("openai_base_url")),
+  )
+  if not ok:
+    enabled.remove(pick)
+    if pick == "openai_azure" and not env_endpoint:
+      cfg.pop("openai_base_url", None)
+    return False
+  return True
+
+
+# ────────────────────── entry point ──────────────────────
 
 def run_setup() -> None:
-  console.print("[bold cyan]genimg setup[/bold cyan] — quick onboarding\n")
+  console.print("[bold cyan]genimg setup[/bold cyan] — detect → fetch → validate → save\n")
+  cfg = config.load()
 
-  # 1. Detect env vars
-  env = _detect_env()
-  console.print(f"[dim]detected {len(env)} relevant env var(s)[/dim]")
-  accepted_env: dict[str, str] = {}
-  for var, value in env.items():
-    use = questionary.confirm(
-      f"Use {var}={_truncate(value)} ?", default=True,
-    ).ask()
-    if use is None:  # ctrl-c
-      console.print("[yellow]cancelled[/yellow]")
-      return
-    if use:
-      accepted_env[var] = value
-
-  # 2. gcloud detection
-  proj, region = _detect_gcloud()
-  use_gcloud_proj, use_gcloud_region = None, None
-  if proj:
-    use_gcloud_proj = questionary.confirm(
-      f"gcloud says project={proj}. Use that for Vertex?", default=True,
-    ).ask()
-  if region:
-    use_gcloud_region = questionary.confirm(
-      f"gcloud says region={region}. Use that?", default=True,
-    ).ask()
-
-  # 3. Multi-select providers
-  has_vertex_creds = "CLAUDE_GCP_CRED" in accepted_env or "GOOGLE_APPLICATION_CREDENTIALS" in accepted_env
-  has_google_direct = "GEMINI_API_KEY" in accepted_env or "GOOGLE_API_KEY" in accepted_env
-  has_azure = (
-    "AZURE_OPENAI_ENDPOINT" in accepted_env
-    or "azure" in accepted_env.get("OPENAI_BASE_URL", "").lower()
-  )
-  has_openai_direct = "OPENAI_API_KEY" in accepted_env and not has_azure
-
-  choices = [
-    questionary.Choice("Google (Vertex)", checked=has_vertex_creds, value="google_vertex"),
-    questionary.Choice("Google (direct API)", checked=has_google_direct, value="google_direct"),
-    questionary.Choice("OpenAI (Azure)", checked=has_azure, value="openai_azure"),
-    questionary.Choice("OpenAI (direct)", checked=has_openai_direct, value="openai_direct"),
-  ]
-  enabled = questionary.checkbox(
-    "Enable which providers? (space to toggle, enter to confirm)", choices=choices,
-  ).ask()
-  if enabled is None:
-    console.print("[yellow]cancelled[/yellow]")
+  try:
+    google_ok = _setup_google(cfg)
+    openai_ok = _setup_openai(cfg)
+  except KeyboardInterrupt:
+    console.print("\n[yellow]cancelled — config not saved[/yellow]")
     return
 
-  # 4. Optional live probe
-  do_probe = questionary.confirm(
-    "Probe which models you actually have access to right now?", default=False,
-  ).ask()
+  if not (google_ok or openai_ok):
+    console.print("\n[yellow]No providers enabled.[/yellow] Re-run when ready.")
+    return
 
-  # 5. Save config
-  cfg = config.load()
-  cfg["enabled_providers"] = enabled
-  if use_gcloud_proj and proj:
-    cfg["gcp_project"] = proj
-  if use_gcloud_region and region:
-    cfg["gcp_region"] = region
-  cfg["accepted_env"] = list(accepted_env.keys())
   config.save(cfg)
   console.print(f"\n[green]saved[/green] {config.CONFIG_PATH}")
-  console.print(f"  enabled: {', '.join(enabled) or '(none)'}")
+  console.print(f"  enabled: {', '.join(cfg.get('enabled_providers', [])) or '(none)'}")
   if cfg.get("gcp_project"):
     console.print(f"  gcp project: {cfg['gcp_project']}")
-
-  # 6. Probe (after save so config influences default model selection)
-  if do_probe:
-    console.print("\n[dim]probing...[/dim]")
-    from . import discovery
-    from .cli import _list_models  # reuse
-    _list_models(refresh=True, show_aliases=False)
+  if cfg.get("openai_base_url"):
+    console.print(f"  openai base url: {cfg['openai_base_url']}")
+  console.print("\n[dim]inspect: `genimg auth`  •  test: `genimg \"a robot\" -o /tmp/r.png`[/dim]")

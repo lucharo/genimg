@@ -1,7 +1,15 @@
-"""google-genai client factory. Config wins (`genimg setup`), env is fallback."""
+"""google-genai client factory. Config wins (`genimg setup`), env is fallback.
+
+Three modes:
+  google_direct      — GEMINI_API_KEY / GOOGLE_API_KEY  → generativelanguage.googleapis.com
+  google_vertex      — service-account JSON via CLAUDE_GCP_CRED / GOOGLE_APPLICATION_CREDENTIALS
+  google_vertex_adc  — gcloud user creds via `gcloud auth application-default login`
+"""
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 
 from google import genai
 
@@ -21,8 +29,31 @@ def _vertex(project: str | None, region: str) -> genai.Client:
   return genai.Client(vertexai=True, project=proj, location=loc)
 
 
+def _vertex_adc(project: str | None, region: str) -> genai.Client:
+  """Vertex via gcloud user ADC. The SDK's google.auth.default() picks up ADC when
+  no service-account creds are present in env."""
+  user_cfg = _cfg.load()
+  proj = project or user_cfg.get("gcp_project") or os.getenv("GOOGLE_CLOUD_PROJECT") or GSK_DEFAULT_PROJECT
+  loc = user_cfg.get("gcp_region") or region
+  return genai.Client(vertexai=True, project=proj, location=loc)
+
+
 def _direct() -> genai.Client:
   return genai.Client()
+
+
+def adc_token_present() -> bool:
+  """True if `gcloud auth application-default print-access-token` returns a token."""
+  if not shutil.which("gcloud"):
+    return False
+  try:
+    r = subprocess.run(
+      ["gcloud", "auth", "application-default", "print-access-token"],
+      capture_output=True, text=True, timeout=5,
+    )
+    return r.returncode == 0 and bool(r.stdout.strip())
+  except (subprocess.TimeoutExpired, FileNotFoundError):
+    return False
 
 
 def get_client(region: str = "global", project: str | None = None) -> genai.Client:
@@ -36,6 +67,13 @@ def get_client(region: str = "global", project: str | None = None) -> genai.Clie
       "config says google_vertex but no CLAUDE_GCP_CRED / GOOGLE_APPLICATION_CREDENTIALS in env. "
       "Set one or re-run `genimg setup`."
     )
+  if "google_vertex_adc" in enabled:
+    if adc_token_present():
+      return _vertex_adc(project, region)
+    raise RuntimeError(
+      "config says google_vertex_adc but no ADC token. "
+      "Run `gcloud auth application-default login` and try again."
+    )
   if "google_direct" in enabled:
     if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
       return _direct()
@@ -44,7 +82,6 @@ def get_client(region: str = "global", project: str | None = None) -> genai.Clie
       "Set one or re-run `genimg setup`."
     )
 
-  # No config preference → env auto-detection (legacy behavior)
   if os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS") \
      or os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true"}:
     return _vertex(project, region)
@@ -55,17 +92,58 @@ def get_client(region: str = "global", project: str | None = None) -> genai.Clie
   )
 
 
+def validate(mode: str, *, project: str | None = None, region: str = "us-central1") -> tuple[bool, str]:
+  """Live preflight via `client.models.list()` — free, no image generated.
+
+  Returns (ok, error_msg). `mode` ∈ {google_direct, google_vertex, google_vertex_adc}.
+  """
+  try:
+    if mode == "google_direct":
+      if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        return False, "GEMINI_API_KEY / GOOGLE_API_KEY not in env"
+      client = _direct()
+    elif mode == "google_vertex":
+      if not (os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")):
+        return False, "CLAUDE_GCP_CRED / GOOGLE_APPLICATION_CREDENTIALS not in env"
+      client = _vertex(project, region)
+    elif mode == "google_vertex_adc":
+      if not adc_token_present():
+        return False, "no gcloud ADC token (run `gcloud auth application-default login`)"
+      client = _vertex_adc(project, region)
+    else:
+      return False, f"unknown mode: {mode}"
+    next(iter(client.models.list()), None)
+    return True, ""
+  except Exception as e:
+    return False, f"{type(e).__name__}: {str(e)[:300]}"
+
+
 def auth_info() -> dict[str, object]:
   """Structured auth status: {mode, source, endpoint, credential, ok, hint}.
 
-  `ok` is True iff the credentials needed for the resolved mode are actually present
-  in env (preflight check, not a live API probe). `hint` is empty when ok, otherwise
-  a one-line description of what's missing.
+  `ok` is True iff the credentials needed for the resolved mode are present in env
+  (preflight, not a live API probe). `hint` is empty when ok, otherwise a one-line
+  description of what's missing.
   """
-  enabled = _cfg.load().get("enabled_providers", [])
-  in_config = "google_vertex" in enabled or "google_direct" in enabled
+  user_cfg = _cfg.load()
+  enabled = user_cfg.get("enabled_providers", [])
+  in_config = any(m in enabled for m in ("google_vertex", "google_vertex_adc", "google_direct"))
   source = "config" if in_config else "env"
+  project = user_cfg.get("gcp_project") or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") \
+    or os.getenv("GOOGLE_CLOUD_PROJECT") or GSK_DEFAULT_PROJECT
 
+  if "google_vertex_adc" in enabled:
+    ok = adc_token_present()
+    return {
+      "mode": "vertex_adc", "source": source,
+      "endpoint": project,
+      "credential": "gcloud ADC",
+      "ok": ok,
+      "hint": "" if ok else (
+        "No active ADC token. Run `gcloud auth application-default login` "
+        "(or switch to google_vertex / google_direct via `genimg setup`)."
+      ),
+    }
   if "google_vertex" in enabled or os.getenv("CLAUDE_GCP_CRED"):
     cred_var = (
       "CLAUDE_GCP_CRED" if os.getenv("CLAUDE_GCP_CRED")
@@ -75,12 +153,12 @@ def auth_info() -> dict[str, object]:
     ok = cred_var != "-"
     return {
       "mode": "vertex", "source": source,
-      "endpoint": _cfg.load().get("gcp_project") or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") or GSK_DEFAULT_PROJECT,
+      "endpoint": project,
       "credential": cred_var,
       "ok": ok,
       "hint": "" if ok else (
         "Vertex needs CLAUDE_GCP_CRED or GOOGLE_APPLICATION_CREDENTIALS pointing at a "
-        "service-account JSON. Set one or switch to google_direct via `genimg setup`."
+        "service-account JSON. Set one or switch via `genimg setup`."
       ),
     }
   if "google_direct" in enabled or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
@@ -100,7 +178,7 @@ def auth_info() -> dict[str, object]:
   if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {"1", "true"}:
     return {
       "mode": "vertex", "source": "env",
-      "endpoint": os.getenv("GOOGLE_CLOUD_PROJECT") or GSK_DEFAULT_PROJECT,
+      "endpoint": project,
       "credential": "GOOGLE_APPLICATION_CREDENTIALS",
       "ok": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
       "hint": "" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") else (
