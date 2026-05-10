@@ -129,9 +129,13 @@ def auth_info() -> dict[str, object]:
     }
   if "openai_native" in enabled or (not in_config and os.getenv("OPENAI_API_KEY")):
     ok = bool(os.getenv("OPENAI_API_KEY"))
+    # Config path forces api.openai.com (ignore_base_url=True); only env-detected
+    # native mode honors OPENAI_BASE_URL (for LiteLLM/OpenRouter proxies).
+    endpoint = "https://api.openai.com" if "openai_native" in enabled \
+      else (os.getenv("OPENAI_BASE_URL") or "https://api.openai.com")
     return {
       "mode": "native", "source": source,
-      "endpoint": os.getenv("OPENAI_BASE_URL") or "https://api.openai.com",
+      "endpoint": endpoint,
       "credential": "OPENAI_API_KEY" if ok else "-",
       "ok": ok,
       "hint": "" if ok else "Native mode needs OPENAI_API_KEY in env.",
