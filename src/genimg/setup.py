@@ -164,9 +164,26 @@ def _fetch_sa_json() -> bool:
   return True
 
 
-def _choice_label(text: str, ready: bool, missing: str) -> str:
-  """Plain-text label for questionary (no Rich markup — questionary won't parse it)."""
-  return f"{text}  ·  {'ready' if ready else missing}"
+def _mask(value: str | None, n: int = 3) -> str:
+  """Show the first n chars of a secret-ish value, then ellipsis. Empty → ''."""
+  if not value:
+    return ""
+  return value[:n] + "…"
+
+
+def _host(url: str | None) -> str:
+  """Compact URL for display (host portion only)."""
+  if not url:
+    return ""
+  from urllib.parse import urlparse
+  parsed = urlparse(url)
+  return parsed.netloc or url
+
+
+def _choice_label(text: str, ok: bool, detail: str) -> str:
+  """Plain-text choice label: `✓ Name  ·  detail` or `✗ Name  ·  what's missing`."""
+  icon = "✓" if ok else "✗"
+  return f"{icon}  {text}  ·  {detail}"
 
 
 # ────────────────────── per-provider steps ──────────────────────
@@ -176,22 +193,26 @@ def _setup_google(cfg: dict) -> bool:
   has_sa = bool(os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
   has_adc = auth_google.adc_token_present()
 
-  console.print("\n[bold cyan]Google[/bold cyan] (Gemini Image / Imagen)")
-  detected = []
-  if has_direct: detected.append("Gemini API key")
-  if has_sa: detected.append("Vertex SA JSON")
-  if has_adc: detected.append("gcloud ADC")
-  if detected:
-    console.print(f"  [dim]detected:[/dim] {', '.join(detected)}")
-  else:
-    console.print("  [dim]nothing detected[/dim]")
+  console.print("[bold cyan]Google[/bold cyan] (Gemini Image / Imagen)")
+
+  direct_detail = (
+    f"GEMINI_API_KEY={_mask(os.getenv('GEMINI_API_KEY'))} in env" if os.getenv("GEMINI_API_KEY")
+    else f"GOOGLE_API_KEY={_mask(os.getenv('GOOGLE_API_KEY'))} in env" if os.getenv("GOOGLE_API_KEY")
+    else "needs GEMINI_API_KEY or GOOGLE_API_KEY"
+  )
+  sa_detail = (
+    f"CLAUDE_GCP_CRED={_mask(os.getenv('CLAUDE_GCP_CRED'))} in env" if os.getenv("CLAUDE_GCP_CRED")
+    else f"GOOGLE_APPLICATION_CREDENTIALS set ({_host(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))})" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    else "needs CLAUDE_GCP_CRED or GOOGLE_APPLICATION_CREDENTIALS"
+  )
+  adc_detail = "gcloud token active" if has_adc else "run `gcloud auth application-default login`"
 
   pick = questionary.select(
     "Pick a Google auth path (or skip):",
     choices=[
-      questionary.Choice(_choice_label("Direct API (Gemini key)", has_direct, "needs key"), value="google_direct"),
-      questionary.Choice(_choice_label("Vertex (service account JSON)", has_sa, "needs JSON"), value="google_vertex"),
-      questionary.Choice(_choice_label("Vertex (gcloud user creds, ADC)", has_adc, "needs gcloud login"), value="google_vertex_adc"),
+      questionary.Choice(_choice_label("Direct API (Gemini key)", has_direct, direct_detail), value="google_direct"),
+      questionary.Choice(_choice_label("Vertex (service account JSON)", has_sa, sa_detail), value="google_vertex"),
+      questionary.Choice(_choice_label("Vertex (gcloud user creds, ADC)", has_adc, adc_detail), value="google_vertex_adc"),
       questionary.Choice("Skip Google", value="skip"),
     ],
   ).ask()
@@ -241,22 +262,38 @@ def _setup_openai(cfg: dict) -> bool:
   has_azure_endpoint = bool(env_endpoint or cfg_endpoint)
 
   console.print("\n[bold cyan]OpenAI[/bold cyan] (gpt-image-*)")
-  detected = []
-  if has_key: detected.append("API key")
-  if has_azure_endpoint: detected.append("Azure endpoint")
-  if detected:
-    console.print(f"  [dim]detected:[/dim] {', '.join(detected)}")
-  else:
-    console.print("  [dim]nothing detected[/dim]")
 
-  native_ready = has_key and not env_endpoint  # OPENAI_BASE_URL not pointing at Azure
+  native_ready = bool(os.getenv("OPENAI_API_KEY")) and not env_endpoint
   azure_ready = has_key and has_azure_endpoint
+
+  if os.getenv("OPENAI_API_KEY"):
+    native_detail = f"OPENAI_API_KEY={_mask(os.getenv('OPENAI_API_KEY'))} in env"
+  else:
+    native_detail = "needs OPENAI_API_KEY"
+
+  azure_key_var = (
+    "AZURE_OPENAI_API_KEY" if os.getenv("AZURE_OPENAI_API_KEY")
+    else "OPENAI_API_KEY" if os.getenv("OPENAI_API_KEY")
+    else None
+  )
+  azure_endpoint_str = env_endpoint or cfg_endpoint
+  if azure_ready:
+    azure_detail = (
+      f"{azure_key_var}={_mask(os.getenv(azure_key_var))}, "
+      f"endpoint {_host(azure_endpoint_str)}"
+    )
+  elif has_key and not has_azure_endpoint:
+    azure_detail = f"key {azure_key_var}={_mask(os.getenv(azure_key_var))} OK, endpoint missing"
+  elif has_azure_endpoint and not has_key:
+    azure_detail = f"endpoint {_host(azure_endpoint_str)} OK, key missing"
+  else:
+    azure_detail = "needs api key + resource endpoint"
 
   pick = questionary.select(
     "Pick an OpenAI auth path (or skip):",
     choices=[
-      questionary.Choice(_choice_label("OpenAI native (api.openai.com)", native_ready, "needs OPENAI_API_KEY"), value="openai_native"),
-      questionary.Choice(_choice_label("OpenAI via Azure", azure_ready, "needs key + endpoint"), value="openai_azure"),
+      questionary.Choice(_choice_label("OpenAI native (api.openai.com)", native_ready, native_detail), value="openai_native"),
+      questionary.Choice(_choice_label("OpenAI via Azure", azure_ready, azure_detail), value="openai_azure"),
       questionary.Choice("Skip OpenAI", value="skip"),
     ],
   ).ask()
@@ -272,9 +309,11 @@ def _setup_openai(cfg: dict) -> bool:
       if not _fetch_secret("azure", "AZURE_OPENAI_API_KEY", "Azure OpenAI API key"):
         return False
     if not has_azure_endpoint:
-      url = questionary.text(
-        "Azure resource endpoint (e.g. https://my-resource.openai.azure.com):",
-      ).ask()
+      console.print()
+      console.print("[dim]Azure needs the resource endpoint URL — looks like:[/dim] [bold]https://<resource>.openai.azure.com[/bold]")
+      console.print("[dim]Find it in: Azure portal → your OpenAI resource → 'Keys and Endpoint'.[/dim]")
+      console.print("[dim]Or copy from an existing config (codex/config.toml, litellm, etc.) — same URL, different env-var name.[/dim]")
+      url = questionary.text("Paste the URL:").ask()
       if not url:
         return False
       cfg["openai_base_url"] = url.strip()
@@ -301,7 +340,7 @@ def _setup_openai(cfg: dict) -> bool:
 # ────────────────────── entry point ──────────────────────
 
 def run_setup() -> None:
-  console.print("[bold cyan]genimg setup[/bold cyan] — detect → fetch → validate → save\n")
+  console.print("[bold cyan]genimg setup[/bold cyan] — detect → fetch → validate → save")
   cfg = config.load()
 
   try:
