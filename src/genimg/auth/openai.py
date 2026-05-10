@@ -57,7 +57,8 @@ def get_client(*, force: str | None = None) -> OpenAI | AzureOpenAI:
   if "openai_azure" in enabled:
     return _azure()
   if "openai_native" in enabled:
-    return _direct()
+    # User explicitly chose api.openai.com — bypass any OPENAI_BASE_URL proxy.
+    return _direct(ignore_base_url=True)
 
   return _azure() if is_azure() else _direct()
 
