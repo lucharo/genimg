@@ -13,19 +13,24 @@ uv tool install --from . genimg
 ```bash
 genimg "a robot" -o robot.png                    # default model (gdm:nb2)
 genimg "a robot" -m oai:gi2 -o robot.png         # OpenAI gpt-image-2
-genimg "with refs" --refs a.png b.png -o out.png # reference images
+genimg "with refs" a.png b.png -o out.png        # reference images (positional)
 genimg "edit this" -i input.png -o edited.png    # image-to-image
-genimg "X" -n 4 -g grid.html                     # batch + HTML grid
+genimg "X" -n 4 -g --open                        # batch + auto HTML grid
+genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg models                                    # discover working models
-genimg models --refresh                          # re-probe
-genimg grid *.png -o g.html --open               # standalone grid
+genimg setup                                     # interactive auth wizard
+genimg auth                                      # show ✓/✗ readiness per provider
 ```
 
 ## Auth
 
-Auto-detected:
-- **Google**: `CLAUDE_GCP_CRED` → Vertex AI; else `GOOGLE_API_KEY`/`GEMINI_API_KEY` → direct
-- **OpenAI**: `OPENAI_BASE_URL` containing `azure` → Azure OpenAI; else direct via `OPENAI_API_KEY`
+Run `genimg setup` for the guided flow (detect → fetch missing → live preflight → save).
+
+Modes:
+- **Google**: `google_direct` (`GEMINI_API_KEY`/`GOOGLE_API_KEY`), `google_vertex` (service-account JSON via `CLAUDE_GCP_CRED`/`GOOGLE_APPLICATION_CREDENTIALS`), or `google_vertex_adc` (`gcloud auth application-default login`).
+- **OpenAI**: `openai_native` (`OPENAI_API_KEY` → api.openai.com) or `openai_azure` (`AZURE_OPENAI_API_KEY` + endpoint URL).
+
+Saved config wins over env-var auto-detection. Secrets stay in env / shell rc; non-secret values (Azure endpoint, GCP project) live in `~/.config/genimg/config.json`.
 
 ## Models (`-m`)
 
