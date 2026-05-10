@@ -164,6 +164,11 @@ def _fetch_sa_json() -> bool:
   return True
 
 
+def _choice_label(text: str, ready: bool, missing: str) -> str:
+  """Plain-text label for questionary (no Rich markup — questionary won't parse it)."""
+  return f"{text}  ·  {'ready' if ready else missing}"
+
+
 # ────────────────────── per-provider steps ──────────────────────
 
 def _setup_google(cfg: dict) -> bool:
@@ -181,15 +186,12 @@ def _setup_google(cfg: dict) -> bool:
   else:
     console.print("  [dim]nothing detected[/dim]")
 
-  def _label(text: str, ready: bool, missing: str) -> str:
-    return f"{text}  {'[green][ready][/green]' if ready else f'[dim][{missing}][/dim]'}"
-
   pick = questionary.select(
     "Pick a Google auth path (or skip):",
     choices=[
-      questionary.Choice(_label("Direct API (Gemini key)", has_direct, "needs key"), value="google_direct"),
-      questionary.Choice(_label("Vertex (service account JSON)", has_sa, "needs JSON"), value="google_vertex"),
-      questionary.Choice(_label("Vertex (gcloud user creds, ADC)", has_adc, "needs gcloud login"), value="google_vertex_adc"),
+      questionary.Choice(_choice_label("Direct API (Gemini key)", has_direct, "needs key"), value="google_direct"),
+      questionary.Choice(_choice_label("Vertex (service account JSON)", has_sa, "needs JSON"), value="google_vertex"),
+      questionary.Choice(_choice_label("Vertex (gcloud user creds, ADC)", has_adc, "needs gcloud login"), value="google_vertex_adc"),
       questionary.Choice("Skip Google", value="skip"),
     ],
   ).ask()
@@ -250,14 +252,11 @@ def _setup_openai(cfg: dict) -> bool:
   native_ready = has_key and not env_endpoint  # OPENAI_BASE_URL not pointing at Azure
   azure_ready = has_key and has_azure_endpoint
 
-  def _label(text: str, ready: bool, missing: str) -> str:
-    return f"{text}  {'[green][ready][/green]' if ready else f'[dim][{missing}][/dim]'}"
-
   pick = questionary.select(
     "Pick an OpenAI auth path (or skip):",
     choices=[
-      questionary.Choice(_label("OpenAI native (api.openai.com)", native_ready, "needs OPENAI_API_KEY"), value="openai_native"),
-      questionary.Choice(_label("OpenAI via Azure", azure_ready, "needs key + endpoint"), value="openai_azure"),
+      questionary.Choice(_choice_label("OpenAI native (api.openai.com)", native_ready, "needs OPENAI_API_KEY"), value="openai_native"),
+      questionary.Choice(_choice_label("OpenAI via Azure", azure_ready, "needs key + endpoint"), value="openai_azure"),
       questionary.Choice("Skip OpenAI", value="skip"),
     ],
   ).ask()
