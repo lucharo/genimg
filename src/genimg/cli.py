@@ -8,6 +8,7 @@ from typing import Annotated
 import click
 import typer
 from rich.console import Console
+from rich.markup import escape as _rich_escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
@@ -187,7 +188,8 @@ def _run(
     f"{alias}{default_marker} → [bold]{spec.model_id}[/bold]"
   )
   prompt_preview = prompt if len(prompt) <= 80 else prompt[:77] + "…"
-  console.print(f'  [dim]prompt[/dim]   "{prompt_preview}"')
+  # Escape user input — bracketed prompts would otherwise be parsed as Rich markup.
+  console.print(f'  [dim]prompt[/dim]   "{_rich_escape(prompt_preview)}"')
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
@@ -508,8 +510,10 @@ def grid_cmd(
       console.print(f"[red]error:[/red] not found: {p}")
       raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
-  written, total = grid_module.render(paths, target)
-  console.print(f"[green]wrote[/green] {written} [dim](est. ${total:.2f} across {len(paths)} images)[/dim]")
+  # Don't pass provider/quality — provenance of arbitrary input files is unknown,
+  # so any cost estimate would be misleading. Suppress the dollar figure here.
+  written, _total = grid_module.render(paths, target)
+  console.print(f"[green]wrote[/green] {written} [dim]({len(paths)} images)[/dim]")
   if open_after:
     grid_module.open_in_browser(written)
 
