@@ -84,7 +84,10 @@ def _data_uri(path: Path) -> str:
 
 def render(images: list[Path], output: Path, *, embed: bool = True,
            copy_format: str = "I choose {label} ({filename})",
-           provider: str | None = None, quality: str | None = None) -> tuple[Path, float]:
+           provider: str | None = None, quality: str | None = None,
+           include_cost: bool = True) -> tuple[Path, float]:
+  """Render an HTML grid. If `include_cost` is False (or provider unknown),
+  the embedded cost footer is omitted to avoid misleading totals."""
   cards: list[str] = []
   costs: list[float] = []
   for i, p in enumerate(images):
@@ -95,8 +98,11 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
     costs.append(estimate_cost(p, provider=provider, quality=quality))
 
   total = sum(costs)
-  detail = f"{len(images)} images x ${costs[0]:.2f}" if len(set(costs)) == 1 else f"{len(images)} images (mixed)"
-  footer = f'<div class="cost-footer"><span class="detail">{detail}</span><span class="total">Total: ${total:.2f}</span></div>'
+  if include_cost and provider is not None:
+    detail = f"{len(images)} images x ${costs[0]:.2f}" if len(set(costs)) == 1 else f"{len(images)} images (mixed)"
+    footer = f'<div class="cost-footer"><span class="detail">{detail}</span><span class="total">Total: ${total:.2f}</span></div>'
+  else:
+    footer = ""
   html = _HTML.replace("__CARDS__", "".join(cards)).replace("__COST_FOOTER__", footer)
   output.parent.mkdir(parents=True, exist_ok=True)
   output.write_text(html)
