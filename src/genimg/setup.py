@@ -7,6 +7,7 @@ guided fetch flow opens the right signup page, prompts for the value, optionally
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import webbrowser
@@ -51,7 +52,11 @@ def _shell_rc_path() -> Path | None:
 
 
 def _format_export(rc: Path, var: str, value: str) -> str:
-  return f"set -gx {var} {value}\n" if rc.name == "config.fish" else f"export {var}={value}\n"
+  """Format a persistent export line, properly escaping `value` for the target shell."""
+  if rc.name == "config.fish":
+    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+    return f"set -gx {var} '{escaped}'\n"
+  return f"export {var}={shlex.quote(value)}\n"
 
 
 def _has_export(text: str, var: str) -> bool:

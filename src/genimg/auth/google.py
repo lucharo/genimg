@@ -30,12 +30,23 @@ def _vertex(project: str | None, region: str) -> genai.Client:
 
 
 def _vertex_adc(project: str | None, region: str) -> genai.Client:
-  """Vertex via gcloud user ADC. The SDK's google.auth.default() picks up ADC when
-  no service-account creds are present in env."""
+  """Force Vertex auth via gcloud user ADC.
+
+  The SDK's google.auth.default() resolution picks up GOOGLE_APPLICATION_CREDENTIALS
+  *first*, then falls back to gcloud ADC. If a service-account env var is set we'd
+  silently auth as the SA — defeating the user's explicit `google_vertex_adc` choice.
+  Hide those vars during client construction so ADC actually wins.
+  """
   user_cfg = _cfg.load()
   proj = project or user_cfg.get("gcp_project") or os.getenv("GOOGLE_CLOUD_PROJECT") or ORG_DEFAULT_PROJECT
   loc = user_cfg.get("gcp_region") or region
-  return genai.Client(vertexai=True, project=proj, location=loc)
+  hidden = {k: os.environ.pop(k, None) for k in ("GOOGLE_APPLICATION_CREDENTIALS", "CLAUDE_GCP_CRED")}
+  try:
+    return genai.Client(vertexai=True, project=proj, location=loc)
+  finally:
+    for k, v in hidden.items():
+      if v is not None:
+        os.environ[k] = v
 
 
 def _direct() -> genai.Client:
