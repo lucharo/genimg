@@ -136,13 +136,24 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
-  resolved = model or config.get_default_model() or registry.DEFAULT
+  user_cfg = config.load()
+  model_was_explicit = model is not None
+  resolved = model or user_cfg.get("default_model") or registry.DEFAULT
   try:
     alias, spec = registry.resolve(resolved)
   except ValueError as e:
     console.print(f"[red]unknown model:[/red] {e}\n")
     _list_models(refresh=False, show_aliases=True)
     raise typer.Exit(1)
+
+  # Apply config defaults for generation params (flag → config → built-in).
+  resolution_was_explicit = resolution is not None
+  aspect_was_explicit = aspect_ratio is not None
+  quality_was_explicit = quality is not None
+  resolution = resolution or user_cfg.get("default_resolution")
+  aspect_ratio = aspect_ratio or user_cfg.get("default_aspect_ratio")
+  if spec.provider == "openai":
+    quality = quality or user_cfg.get("default_quality")
 
   _validate_provider_flags(
     spec.provider, quality=quality, region=region, project=project, auth=auth,
@@ -156,23 +167,36 @@ def _run(
   effective_q = (quality or "medium") if spec.provider == "openai" else None
   params = [f"n={n}"]
   if effective_q:
-    params.append(f"q={effective_q}{'' if quality else ' (default)'}")
+    params.append(f"q={effective_q}{'' if quality_was_explicit else ' (default)'}")
   if resolution:
-    params.append(f"r={resolution}")
+    params.append(f"r={resolution}{'' if resolution_was_explicit else ' (default)'}")
   if aspect_ratio:
-    params.append(f"a={aspect_ratio}")
-  console.print(
-    f"[cyan]genimg[/cyan] [{spec.provider}] {alias} → [bold]{spec.model_id}[/bold] "
-    f"[dim]id={gen_id} {' '.join(params)}[/dim]"
+    params.append(f"a={aspect_ratio}{'' if aspect_was_explicit else ' (default)'}")
+
+  resolved_size = _resolved_openai_size(spec.provider, resolution, aspect_ratio)
+  est_cost = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
+                           quality=effective_q, resolution=resolution)
+  auth_mode_str = (
+    auth_openai.auth_info()["mode"] if spec.provider == "openai"
+    else auth_google.auth_info()["mode"]
   )
+  default_marker = "" if model_was_explicit else " [dim](default)[/dim]"
+
+  console.print(
+    f"[cyan]genimg[/cyan] [magenta]{spec.provider}/{auth_mode_str}[/magenta] "
+    f"{alias}{default_marker} → [bold]{spec.model_id}[/bold]"
+  )
+  prompt_preview = prompt if len(prompt) <= 80 else prompt[:77] + "…"
+  console.print(f'  [dim]prompt[/dim]   "{prompt_preview}"')
+  size_note = f" → {resolved_size}" if resolved_size else ""
+  console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
+  console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
+  console.print(f"  [dim]output[/dim]   {_short_path(out_path)}")
   if effective_q == "high":
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
   if dry_run:
-    est = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
-                        quality=effective_q, resolution=resolution)
-    console.print(f"[dim]dry-run: would call {spec.model_id} ({n} image{'s' if n>1 else ''}). "
-                  f"Estimated cost: ~${est:.4f}. No API call made.[/dim]")
+    console.print(f"[dim]dry-run: no API call made.[/dim]")
     return
 
   t0 = time.time()
@@ -201,8 +225,6 @@ def _run(
     console.print(f"[red]error[/red] ({type(e).__name__}): {e}")
     raise typer.Exit(2)
 
-  est_cost = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
-                           quality=effective_q, resolution=resolution)
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
@@ -255,12 +277,13 @@ def _models_root(
 
 def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> None:
   cache_exists = discovery.load_cache() is not None
-  if not cache_exists or refresh:
-    n_models = len(registry.all_canonical())
-    console.print(f"[dim]first probe of {n_models} model(s) — this may take ~30s...[/dim]")
-  else:
-    console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
-    console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
+  if not json_out:
+    if not cache_exists or refresh:
+      n_models = len(registry.all_canonical())
+      console.print(f"[dim]first probe of {n_models} model(s) — this may take ~30s...[/dim]")
+    else:
+      console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
+      console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
   t0 = time.time()
   probes, age = discovery.get_or_probe(refresh=refresh)
   elapsed = time.time() - t0
@@ -410,11 +433,23 @@ def auth_cmd(
 
 # ────────────────────── history command ──────────────────────
 
-@_app.command("history", help="List recent generations (reads ~/.genimg/metadata/).")
+@_app.command("history", help="List recent generations, or aggregate spend with --summary.")
 def history_cmd(
   limit: Annotated[int, typer.Option("-n", "--limit", min=1, max=200, help="Max rows.")] = 20,
+  summary: Annotated[bool, typer.Option("--summary", help="Aggregate total spend across all generations.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table.")] = False,
 ):
+  if summary:
+    total, count = history.total_spent()
+    if json_out:
+      import json as _json
+      typer.echo(_json.dumps({"total_usd": round(total, 4), "generations": count}))
+      return
+    console.print(f"[bold green]${total:.4f}[/bold green] across {count} generation(s)")
+    if count:
+      console.print(f"[dim]avg ${total/count:.4f}/gen  •  reads ~/.genimg/metadata/*.json[/dim]")
+    return
+
   entries = history.recent(limit=limit)
   if json_out:
     import json as _json
@@ -448,20 +483,35 @@ def history_cmd(
   console.print(table)
 
 
-# ────────────────────── cost command ──────────────────────
+# ────────────────────── cost command (alias for history --summary) ──────────────────────
 
-@_app.command("cost", help="Show total estimated spend across all generations.")
+@_app.command("cost", help="Alias for `history --summary` — total estimated spend.")
 def cost_cmd(
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
 ):
-  total, count = history.total_spent()
-  if json_out:
-    import json as _json
-    typer.echo(_json.dumps({"total_usd": round(total, 4), "generations": count}))
-    return
-  console.print(f"[bold green]${total:.4f}[/bold green] across {count} generation(s)")
-  if count:
-    console.print(f"[dim]avg ${total/count:.4f}/gen  •  reads ~/.genimg/metadata/*.json[/dim]")
+  history_cmd(limit=20, summary=True, json_out=json_out)
+
+
+# ────────────────────── grid command (standalone) ──────────────────────
+
+@_app.command("grid", help="Render an HTML grid from existing image files.")
+def grid_cmd(
+  paths: Annotated[list[Path], typer.Argument(help="Image paths to include in the grid.")],
+  output: Annotated[Path | None, typer.Option("-o", "--output", help="Output HTML path. Default: ~/.genimg/grids/<timestamp>.html")] = None,
+  open_after: Annotated[bool, typer.Option("--open", help="Open the grid in the browser.")] = False,
+):
+  if not paths:
+    console.print("[red]error:[/red] need at least one image path.")
+    raise typer.Exit(1)
+  for p in paths:
+    if not p.exists():
+      console.print(f"[red]error:[/red] not found: {p}")
+      raise typer.Exit(1)
+  target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
+  written, total = grid_module.render(paths, target)
+  console.print(f"[green]wrote[/green] {written} [dim](est. ${total:.2f} across {len(paths)} images)[/dim]")
+  if open_after:
+    grid_module.open_in_browser(written)
 
 
 # ────────────────────── config sub-typer ──────────────────────
@@ -469,8 +519,16 @@ def cost_cmd(
 config_app = typer.Typer(
   help="Inspect / edit the saved config (~/.config/genimg/config.json).",
   context_settings={"help_option_names": ["-h", "--help"]},
+  invoke_without_command=True,
+  no_args_is_help=False,
 )
 _app.add_typer(config_app, name="config")
+
+
+@config_app.callback(invoke_without_command=True)
+def _config_root(ctx: typer.Context):
+  if ctx.invoked_subcommand is None:
+    config_show()
 
 
 @config_app.command("show", help="Print current saved config as JSON.")
@@ -500,8 +558,16 @@ def config_edit():
 skills_app = typer.Typer(
   help="Install the bundled skill into agent harnesses (claude/codex/cursor/opencode).",
   context_settings={"help_option_names": ["-h", "--help"]},
+  invoke_without_command=True,
+  no_args_is_help=False,
 )
 _app.add_typer(skills_app, name="skills")
+
+
+@skills_app.callback(invoke_without_command=True)
+def _skills_root(ctx: typer.Context):
+  if ctx.invoked_subcommand is None:
+    skills_list()
 
 _AGENT_TARGETS = {
   "claude":   Path.home() / ".claude" / "skills" / "genimg",
@@ -610,6 +676,21 @@ _ASPECT_VALUES = {"1:1", "3:4", "4:3", "9:16", "16:9"}
 _OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _OPENAI_MAX_INPUT_MB = 50
 _OPENAI_MAX_INPUTS = 16
+
+
+def _resolved_openai_size(provider: str, resolution: str | None, aspect_ratio: str | None) -> str | None:
+  """Look up the WxH OpenAI gpt-image-2 will use, for the preflight display.
+  Returns None for non-OpenAI providers or unknown combos."""
+  if provider != "openai":
+    return None
+  from .providers.openai import _SIZE_MAP
+  return _SIZE_MAP.get((resolution or "1K", aspect_ratio or "1:1"))
+
+
+def _short_path(p: Path) -> str:
+  s = str(p)
+  home = str(Path.home())
+  return s.replace(home, "~", 1) if s.startswith(home) else s
 
 
 def _validate_provider_flags(

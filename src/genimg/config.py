@@ -1,12 +1,15 @@
 """User config at ~/.config/genimg/config.json.
 
 Schema (all optional, additive):
-  enabled_providers: list[str]      # {google_direct, google_vertex, google_vertex_adc, openai_native, openai_azure}
-  default_model:     str            # alias or canonical id
-  gcp_project:       str            # for Vertex modes
-  gcp_region:        str            # for Vertex modes
-  openai_base_url:   str            # Azure resource URL or proxy (non-secret)
-  azure_api_version: str            # optional override for Azure api-version
+  enabled_providers:     list[str]  # {google_direct, google_vertex, google_vertex_adc, openai_native, openai_azure}
+  default_model:         str        # alias or canonical id
+  default_quality:       str        # OpenAI-only — low | medium | high | auto
+  default_aspect_ratio:  str        # 1:1 | 3:4 | 4:3 | 9:16 | 16:9
+  default_resolution:    str        # 1K | 2K | 4K
+  gcp_project:           str        # for Vertex modes
+  gcp_region:            str        # for Vertex modes
+  openai_base_url:       str        # Azure resource URL or proxy (non-secret)
+  azure_api_version:     str        # optional override for Azure api-version
 
 Secrets (API keys, service-account JSON paths) live in env, never here.
 """

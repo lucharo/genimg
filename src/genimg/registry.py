@@ -19,13 +19,19 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   # Google DeepMind / Gemini Image
   "gdm:nbp":             ModelSpec("google", "gemini-3-pro-image-preview",     region="global", quality_rank=10),
   "gdm:nano-banana-pro": "gdm:nbp",
+  "google:nbp":          "gdm:nbp",
   "gdm:nb2":             ModelSpec("google", "gemini-3.1-flash-image-preview", region="global", quality_rank=8),
   "gdm:nano-banana-2":   "gdm:nb2",
+  "google:nb2":          "gdm:nb2",
   "gdm:nb":              ModelSpec("google", "gemini-2.5-flash-image",         region="us-central1", quality_rank=6),
   "gdm:nano-banana":     "gdm:nb",
+  "google:nb":           "gdm:nb",
   "gdm:imagen4":         ModelSpec("google", "imagen-4.0-generate-001",        region="us-central1", quality_rank=7),
+  "google:imagen4":      "gdm:imagen4",
   "gdm:imagen4-fast":    ModelSpec("google", "imagen-4.0-fast-generate-001",   region="us-central1", quality_rank=5),
+  "google:imagen4-fast": "gdm:imagen4-fast",
   "gdm:imagen4-ultra":   ModelSpec("google", "imagen-4.0-ultra-generate-001",  region="us-central1", quality_rank=8),
+  "google:imagen4-ultra": "gdm:imagen4-ultra",
 
   # OpenAI / Azure OpenAI
   # Verified from developers.openai.com/cookbook (Apr 2026 prompting guide) +
