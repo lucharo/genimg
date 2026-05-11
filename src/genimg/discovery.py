@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 from google.genai.errors import ClientError, ServerError
 from openai import APIStatusError, AuthenticationError
 
+from .auth import google as auth_google
+from .auth import openai as auth_openai
 from .interfaces import ProbeResult
-from .providers import GeminiImageGen, OpenAIImageGen
 from .registry import ModelSpec, all_canonical
 
 CACHE_PATH = Path.home() / ".cache" / "genimg" / "models.json"
@@ -38,6 +39,13 @@ def cache_age_seconds(cached: dict[str, Any]) -> float:
 
 def is_cache_stale(cached: dict[str, Any]) -> bool:
   return cache_age_seconds(cached) > CACHE_REFRESH_INTERVAL_SECONDS
+
+
+def load_fresh_cache() -> dict[str, Any] | None:
+  cached = load_cache()
+  if cached and not is_cache_stale(cached):
+    return cached
+  return None
 
 
 def save_cache(probes: dict[str, ProbeResult]) -> None:
@@ -72,8 +80,10 @@ def _probe_groups(entries: list[tuple[str, ModelSpec]]):
   for alias, spec in entries:
     if spec.provider == "google":
       google_entries_by_region.setdefault(spec.region or "global", []).append((alias, spec))
-    else:
+    elif spec.provider == "openai":
       openai_entries.append((alias, spec))
+    else:
+      raise ValueError(f"unknown provider for {alias}: {spec.provider}")
 
   groups = []
   if openai_entries:
@@ -85,7 +95,7 @@ def _probe_groups(entries: list[tuple[str, ModelSpec]]):
 
 def _probe_openai_from_model_list(entries: list[tuple[str, ModelSpec]]) -> dict[str, ProbeResult]:
   try:
-    client = OpenAIImageGen()._client()
+    client = auth_openai.get_client()
     listed_ids = _listed_model_ids(client.models.list())
     return _results_from_model_ids(entries, listed_ids)
   except AuthenticationError as e:
@@ -99,7 +109,7 @@ def _probe_openai_from_model_list(entries: list[tuple[str, ModelSpec]]) -> dict[
 
 def _probe_google_from_model_list(region: str, entries: list[tuple[str, ModelSpec]]) -> dict[str, ProbeResult]:
   try:
-    client = GeminiImageGen()._client(region)
+    client = auth_google.get_client(region=region)
     listed_ids = _listed_model_ids(client.models.list())
     return _results_from_model_ids(entries, listed_ids)
   except ClientError as e:
@@ -147,10 +157,10 @@ def _error_results(entries: list[tuple[str, ModelSpec]], status: str, detail: st
   }
 
 
-def get_or_probe(refresh: bool = False) -> tuple[dict[str, ProbeResult], float]:
+def get_or_probe(refresh: bool = False, cached: dict[str, Any] | None = None) -> tuple[dict[str, ProbeResult], float]:
   """Return (alias → ProbeResult, cache_age_seconds). Probes if cache stale or refresh=True."""
   if not refresh:
-    cached = load_cache()
+    cached = cached if cached is not None else load_cache()
     if cached and not is_cache_stale(cached):
       probes = {a: ProbeResult.model_validate(p) for a, p in cached["probes"].items()}
       return probes, cache_age_seconds(cached)

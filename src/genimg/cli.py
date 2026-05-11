@@ -278,17 +278,15 @@ def _models_root(
 
 
 def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> None:
-  cached = discovery.load_cache()
-  cache_exists = cached is not None
-  cache_stale = bool(cached and discovery.is_cache_stale(cached))
+  cached = None if refresh or json_out else discovery.load_cache()
   if not json_out:
     if refresh:
       n_models = len(registry.all_canonical())
       console.print(f"[dim]refreshing {n_models} model probe(s) in parallel...[/dim]")
-    elif not cache_exists:
+    elif cached is None:
       n_models = len(registry.all_canonical())
       console.print(f"[dim]first probe of {n_models} model(s) in parallel — this may take a few minutes...[/dim]")
-    elif cache_stale:
+    elif discovery.is_cache_stale(cached):
       n_models = len(registry.all_canonical())
       console.print(
         f"[dim]cache age: {_fmt_age(discovery.cache_age_seconds(cached))}; "
@@ -297,9 +295,7 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
     else:
       console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
       console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
-  t0 = time.time()
-  probes, age = discovery.get_or_probe(refresh=refresh)
-  elapsed = time.time() - t0
+  probes, age = discovery.get_or_probe(refresh=refresh, cached=cached)
 
   if json_out:
     import json as _json
@@ -384,7 +380,7 @@ def auth_cmd(
   check: Annotated[bool, typer.Option("--check", help="Run a tiny live probe per provider.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table (agent-friendly).")] = False,
 ):
-  cached = discovery.load_cache()
+  cached = discovery.load_fresh_cache()
   probes = {a: p["status"] for a, p in (cached or {}).get("probes", {}).items()}
 
   rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:")]
@@ -433,7 +429,7 @@ def auth_cmd(
   if not cached:
     console.print("[dim]run `genimg models` to populate the probe cache.[/dim]")
   else:
-    console.print(f"[dim]cache age: {_fmt_age(time.time() - cached['timestamp'])}  •  `genimg models --refresh` to re-probe[/dim]")
+    console.print(f"[dim]cache age: {_fmt_age(discovery.cache_age_seconds(cached))}  •  `genimg models --refresh` to re-probe[/dim]")
 
   if check:
     console.print("\n[dim]live probe...[/dim]")
