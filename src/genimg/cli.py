@@ -391,7 +391,7 @@ def auth_cmd(
 
   if json_out:
     import json as _json
-    payload = {name: {**info, "models_working": sum(1 for a, s in probes.items() if a.startswith(prefix) and s == "working"),
+    payload = {name: {**info, "models_listed": sum(1 for a, s in probes.items() if a.startswith(prefix) and _status_counts_as_available(s)),
                       "models_total":  sum(1 for a in probes if a.startswith(prefix))} for name, info, prefix in rows}
     typer.echo(_json.dumps(payload, indent=2))
     return
@@ -407,8 +407,8 @@ def auth_cmd(
 
   for name, info, prefix in rows:
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
-    ok_probes = sum(1 for s in cohort if s == "working")
-    summary = f"{ok_probes}/{len(cohort)} working" if cohort else "[yellow]no cache[/yellow]"
+    ok_probes = sum(1 for s in cohort if _status_counts_as_available(s))
+    summary = f"{ok_probes}/{len(cohort)} listed" if cohort else "[yellow]no cache[/yellow]"
     cred_cell = (
       f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
       else "[red]✗ unset[/red]"
@@ -835,12 +835,18 @@ def _fmt_age(seconds: float) -> str:
 
 def _color_status(s: str) -> str:
   return {
+    "listed": "[green]listed[/green]",
+    "missing": "[yellow]missing[/yellow]",
     "working": "[green]working[/green]",
     "404": "[yellow]404[/yellow]",
     "403": "[red]403[/red]",
     "auth": "[red]auth[/red]",
     "error": "[red]error[/red]",
   }.get(s, s)
+
+
+def _status_counts_as_available(s: str) -> bool:
+  return s in {"listed", "working"}
 
 
 def _rm_tree(p: Path) -> None:
