@@ -22,6 +22,19 @@ genimg setup                                     # interactive auth wizard
 genimg auth                                      # show ✓/✗ readiness per provider
 ```
 
+## Skills
+
+```bash
+genimg skills list                              # show install state
+genimg skills install                           # install all bundled skills to Claude
+genimg skills install all                       # install all bundled skills to known agents
+genimg skills install codex genimg              # targeted install
+```
+
+Bundled skills:
+- `genimg`: lean CLI usage patterns.
+- `genimg-agent-refinement`: agent loop for inspecting outputs and removing obvious artifacts.
+
 ## Auth
 
 Run `genimg setup` for the guided flow (detect → fetch missing → live preflight → save).
