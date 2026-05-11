@@ -1,11 +1,19 @@
 ---
 name: genimg-agent-refinement
-description: Agentic polish loop for genimg outputs. Use when asked to refine, polish, clean up, validate, or iterate generated images; when the user is frustrated by artifacts; or when an agent is expected to produce image outputs and should inspect them before showing the final result.
+description: Optional agentic polish loop for genimg outputs. Use when the user explicitly asks to refine, polish, clean up, validate, or iterate generated images; when they approve an offered refinement pass; or when they are clearly frustrated by artifacts and need a concrete next step.
 ---
 
 # genimg-agent-refinement
 
-Use this on top of `genimg` when you are responsible for getting a usable image, not just firing one generation.
+Use this on top of `genimg` only when the extra time and image-generation cost are justified.
+
+Default behavior: show the best initial result first. Then offer a refinement pass if obvious artifacts remain:
+
+> I made an initial version. I can run one artifact-cleanup pass if you want, but it will take another generation round.
+
+Do not quietly run extra rounds just because an image could be improved.
+
+It is okay to start with the loop when the user explicitly asks for refinement, validation, polish, artifact cleanup, or an agentic/iterative image workflow.
 
 ## Loop
 
@@ -13,7 +21,7 @@ Use this on top of `genimg` when you are responsible for getting a usable image,
 2. Inspect the PNGs yourself.
 3. Pick the strongest candidate.
 4. Rewrite the prompt only to remove clear defects.
-5. Re-run once or twice, using the best prior image as a reference when helpful:
+5. If the user approved refinement, re-run once or twice, using the best prior image as a reference when helpful:
 
 ```bash
 genimg "REFINED PROMPT" best.png -n 2 -g --open
@@ -39,8 +47,10 @@ Do not make taste calls unless the user asked for curation. Avoid adding warmer 
 
 Keep what worked in the best prior image. The refined prompt should name the useful parts to preserve, then name the defects to remove.
 
-If the retry fixes one defect but regresses important content, show or recommend the earlier image instead and explain the tradeoff briefly. Do not hide regressions from the user.
+If the retry fixes one defect but regresses important content, present the earlier image as the recommended result. Mention the regression only as brief context, for example: "The cleanup pass fixed the label collision but lost the stronger composition, so I’d keep the first image."
 
 ## When To Suggest It
 
-If the user sounds frustrated with image artifacts, offer this loop as the next step. If you are already producing an image deliverable for the user, you may run the loop before presenting the result.
+Suggest it when the user sounds frustrated with image artifacts, asks whether an image can be cleaned up, or requests production-ready output. Keep the offer concrete and cost-aware.
+
+If a user repeatedly accepts this workflow in the same project, you may treat that as a project preference for similar image tasks. Do not assume it globally from one approval.
