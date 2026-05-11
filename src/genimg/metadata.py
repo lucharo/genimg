@@ -46,8 +46,8 @@ def save(meta: dict[str, Any], gen_id: str) -> Path:
 def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
-          quality: str | None = None) -> dict[str, Any]:
-  return {
+          quality: str | None = None, grid_path: Path | None = None) -> dict[str, Any]:
+  meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),
     "prompt": prompt,
@@ -65,3 +65,10 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "cost_usd_estimated": round(cost_usd, 4),
     "workdir": str(Path.cwd()),
   }
+  if grid_path is not None:
+    meta["grid"] = {
+      "path": str(grid_path),
+      "format": grid_path.suffix.lstrip("."),
+      "bytes": grid_path.stat().st_size,
+    }
+  return meta
