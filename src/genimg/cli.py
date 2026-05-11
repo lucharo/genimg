@@ -278,11 +278,22 @@ def _models_root(
 
 
 def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> None:
-  cache_exists = discovery.load_cache() is not None
+  cached = discovery.load_cache()
+  cache_exists = cached is not None
+  cache_stale = bool(cached and discovery.is_cache_stale(cached))
   if not json_out:
-    if not cache_exists or refresh:
+    if refresh:
       n_models = len(registry.all_canonical())
-      console.print(f"[dim]first probe of {n_models} model(s) — this may take ~30s...[/dim]")
+      console.print(f"[dim]refreshing {n_models} model probe(s) in parallel...[/dim]")
+    elif not cache_exists:
+      n_models = len(registry.all_canonical())
+      console.print(f"[dim]first probe of {n_models} model(s) in parallel — this may take a few minutes...[/dim]")
+    elif cache_stale:
+      n_models = len(registry.all_canonical())
+      console.print(
+        f"[dim]cache age: {_fmt_age(discovery.cache_age_seconds(cached))}; "
+        f"refreshing {n_models} model probe(s) in parallel...[/dim]"
+      )
     else:
       console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
       console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
@@ -817,7 +828,9 @@ def _fmt_age(seconds: float) -> str:
     return f"{seconds:.0f}s"
   if seconds < 3600:
     return f"{seconds / 60:.0f}m"
-  return f"{seconds / 3600:.1f}h"
+  if seconds < 86400:
+    return f"{seconds / 3600:.1f}h"
+  return f"{seconds / 86400:.1f}d"
 
 
 def _color_status(s: str) -> str:
