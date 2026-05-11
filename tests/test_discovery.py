@@ -16,10 +16,10 @@ from genimg.interfaces import ProbeResult
 class DiscoveryCacheTests(unittest.TestCase):
   def test_uses_cache_before_refresh_interval(self) -> None:
     with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"):
-      cached_probe = ProbeResult(model="gpt-image-2", status="working")
+      cached_probe = ProbeResult(model="gpt-image-2", status="listed")
       discovery.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
       discovery.CACHE_PATH.write_text(json.dumps({
-        "timestamp": time.time() - (4 * 24 * 60 * 60),
+        "timestamp": time.time() - (discovery.CACHE_REFRESH_INTERVAL_SECONDS - 1),
         "probes": {"oai:gpt-image-2": cached_probe.model_dump()},
       }))
 
@@ -27,24 +27,24 @@ class DiscoveryCacheTests(unittest.TestCase):
         probes, age = discovery.get_or_probe()
 
       self.assertGreater(age, 0)
-      self.assertEqual(probes["oai:gpt-image-2"].status, "working")
+      self.assertEqual(probes["oai:gpt-image-2"].status, "listed")
 
   def test_refreshes_cache_after_refresh_interval(self) -> None:
     with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"):
-      stale_probe = ProbeResult(model="gpt-image-1.5", status="404")
+      stale_probe = ProbeResult(model="gpt-image-1.5", status="missing")
       discovery.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
       discovery.CACHE_PATH.write_text(json.dumps({
-        "timestamp": time.time() - (6 * 24 * 60 * 60),
+        "timestamp": time.time() - (discovery.CACHE_REFRESH_INTERVAL_SECONDS + 1),
         "probes": {"oai:gpt-image-1.5": stale_probe.model_dump()},
       }))
 
-      fresh_probe = ProbeResult(model="gpt-image-2", status="working")
+      fresh_probe = ProbeResult(model="gpt-image-2", status="listed")
       with patch.object(discovery, "probe_all", return_value={"oai:gpt-image-2": fresh_probe}) as probe_all:
         probes, age = discovery.get_or_probe()
 
       probe_all.assert_called_once_with()
       self.assertEqual(age, 0.0)
-      self.assertEqual(probes["oai:gpt-image-2"].status, "working")
+      self.assertEqual(probes["oai:gpt-image-2"].status, "listed")
 
 
 class DiscoveryProbeTests(unittest.TestCase):
@@ -69,26 +69,15 @@ class DiscoveryProbeTests(unittest.TestCase):
       def __init__(self, models: list[object]):
         self.models = FakeModels(models)
 
-    class FakeOpenAI:
-      def _client(self) -> FakeClient:
-        return FakeClient([SimpleNamespace(id="gpt-image-listed")])
-
-      def probe(self, model: str, region: str | None = None) -> ProbeResult:
-        raise AssertionError("discovery should use model-list metadata, not live generation probes")
-
-    class FakeGoogle:
-      def _client(self, region: str | None = None) -> FakeClient:
-        if region == "global":
-          return FakeClient([{"name": "models/gemini-listed"}])
-        return FakeClient([SimpleNamespace(name="publishers/google/models/imagen-listed")])
-
-      def probe(self, model: str, region: str | None = None) -> ProbeResult:
-        raise AssertionError("discovery should use model-list metadata, not live generation probes")
+    def fake_google_client(region: str = "global", project: str | None = None) -> FakeClient:
+      if region == "global":
+        return FakeClient([{"name": "models/gemini-listed"}])
+      return FakeClient([SimpleNamespace(name="publishers/google/models/imagen-listed")])
 
     with (
       patch.object(discovery, "all_canonical", return_value=entries),
-      patch.object(discovery, "OpenAIImageGen", FakeOpenAI),
-      patch.object(discovery, "GeminiImageGen", FakeGoogle),
+      patch.object(discovery.auth_openai, "get_client", return_value=FakeClient([SimpleNamespace(id="gpt-image-listed")])),
+      patch.object(discovery.auth_google, "get_client", side_effect=fake_google_client),
     ):
       probes = discovery.probe_all()
 
@@ -97,6 +86,13 @@ class DiscoveryProbeTests(unittest.TestCase):
     self.assertEqual(probes["gdm:regional"].status, "listed")
     self.assertEqual(probes["oai:listed"].status, "listed")
     self.assertEqual(probes["oai:missing"].status, "missing")
+
+  def test_probe_all_rejects_unknown_provider(self) -> None:
+    entries = {"bad:model": discovery.ModelSpec("not-a-provider", "test-model")}  # type: ignore[arg-type]
+
+    with patch.object(discovery, "all_canonical", return_value=entries):
+      with self.assertRaisesRegex(ValueError, "unknown provider"):
+        discovery.probe_all()
 
 
 if __name__ == "__main__":
