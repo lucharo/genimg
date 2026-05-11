@@ -18,7 +18,7 @@ from . import setup as setup_module
 from .auth import google as auth_google
 from .auth import openai as auth_openai
 from .generate import generate as run_generate
-from .interfaces import GenerateRequest
+from .interfaces import GenerateRequest, IImageGen
 
 console = Console()
 
@@ -164,6 +164,8 @@ def _run(
 
   gen_id = metadata.make_id(prompt, spec.model_id)
   out_path = output if output is not None else metadata.auto_output_path(gen_id)
+  planned_paths = _planned_output_paths(out_path, n)
+  planned_grid = metadata.auto_grid_path(gen_id) if grid and n > 1 else None
 
   effective_q = (quality or "medium") if spec.provider == "openai" else None
   params = [f"n={n}"]
@@ -193,7 +195,9 @@ def _run(
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
-  console.print(f"  [dim]output[/dim]   {_short_path(out_path)}")
+  _print_planned_paths(planned_paths)
+  if planned_grid:
+    console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
@@ -217,7 +221,7 @@ def _run(
       console=console,
       transient=True,
     ) as progress:
-      label = f"generating {n} images in parallel..." if n > 1 else "generating 1 image..."
+      label = _progress_label(n, grid)
       progress.add_task(label, total=None)
       result = run_generate(req, force_openai_auth=auth)
   except RuntimeError as e:
@@ -227,28 +231,29 @@ def _run(
     console.print(f"[red]error[/red] ({type(e).__name__}): {e}")
     raise typer.Exit(2)
 
-  meta = metadata.build(
-    gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
-    n=n, cost_usd=est_cost, input=input, refs=refs,
-    resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-  )
-  meta_path = metadata.save(meta, gen_id)
-
   elapsed = time.time() - t0
   for p in result.paths:
     console.print(f"  [green]wrote[/green] {p} [dim]({p.stat().st_size:,}B)[/dim]", soft_wrap=True)
-  console.print(
-    f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
-    soft_wrap=True,
-  )
 
   written_grid: Path | None = None
   if grid and len(result.paths) > 1:
-    target = metadata.auto_grid_path(gen_id)
+    target = planned_grid or metadata.auto_grid_path(gen_id)
     written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
   elif grid and len(result.paths) == 1:
     console.print("[dim]--grid ignored: needs n>=2[/dim]")
+
+  meta = metadata.build(
+    gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
+    n=n, cost_usd=est_cost, input=input, refs=refs,
+    resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+    grid_path=written_grid,
+  )
+  meta_path = metadata.save(meta, gen_id)
+  console.print(
+    f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
+    soft_wrap=True,
+  )
 
   if open_after:
     grid_module.open_in_browser(written_grid or result.paths[0])
@@ -740,6 +745,25 @@ def _short_path(p: Path) -> str:
   s = str(p)
   home = str(Path.home())
   return s.replace(home, "~", 1) if s.startswith(home) else s
+
+
+def _planned_output_paths(out_path: Path, n: int) -> list[Path]:
+  return [IImageGen.numbered_path(out_path, i, n) for i in range(n)]
+
+
+def _print_planned_paths(paths: list[Path]) -> None:
+  label = "output" if len(paths) == 1 else "outputs"
+  for i, path in enumerate(paths):
+    row_label = label if i == 0 else ""
+    console.print(f"  [dim]{row_label:<7}[/dim]  {_short_path(path)}")
+
+
+def _progress_label(n: int, grid: bool) -> str:
+  if n == 1:
+    return "generating 1 image..."
+  if grid:
+    return f"generating {n} images for grid in parallel..."
+  return f"generating {n} images in parallel..."
 
 
 def _validate_provider_flags(
