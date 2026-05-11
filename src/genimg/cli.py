@@ -560,7 +560,7 @@ def config_edit():
 # ────────────────────── skills sub-typer ──────────────────────
 
 skills_app = typer.Typer(
-  help="Install the bundled skill into agent harnesses (claude/codex/cursor/opencode).",
+  help="Install bundled skills into agent harnesses (claude/codex/cursor/opencode).",
   context_settings={"help_option_names": ["-h", "--help"]},
   invoke_without_command=True,
   no_args_is_help=False,
@@ -573,103 +573,144 @@ def _skills_root(ctx: typer.Context):
   if ctx.invoked_subcommand is None:
     skills_list()
 
-_AGENT_TARGETS = {
-  "claude":   Path.home() / ".claude" / "skills" / "genimg",
-  "codex":    Path.home() / ".codex" / "skills" / "genimg",
-  "cursor":   Path.home() / ".cursor" / "skills" / "genimg",
-  "opencode": Path.home() / ".opencode" / "skills" / "genimg",
+_AGENT_SKILL_ROOTS = {
+  "claude":   Path.home() / ".claude" / "skills",
+  "codex":    Path.home() / ".codex" / "skills",
+  "cursor":   Path.home() / ".cursor" / "skills",
+  "opencode": Path.home() / ".opencode" / "skills",
 }
 
 
-def _skill_source() -> Path:
+def _skill_sources() -> dict[str, Path]:
   pkg_dir = Path(__file__).parent
-  for candidate in (pkg_dir / "_skill", pkg_dir.parent.parent / "skill"):
+  for candidate in (pkg_dir / "_skills", pkg_dir.parent.parent / "skills"):
     if candidate.exists():
-      return candidate
+      sources = {
+        child.name: child
+        for child in sorted(candidate.iterdir())
+        if child.is_dir() and (child / "SKILL.md").exists()
+      }
+      if sources:
+        return sources
+
+  # Legacy source layout used before multiple skills were bundled.
+  for candidate in (pkg_dir / "_skill", pkg_dir.parent.parent / "skill"):
+    if (candidate / "SKILL.md").exists():
+      return {"genimg": candidate}
+
   raise FileNotFoundError("skill assets not found in package")
 
 
 def _resolve_agents(agent: str) -> list[str]:
   if agent == "all":
-    return list(_AGENT_TARGETS)
-  if agent not in _AGENT_TARGETS:
-    console.print(f"[red]unknown agent {agent!r}. Choose: {', '.join(_AGENT_TARGETS)} or 'all'.[/red]")
+    return list(_AGENT_SKILL_ROOTS)
+  if agent not in _AGENT_SKILL_ROOTS:
+    console.print(f"[red]unknown agent {agent!r}. Choose: {', '.join(_AGENT_SKILL_ROOTS)} or 'all'.[/red]")
     raise typer.Exit(1)
   return [agent]
 
 
-@skills_app.command("path", help="Print the source path of the bundled skill (useful for `npx skills add`).")
-def skills_path():
-  console.print(str(_skill_source()))
+def _resolve_skill_names(skill: str, sources: dict[str, Path]) -> list[str]:
+  if skill == "all":
+    return list(sources)
+  if skill not in sources:
+    console.print(f"[red]unknown skill {skill!r}. Choose: {', '.join(sources)} or 'all'.[/red]")
+    raise typer.Exit(1)
+  return [skill]
 
 
-@skills_app.command("install", help="Symlink the skill into one or more agent skill dirs.")
+@skills_app.command("path", help="Print bundled skill source paths.")
+def skills_path(
+  skill: Annotated[str, typer.Argument(help="Skill name or 'all'.")] = "all",
+):
+  sources = _skill_sources()
+  for skill_name in _resolve_skill_names(skill, sources):
+    console.print(f"{skill_name}: {sources[skill_name]}")
+
+
+@skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
 def skills_install(
-  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "claude",
+  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
   force: Annotated[bool, typer.Option("--force", help="Replace existing symlinks.")] = False,
 ):
-  src = _skill_source()
+  sources = _skill_sources()
   for name in _resolve_agents(agent):
-    target = _AGENT_TARGETS[name]
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() or target.is_symlink():
-      if not force:
-        console.print(f"[yellow]{name}:[/yellow] {target} exists (use --force or `skills update {name}`)")
-        continue
-      target.unlink() if target.is_symlink() else _rm_tree(target)
-    target.symlink_to(src)
-    console.print(f"[green]installed → {name}:[/green] {target}")
+    root = _AGENT_SKILL_ROOTS[name]
+    for skill_name in _resolve_skill_names(skill, sources):
+      src = sources[skill_name]
+      target = root / skill_name
+      target.parent.mkdir(parents=True, exist_ok=True)
+      if target.exists() or target.is_symlink():
+        if not force:
+          console.print(f"[yellow]{name}/{skill_name}:[/yellow] {target} exists (use --force or `skills update {name} {skill_name}`)")
+          continue
+        target.unlink() if target.is_symlink() else _rm_tree(target)
+      target.symlink_to(src)
+      console.print(f"[green]installed → {name}/{skill_name}:[/green] {target}")
 
 
-@skills_app.command("update", help="Re-link the skill in one or more agent dirs.")
+@skills_app.command("update", help="Re-link bundled skills in one or more agent dirs.")
 def skills_update(
   agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
 ):
-  src = _skill_source()
+  sources = _skill_sources()
   for name in _resolve_agents(agent):
-    target = _AGENT_TARGETS[name]
-    if not (target.exists() or target.is_symlink()):
-      continue  # silently skip uninstalled
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.is_symlink() and target.resolve() == src.resolve():
-      console.print(f"[dim]{name}: already current[/dim]")
-      continue
-    target.unlink() if target.is_symlink() else _rm_tree(target)
-    target.symlink_to(src)
-    console.print(f"[green]updated → {name}:[/green] {target}")
+    root = _AGENT_SKILL_ROOTS[name]
+    for skill_name in _resolve_skill_names(skill, sources):
+      src = sources[skill_name]
+      target = root / skill_name
+      if not (target.exists() or target.is_symlink()):
+        continue  # silently skip uninstalled
+      target.parent.mkdir(parents=True, exist_ok=True)
+      if target.is_symlink() and target.resolve() == src.resolve():
+        console.print(f"[dim]{name}/{skill_name}: already current[/dim]")
+        continue
+      target.unlink() if target.is_symlink() else _rm_tree(target)
+      target.symlink_to(src)
+      console.print(f"[green]updated → {name}/{skill_name}:[/green] {target}")
 
 
-@skills_app.command("uninstall", help="Remove the skill symlink from one or more agent dirs.")
+@skills_app.command("uninstall", help="Remove bundled skill symlinks from one or more agent dirs.")
 def skills_uninstall(
   agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
 ):
+  sources = _skill_sources()
   for name in _resolve_agents(agent):
-    target = _AGENT_TARGETS[name]
-    if not (target.exists() or target.is_symlink()):
-      console.print(f"[dim]{name}: not installed[/dim]")
-      continue
-    target.unlink() if target.is_symlink() else _rm_tree(target)
-    console.print(f"[green]removed ← {name}:[/green] {target}")
+    root = _AGENT_SKILL_ROOTS[name]
+    for skill_name in _resolve_skill_names(skill, sources):
+      target = root / skill_name
+      if not (target.exists() or target.is_symlink()):
+        console.print(f"[dim]{name}/{skill_name}: not installed[/dim]")
+        continue
+      target.unlink() if target.is_symlink() else _rm_tree(target)
+      console.print(f"[green]removed ← {name}/{skill_name}:[/green] {target}")
 
 
 @skills_app.command("list", help="Show install state across all known agents.")
 def skills_list():
-  src = _skill_source()
+  sources = _skill_sources()
   table = Table(title="skill installs")
   table.add_column("agent", style="cyan")
+  table.add_column("skill")
   table.add_column("target", style="dim")
   table.add_column("status")
-  for name, target in _AGENT_TARGETS.items():
-    if target.is_symlink() and target.resolve() == src.resolve():
-      status = "[green]installed[/green]"
-    elif target.exists() or target.is_symlink():
-      status = "[yellow]other (link mismatch)[/yellow]"
-    else:
-      status = "[dim]not installed[/dim]"
-    table.add_row(name, str(target), status)
+  for agent_name, root in _AGENT_SKILL_ROOTS.items():
+    for skill_name, src in sources.items():
+      target = root / skill_name
+      if target.is_symlink() and target.resolve() == src.resolve():
+        status = "[green]installed[/green]"
+      elif target.exists() or target.is_symlink():
+        status = "[yellow]other (link mismatch)[/yellow]"
+      else:
+        status = "[dim]not installed[/dim]"
+      table.add_row(agent_name, skill_name, str(target), status)
   console.print(table)
-  console.print(f"[dim]source: {src}[/dim]")
-  console.print("[dim]install elsewhere: `genimg skills install <agent>` or `npx skills add $(genimg skills path) --agent <agent>`[/dim]")
+  for skill_name, src in sources.items():
+    console.print(f"[dim]source {skill_name}: {src}[/dim]")
+  console.print("[dim]install: `genimg skills install` (all) or `genimg skills install codex genimg`[/dim]")
 
 
 # ────────────────────── helpers ──────────────────────

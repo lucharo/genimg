@@ -26,4 +26,4 @@ build-backend = "hatchling.build"
 packages = ["src/genimg"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"skill" = "genimg/_skill"
+"skills" = "genimg/_skills"
