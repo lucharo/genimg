@@ -235,21 +235,28 @@ def _run(
   for p in result.paths:
     console.print(f"  [green]wrote[/green] {p} [dim]({p.stat().st_size:,}B)[/dim]", soft_wrap=True)
 
-  written_grid: Path | None = None
-  if grid and len(result.paths) > 1:
-    target = planned_grid or metadata.auto_grid_path(gen_id)
-    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality)
-    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
-  elif grid and len(result.paths) == 1:
-    console.print("[dim]--grid ignored: needs n>=2[/dim]")
-
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    grid_path=written_grid,
   )
   meta_path = metadata.save(meta, gen_id)
+
+  written_grid: Path | None = None
+  if grid and len(result.paths) > 1:
+    target = planned_grid or metadata.auto_grid_path(gen_id)
+    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality)
+    meta = metadata.build(
+      gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
+      n=n, cost_usd=est_cost, input=input, refs=refs,
+      resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+      grid_path=written_grid,
+    )
+    meta_path = metadata.save(meta, gen_id)
+    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
+  elif grid and len(result.paths) == 1:
+    console.print("[dim]--grid ignored: needs n>=2[/dim]")
+
   console.print(
     f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
     soft_wrap=True,
