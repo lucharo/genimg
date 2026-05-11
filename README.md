@@ -26,7 +26,8 @@ genimg auth                                      # show ✓/✗ readiness per pr
 
 ```bash
 genimg skills list                              # show install state
-genimg skills install                           # install all bundled skills to known agents
+genimg skills install                           # install all bundled skills to Claude
+genimg skills install all                       # install all bundled skills to known agents
 genimg skills install codex genimg              # targeted install
 ```
 
