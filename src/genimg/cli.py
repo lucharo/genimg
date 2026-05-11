@@ -621,16 +621,20 @@ def _resolve_skill_names(skill: str, sources: dict[str, Path]) -> list[str]:
 
 @skills_app.command("path", help="Print bundled skill source paths.")
 def skills_path(
-  skill: Annotated[str, typer.Argument(help="Skill name or 'all'.")] = "all",
+  skill: Annotated[str, typer.Argument(help="Skill name or 'all'.")] = "genimg",
 ):
   sources = _skill_sources()
-  for skill_name in _resolve_skill_names(skill, sources):
-    console.print(f"{skill_name}: {sources[skill_name]}")
+  skill_names = _resolve_skill_names(skill, sources)
+  for skill_name in skill_names:
+    if len(skill_names) == 1:
+      console.print(str(sources[skill_name]))
+    else:
+      console.print(f"{skill_name}: {sources[skill_name]}")
 
 
 @skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
 def skills_install(
-  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
+  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "claude",
   skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
   force: Annotated[bool, typer.Option("--force", help="Replace existing symlinks.")] = False,
 ):
