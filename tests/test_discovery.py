@@ -6,6 +6,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from genimg import discovery
@@ -47,31 +48,55 @@ class DiscoveryCacheTests(unittest.TestCase):
 
 
 class DiscoveryProbeTests(unittest.TestCase):
-  def test_default_probe_parallelism_covers_current_registry_size(self) -> None:
+  def test_probe_all_uses_parallel_model_list_checks(self) -> None:
     entries = {
-      f"gdm:test-{i}": discovery.ModelSpec("google", f"test-model-{i}")
-      for i in range(10)
+      "gdm:global": discovery.ModelSpec("google", "gemini-listed", region="global"),
+      "gdm:regional": discovery.ModelSpec("google", "imagen-listed", region="us-central1"),
+      "oai:listed": discovery.ModelSpec("openai", "gpt-image-listed"),
+      "oai:missing": discovery.ModelSpec("openai", "gpt-image-missing"),
     }
-    barrier = threading.Barrier(len(entries))
+    barrier = threading.Barrier(3)
 
-    class FakeGoogle:
-      def probe(self, model: str, region: str | None = None) -> ProbeResult:
+    class FakeModels:
+      def __init__(self, models: list[object]):
+        self.models = models
+
+      def list(self) -> list[object]:
         barrier.wait(timeout=2)
-        return ProbeResult(model=model, status="working")
+        return self.models
+
+    class FakeClient:
+      def __init__(self, models: list[object]):
+        self.models = FakeModels(models)
 
     class FakeOpenAI:
+      def _client(self) -> FakeClient:
+        return FakeClient([SimpleNamespace(id="gpt-image-listed")])
+
       def probe(self, model: str, region: str | None = None) -> ProbeResult:
-        barrier.wait(timeout=2)
-        return ProbeResult(model=model, status="working")
+        raise AssertionError("discovery should use model-list metadata, not live generation probes")
+
+    class FakeGoogle:
+      def _client(self, region: str | None = None) -> FakeClient:
+        if region == "global":
+          return FakeClient([{"name": "models/gemini-listed"}])
+        return FakeClient([SimpleNamespace(name="publishers/google/models/imagen-listed")])
+
+      def probe(self, model: str, region: str | None = None) -> ProbeResult:
+        raise AssertionError("discovery should use model-list metadata, not live generation probes")
 
     with (
       patch.object(discovery, "all_canonical", return_value=entries),
-      patch.object(discovery, "GeminiImageGen", FakeGoogle),
       patch.object(discovery, "OpenAIImageGen", FakeOpenAI),
+      patch.object(discovery, "GeminiImageGen", FakeGoogle),
     ):
       probes = discovery.probe_all()
 
     self.assertEqual(set(probes), set(entries))
+    self.assertEqual(probes["gdm:global"].status, "listed")
+    self.assertEqual(probes["gdm:regional"].status, "listed")
+    self.assertEqual(probes["oai:listed"].status, "listed")
+    self.assertEqual(probes["oai:missing"].status, "missing")
 
 
 if __name__ == "__main__":
