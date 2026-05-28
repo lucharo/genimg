@@ -37,7 +37,7 @@ genimg "same palette and line style, new layout" ref1.png ref2.png -o styled.png
 
 - Run `genimg setup` if auth is missing.
 - Omit `-m` unless the user asks for a specific provider.
-- Use `-n 4 -g --open` when exploring options — never run parallel shell jobs as a substitute for `-n N`.
+- Use `-n 4 -g --open` when exploring options — never run parallel shell jobs as a substitute for `-n N`. When exploring, **vary styles across prompts** (photorealistic, illustrated, cartoony, sketch, minimalist) to find the right register in round 1, not round 2.
 - Use `oai:gi2` when legible in-image text matters.
 - Use `gdm:nbp` when quality matters more than speed.
 - `-q`/`--quality` is **oai:gi2 only** — silently ignored on gdm models. Omit it unless the model is `oai:gi2`.
