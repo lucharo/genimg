@@ -240,6 +240,7 @@ def _run(
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
   )
+  metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
 
   written_grid: Path | None = None

@@ -3,6 +3,10 @@
 Two views in one self-contained file: a responsive grid and a one-at-a-time
 carousel, toggled client-side. Images are embedded once into a JS data array
 and both views render from it, so the carousel adds no extra payload.
+
+Layout: a collapsible prompt at the top (hidden by default), the view toggle,
+the images, and a per-line metadata panel at the bottom with a single
+harmonized cost estimate.
 """
 from __future__ import annotations
 
@@ -42,10 +46,10 @@ _HTML = '''<!DOCTYPE html>
   h1{text-align:center;margin-bottom:10px;font-weight:400;color:#888;font-size:14px}
   .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#4CAF50;color:#fff;padding:12px 24px;border-radius:8px;opacity:0;transition:opacity .3s;z-index:1000;font-size:14px}
   .toast.show{opacity:1}
-  .meta{max-width:1400px;margin:0 auto 16px;background:#222;border:1px solid #333;border-radius:12px;padding:14px 18px;font-size:13px;color:#bbb}
-  .meta .prompt{color:#e8e8e8;white-space:pre-wrap;word-break:break-word;margin-bottom:10px;line-height:1.45}
-  .meta .fields{display:flex;flex-wrap:wrap;gap:8px 18px;color:#888}
-  .meta .fields b{color:#ccc;font-weight:600}
+  .instructions{text-align:center;margin-bottom:16px;color:#666;font-size:13px}
+  .promptbar{max-width:1400px;margin:0 auto 16px;text-align:center}
+  .promptbox{max-width:1400px;margin:12px auto 0;background:#222;border:1px solid #333;border-radius:12px;padding:14px 18px;font-size:13px;line-height:1.5;color:#e8e8e8;white-space:pre-wrap;word-break:break-word;text-align:left}
+  .promptbox[hidden]{display:none}
   .viewbar{max-width:1400px;margin:0 auto 16px;display:flex;justify-content:center;gap:8px}
   .viewbar button{background:#2a2a2a;border:1px solid #444;color:#aaa;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .2s,color .2s}
   .viewbar button.active{background:#4CAF50;color:#fff;border-color:#4CAF50}
@@ -56,12 +60,8 @@ _HTML = '''<!DOCTYPE html>
   .card .label{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.5);color:#fff;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:500;pointer-events:none;z-index:2}
   .card .actions{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .card .filename{font-size:12px;color:#888;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .btn{background:#333;border:1px solid #555;color:#ccc;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;transition:background .2s,color .2s;white-space:nowrap}
+  .btn{background:#333;border:1px solid #555;color:#ccc;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:background .2s,color .2s;white-space:nowrap}
   .btn:hover{background:#4CAF50;color:#fff;border-color:#4CAF50}
-  .instructions{text-align:center;margin-bottom:20px;color:#666;font-size:13px}
-  .cost-footer{max-width:1400px;margin:24px auto 0;padding:16px 20px;background:#2a2a2a;border-radius:12px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
-  .cost-footer .total{color:#4CAF50;font-weight:600;font-size:15px}
-  .cost-footer .detail{color:#888}
   /* carousel */
   .carousel{display:none;max-width:1100px;margin:0 auto}
   .carousel.active{display:block}
@@ -76,15 +76,22 @@ _HTML = '''<!DOCTYPE html>
   .car-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 4px 0}
   .car-bar .counter{color:#aaa;font-size:13px}
   .car-bar .car-filename{color:#888;font-size:12px;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* metadata panel */
+  .info{max-width:1400px;margin:24px auto 0;background:#2a2a2a;border-radius:12px;padding:8px 20px;font-size:13px}
+  .info .row{display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #333}
+  .info .row:last-child{border-bottom:none}
+  .info .k{color:#888;min-width:120px;flex-shrink:0}
+  .info .v{color:#ddd;word-break:break-word}
+  .info .row.cost .v{color:#4CAF50;font-weight:600}
 </style></head><body>
 <h1>Click image to copy to clipboard | Click "Copy Text" for selection text</h1>
 <p class="instructions">Paste directly into slides or back into the conversation</p>
-<div id="toast" class="toast">Copied!</div>
-__META__
+__PROMPT_TOP__
 <div class="viewbar">
   <button id="btn-grid" class="active" onclick="setView('grid')">Grid</button>
   <button id="btn-carousel" onclick="setView('carousel')">Carousel</button>
 </div>
+<div id="toast" class="toast">Copied!</div>
 <div id="grid" class="grid"></div>
 <div id="carousel" class="carousel">
   <div class="stage">
@@ -102,11 +109,12 @@ __META__
     </span>
   </div>
 </div>
-__COST_FOOTER__
+__INFO_PANEL__
 <script>
   const IMAGES = __IMAGES__;
   let curIdx = 0;
   function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000)}
+  function togglePrompt(){const b=document.getElementById('promptbox'),btn=document.getElementById('prompt-toggle');const show=b.hasAttribute('hidden');if(show){b.removeAttribute('hidden');btn.textContent='Hide prompt';}else{b.setAttribute('hidden','');btn.textContent='Show prompt';}}
   function copyText(e,text,label){if(e){e.preventDefault();e.stopPropagation();}
     if(navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(()=>showToast('Copied: '+label)).catch(()=>fallbackCopyText(text,label))
@@ -165,41 +173,52 @@ def _js(value: Any) -> str:
           .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
 
 
-def _meta_panel(meta: dict[str, Any] | None) -> str:
-  """Render a generation-metadata header from the dict built by metadata.build()."""
-  if not meta:
+def _prompt_top(meta: dict[str, Any] | None) -> str:
+  """Collapsible prompt block, hidden by default, with a Show prompt toggle."""
+  prompt = (meta or {}).get("prompt")
+  if not prompt:
     return ""
-  prompt = meta.get("prompt")
+  return (
+    '<div class="promptbar">'
+    '<button id="prompt-toggle" class="btn" onclick="togglePrompt()">Show prompt</button>'
+    f'<div id="promptbox" class="promptbox" hidden>{html.escape(str(prompt))}</div>'
+    '</div>'
+  )
+
+
+def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
+  """Bottom metadata panel: one field per line, single harmonized cost."""
+  meta = meta or {}
   model = " · ".join(str(v) for v in (meta.get("alias"), meta.get("model_id")) if v)
-  fields: list[tuple[str, Any]] = [
-    ("model", model or None),
-    ("provider", meta.get("provider")),
-    ("n", meta.get("n")),
-    ("quality", meta.get("quality")),
-    ("resolution", meta.get("resolution")),
-    ("aspect", meta.get("aspect_ratio")),
-    ("time", meta.get("time")),
+  rows: list[tuple[str, Any, bool]] = [
+    ("model", model or None, False),
+    ("provider", meta.get("provider"), False),
+    ("n", meta.get("n"), False),
+    ("quality", meta.get("quality"), False),
+    ("resolution", meta.get("resolution"), False),
+    ("aspect ratio", meta.get("aspect_ratio"), False),
+    ("time", meta.get("time"), False),
   ]
-  cost = meta.get("cost_usd_estimated")
   if cost is not None:
-    fields.append(("est. cost", f"${cost:.2f}"))
-  chips = "".join(
-    f"<span><b>{html.escape(k)}:</b> {html.escape(str(v))}</span>"
-    for k, v in fields if v is not None and v != ""
+    rows.append(("est. cost", f"${cost:.2f}", True))
+  html_rows = "".join(
+    f'<div class="row{" cost" if is_cost else ""}">'
+    f'<span class="k">{html.escape(k)}</span>'
+    f'<span class="v">{html.escape(str(v))}</span></div>'
+    for k, v, is_cost in rows if v is not None and v != ""
   )
-  prompt_html = (
-    f'<div class="prompt">{html.escape(str(prompt))}</div>' if prompt else ""
-  )
-  return f'<div class="meta">{prompt_html}<div class="fields">{chips}</div></div>'
+  return f'<div class="info">{html_rows}</div>' if html_rows else ""
 
 
 def render(images: list[Path], output: Path, *, embed: bool = True,
            copy_format: str = "I choose {label} ({filename})",
            provider: str | None = None, quality: str | None = None,
            include_cost: bool = True, meta: dict[str, Any] | None = None) -> tuple[Path, float]:
-  """Render an HTML grid + carousel. If `include_cost` is False (or provider
-  unknown), the cost footer is omitted to avoid misleading totals. If `meta`
-  (the dict from metadata.build) is given, a generation-metadata header is shown."""
+  """Render an HTML grid + carousel with a collapsible prompt and a bottom
+  metadata panel. The cost shown is a single harmonized estimate: the value
+  from `meta` (`cost_usd_estimated`, which the CLI computes with full size/quality
+  context) when available, else the renderer's own per-image estimate. If
+  `include_cost` is False (or provider unknown and no meta cost), no cost is shown."""
   items: list[dict[str, str]] = []
   costs: list[float] = []
   for i, p in enumerate(images):
@@ -209,19 +228,22 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
     items.append({"src": src, "label": label, "filename": p.name, "copyText": text})
     costs.append(estimate_cost(p, provider=provider, quality=quality))
 
-  total = sum(costs)
-  if include_cost and provider is not None:
-    detail = f"{len(images)} images x ${costs[0]:.2f}" if len(set(costs)) == 1 else f"{len(images)} images (mixed)"
-    footer = f'<div class="cost-footer"><span class="detail">{detail}</span><span class="total">Total: ${total:.2f}</span></div>'
+  # Single source of truth for cost: prefer the CLI's size/quality-aware estimate.
+  meta_cost = (meta or {}).get("cost_usd_estimated")
+  if meta_cost is not None:
+    cost: float | None = float(meta_cost)
+  elif include_cost and provider is not None:
+    cost = sum(costs)
   else:
-    footer = ""
+    cost = None
+
   html_doc = (_HTML
-              .replace("__META__", _meta_panel(meta))
-              .replace("__COST_FOOTER__", footer)
+              .replace("__PROMPT_TOP__", _prompt_top(meta))
+              .replace("__INFO_PANEL__", _info_panel(meta, cost))
               .replace("__IMAGES__", _js(items)))
   output.parent.mkdir(parents=True, exist_ok=True)
   output.write_text(html_doc)
-  return output, total
+  return output, (cost if cost is not None else sum(costs))
 
 
 def open_in_browser(path: Path) -> None:
