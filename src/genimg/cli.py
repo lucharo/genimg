@@ -245,7 +245,7 @@ def _run(
   written_grid: Path | None = None
   if grid and len(result.paths) > 1:
     target = planned_grid or metadata.auto_grid_path(gen_id)
-    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality)
+    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality, meta=meta)
     meta = metadata.build(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
