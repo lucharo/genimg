@@ -12,6 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
+
 GENIMG_HOME = Path(os.getenv("GENIMG_HOME") or Path.home() / ".genimg")
 GEN_DIR = GENIMG_HOME / "generations"
 META_DIR = GENIMG_HOME / "metadata"
@@ -34,6 +37,40 @@ def auto_output_path(gen_id: str, suffix: str = ".png") -> Path:
 def auto_grid_path(gen_id: str) -> Path:
   GRID_DIR.mkdir(parents=True, exist_ok=True)
   return GRID_DIR / f"{gen_id}.html"
+
+
+def embed_into_images(meta: dict[str, Any]) -> None:
+  """Write prompt + generation params into each PNG output as tEXt chunks.
+
+  Travels with the file even when separated from the sidecar JSON. PNG is
+  lossless so the re-save introduces no quality loss. Non-PNG or unreadable
+  outputs are skipped silently — embedding is provenance, never load-bearing.
+  """
+  params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio")}
+  params = {k: v for k, v in params.items() if v is not None}
+  fields = {
+    "prompt": meta.get("prompt"),
+    "genimg.model": meta.get("model_id"),
+    "genimg.provider": meta.get("provider"),
+    "genimg.id": meta.get("id"),
+    "genimg.params": json.dumps(params) if params else None,
+    # A1111-style aggregate key that other tools commonly read.
+    "parameters": meta.get("prompt"),
+  }
+  fields = {k: v for k, v in fields.items() if v}
+  for out in meta.get("outputs", []):
+    path = Path(out["path"]) if isinstance(out, dict) else Path(out)
+    if path.suffix.lower() != ".png" or not path.exists():
+      continue
+    try:
+      with Image.open(path) as img:
+        img.load()
+        info = PngInfo()
+        for key, value in fields.items():
+          info.add_text(key, str(value))
+        img.save(path, pnginfo=info)
+    except Exception:
+      continue
 
 
 def save(meta: dict[str, Any], gen_id: str) -> Path:
