@@ -47,10 +47,10 @@ _HTML = '''<!DOCTYPE html>
   .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#4CAF50;color:#fff;padding:12px 24px;border-radius:8px;opacity:0;transition:opacity .3s;z-index:1000;font-size:14px}
   .toast.show{opacity:1}
   .instructions{text-align:center;margin-bottom:16px;color:#666;font-size:13px}
-  .promptbar{max-width:1400px;margin:0 auto 16px;text-align:center}
+  .promptbar{max-width:1400px;margin:0 auto 16px;text-align:left}
   .promptbox{max-width:1400px;margin:12px auto 0;background:#222;border:1px solid #333;border-radius:12px;padding:14px 18px;font-size:13px;line-height:1.5;color:#e8e8e8;white-space:pre-wrap;word-break:break-word;text-align:left}
   .promptbox[hidden]{display:none}
-  .viewbar{max-width:1400px;margin:0 auto 16px;display:flex;justify-content:center;gap:8px}
+  .viewbar{max-width:1400px;margin:0 auto 16px;display:flex;justify-content:flex-start;gap:8px}
   .viewbar button{background:#2a2a2a;border:1px solid #444;color:#aaa;padding:7px 18px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .2s,color .2s}
   .viewbar button.active{background:#4CAF50;color:#fff;border-color:#4CAF50}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;max-width:1400px;margin:0 auto}
