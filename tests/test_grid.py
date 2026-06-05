@@ -90,6 +90,24 @@ class GridRenderTests(unittest.TestCase):
     html = self._render(meta=meta)
     self.assertNotIn("<script>alert(1)</script>", html)
 
+  def test_url_state_is_persisted_and_restored(self) -> None:
+    # View, prompt, and carousel index round-trip through URL query params so
+    # the page survives a refresh.
+    html = self._render(meta=self._meta(), provider="openai", quality="medium")
+    # Writes state via replaceState (not pushState — no history spam).
+    self.assertIn("history.replaceState", html)
+    self.assertNotIn("history.pushState", html)
+    # Reads the three params back on load.
+    self.assertIn("function restore(", html)
+    self.assertIn("restore();", html)
+    self.assertIn("q.get('view')", html)
+    self.assertIn("q.get('prompt')", html)
+    self.assertIn("q.get('i')", html)
+    # State-changing handlers persist to the URL.
+    self.assertIn("writeUrl()", html)
+    # Carousel index is stored 1-based to match the visible counter.
+    self.assertIn("p.set('i',String(curIdx+1))", html)
+
 
 class EmbedMetadataTests(unittest.TestCase):
   def test_prompt_round_trips_into_png(self) -> None:

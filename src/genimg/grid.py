@@ -113,8 +113,20 @@ __INFO_PANEL__
 <script>
   const IMAGES = __IMAGES__;
   let curIdx = 0;
+  // --- URL state: view (grid|carousel), prompt (0|1), i (1-based carousel index) ---
+  function writeUrl(){
+    const p=new URLSearchParams();
+    const isCar=document.getElementById('carousel').classList.contains('active');
+    if(isCar){p.set('view','carousel');p.set('i',String(curIdx+1));}
+    const pb=document.getElementById('promptbox');
+    if(pb&&!pb.hasAttribute('hidden'))p.set('prompt','1');
+    const qs=p.toString();
+    history.replaceState(null,'',qs?('?'+qs):location.pathname);
+  }
+  function readUrl(){return new URLSearchParams(location.search);}
   function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000)}
-  function togglePrompt(){const b=document.getElementById('promptbox'),btn=document.getElementById('prompt-toggle');const show=b.hasAttribute('hidden');if(show){b.removeAttribute('hidden');btn.textContent='Hide prompt';}else{b.setAttribute('hidden','');btn.textContent='Show prompt';}}
+  function setPrompt(show){const b=document.getElementById('promptbox'),btn=document.getElementById('prompt-toggle');if(!b)return;if(show){b.removeAttribute('hidden');btn.textContent='Hide prompt';}else{b.setAttribute('hidden','');btn.textContent='Show prompt';}}
+  function togglePrompt(){const b=document.getElementById('promptbox');if(!b)return;setPrompt(b.hasAttribute('hidden'));writeUrl();}
   function copyText(e,text,label){if(e){e.preventDefault();e.stopPropagation();}
     if(navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(()=>showToast('Copied: '+label)).catch(()=>fallbackCopyText(text,label))
@@ -142,7 +154,7 @@ __INFO_PANEL__
     document.getElementById('car-filename').textContent=im.filename;
     document.getElementById('car-counter').textContent=(curIdx+1)+' / '+IMAGES.length;
   }
-  function step(d){curIdx=(curIdx+d+IMAGES.length)%IMAGES.length;showCarousel();}
+  function step(d){curIdx=(curIdx+d+IMAGES.length)%IMAGES.length;showCarousel();writeUrl();}
   function setView(v){
     const grid=document.getElementById('grid'),car=document.getElementById('carousel');
     const isCar=v==='carousel';
@@ -151,12 +163,21 @@ __INFO_PANEL__
     document.getElementById('btn-grid').classList.toggle('active',!isCar);
     document.getElementById('btn-carousel').classList.toggle('active',isCar);
     if(isCar)showCarousel();
+    writeUrl();
   }
   document.addEventListener('keydown',e=>{
     if(!document.getElementById('carousel').classList.contains('active'))return;
     if(e.key==='ArrowLeft')step(-1);else if(e.key==='ArrowRight')step(1);
   });
+  function restore(){
+    const q=readUrl();
+    if(q.get('prompt')==='1')setPrompt(true);
+    const n=parseInt(q.get('i'),10);
+    if(Number.isFinite(n)&&n>=1&&n<=IMAGES.length)curIdx=n-1;
+    if(q.get('view')==='carousel')setView('carousel');else writeUrl();
+  }
   buildGrid();
+  restore();
 </script></body></html>'''
 
 
