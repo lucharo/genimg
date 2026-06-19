@@ -66,6 +66,11 @@ def embed_into_images(meta: dict[str, Any]) -> None:
       with Image.open(path) as img:
         img.load()
         info = PngInfo()
+        # Preserve any pre-existing text chunks (provider metadata, ICC text,
+        # timestamps); genimg keys take precedence on collision.
+        for key, value in getattr(img, "text", {}).items():
+          if key not in fields:
+            info.add_text(key, value)
         for key, value in fields.items():
           info.add_text(key, str(value))
         img.save(path, pnginfo=info)
