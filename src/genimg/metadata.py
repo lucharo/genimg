@@ -43,8 +43,11 @@ def embed_into_images(meta: dict[str, Any]) -> None:
   """Write prompt + generation params into each PNG output as tEXt chunks.
 
   Travels with the file even when separated from the sidecar JSON. PNG is
-  lossless so the re-save introduces no quality loss. Non-PNG or unreadable
-  outputs are skipped silently — embedding is provenance, never load-bearing.
+  lossless so the re-save introduces no quality loss, but Pillow drops chunks
+  it doesn't model — notably C2PA content credentials (caBX) that some
+  providers embed. Accepted trade-off: the sidecar JSON is the provenance of
+  record. Non-PNG or unreadable outputs are skipped silently — embedding is
+  provenance, never load-bearing.
   """
   params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio")}
   params = {k: v for k, v in params.items() if v is not None}
