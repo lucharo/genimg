@@ -511,15 +511,6 @@ def history_cmd(
   console.print(table)
 
 
-# ────────────────────── cost command (alias for history --summary) ──────────────────────
-
-@_app.command("cost", help="Alias for `history --summary` — total estimated spend.")
-def cost_cmd(
-  json_out: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
-):
-  history_cmd(limit=20, summary=True, json_out=json_out)
-
-
 # ────────────────────── grid command (standalone) ──────────────────────
 
 @_app.command("grid", help="Render an HTML grid from existing image files.")
