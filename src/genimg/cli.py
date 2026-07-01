@@ -42,6 +42,10 @@ class _DefaultGroup(typer.core.TyperGroup):
 
     rich_click renders help via console.print side-effects (not via return value),
     so we capture _run's help to a buffer, filter to named panels, and append.
+
+    NOTE (deferred): this scrapes rendered help text for panel titles, so it is fragile
+    to typer/rich_click rendering changes. Kept because it works and a clean reimplementation
+    is non-trivial. If option panels ever stop showing in `genimg -h`, start here.
     """
     import contextlib
     import io
@@ -672,6 +676,9 @@ def skills_install(
           console.print(f"[yellow]{name}/{skill_name}:[/yellow] {target} exists (use --force or `skills update {name} {skill_name}`)")
           continue
         target.unlink() if target.is_symlink() else _rm_tree(target)
+      # NOTE (deferred): symlink into the (possibly uv-tool-managed) package dir. A `uv tool`
+      # upgrade can recreate that dir and break the link — re-run `genimg skills update`. A
+      # copy-based install would survive upgrades but needs its own staleness detection.
       target.symlink_to(src)
       console.print(f"[green]installed → {name}/{skill_name}:[/green] {target}")
 
