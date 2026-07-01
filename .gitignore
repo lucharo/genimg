@@ -14,11 +14,18 @@ __pycache__/
 .uv/
 
 # tests / artifacts
-output.png
-output_*.png
 .pytest_cache/
 .coverage
 htmlcov/
+
+# genimg is a TOOL — its repo never tracks generated image output or scratch
+# viewers. Real outputs archive under ~/.genimg/ or land via -o elsewhere.
+# Anchored to repo root so genuine in-tree assets (if ever added) aren't hidden.
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.html
 
 # editor
 .DS_Store

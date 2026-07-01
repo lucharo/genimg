@@ -17,7 +17,7 @@ genimg "with refs" a.png b.png -o out.png        # reference images (positional)
 genimg "edit this" -i input.png -o edited.png    # image-to-image
 genimg "X" -n 4 -g --open                        # batch + auto HTML grid
 genimg grid *.png -o g.html --open               # standalone grid from existing files
-genimg models                                    # discover working models
+genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard
 genimg auth                                      # show ✓/✗ readiness per provider
 ```
