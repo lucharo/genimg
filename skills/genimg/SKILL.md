@@ -49,5 +49,5 @@ genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.p
 ## Defaults
 - `genimg setup` if auth is missing; omit `-m` unless the user wants a specific provider.
 - Exploring → `-n 4 -g --open`; never run parallel shell jobs as a substitute for `-n N`, and **vary styles across prompts** (photorealistic, illustrated, cartoony, sketch, minimalist) to find the right register in round 1, not round 2.
-- Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — silently ignored on gdm models.
+- Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — the CLI rejects it on gdm models, so omit it there.
 - When a human must review, generate to a real `-o` path and `--open` the grid; don't describe images you can't show — open or read them.
