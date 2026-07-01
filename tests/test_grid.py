@@ -90,6 +90,15 @@ class GridRenderTests(unittest.TestCase):
     html = self._render(meta=meta)
     self.assertNotIn("<script>alert(1)</script>", html)
 
+  def test_filenames_are_html_escaped_in_grid_cards(self) -> None:
+    # _js() protects the <script> block, but card labels/filenames pass through
+    # innerHTML at runtime — they must go through esc() or an HTML filename injects.
+    html = self._render()
+    self.assertIn("function esc(", html)
+    self.assertIn("${esc(im.filename)}", html)
+    self.assertIn("${esc(im.label)}", html)
+    self.assertIn("${esc(im.src)}", html)
+
   def test_url_state_is_persisted_and_restored(self) -> None:
     # View, prompt, and carousel index round-trip through URL query params so
     # the page survives a refresh.
