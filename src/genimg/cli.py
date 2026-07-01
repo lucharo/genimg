@@ -789,6 +789,12 @@ def _validate_provider_flags(
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
 
+  # Provider-neutral: every input/reference path must exist. Without this, Google refs
+  # only failed deep inside the provider as a generic error (OpenAI pre-checked, Google didn't).
+  for p in ([input] if input else []) + refs:
+    if not p.exists():
+      _die(f"input not found: {p}")
+
   if quality is not None:
     if quality not in _QUALITY_VALUES:
       _die(f"--quality must be one of {sorted(_QUALITY_VALUES)}, got {quality!r}")
@@ -807,25 +813,24 @@ def _validate_provider_flags(
       "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
     )
 
-  if provider == "openai":
-    # Use the effective resolution (1K is the implicit default in _size_for) so bare
-    # --aspect-ratio without --resolution gets the same upstream error as the explicit form.
-    effective_res = resolution or "1K"
-    if effective_res == "4K" and aspect_ratio in ("4:3", "3:4"):
-      _die(
-        "OpenAI: 4K + 4:3/3:4 exceeds total pixel cap (8.3M). "
-        "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
-      )
-    if effective_res == "1K" and aspect_ratio in ("16:9", "9:16"):
-      _die(
-        "OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. "
-        "Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default."
-      )
-
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
     _die(f"--aspect-ratio must be one of {sorted(_ASPECT_VALUES)}, got {aspect_ratio!r}")
+
+  if provider == "openai":
+    # Validate the (resolution, aspect) pair against the provider's real size table so this
+    # can't drift from _size_for. Mirror its implicit defaults (1K square when unset).
+    from .providers.openai import _SIZE_MAP
+    effective_res = resolution or "1K"
+    effective_ar = aspect_ratio or "1:1"
+    if (effective_res, effective_ar) not in _SIZE_MAP:
+      if effective_res == "4K" and effective_ar in ("4:3", "3:4"):
+        _die("OpenAI: 4K + 4:3/3:4 exceeds the total pixel cap (8.3M). Use 2K + 4:3/3:4, or 4K + 16:9/9:16.")
+      if effective_res == "1K" and effective_ar in ("16:9", "9:16"):
+        _die("OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default.")
+      supported = ", ".join(f"{r}+{a}" for r, a in sorted(_SIZE_MAP))
+      _die(f"OpenAI: unsupported ({effective_res}, {effective_ar}) size combo. Supported: {supported}.")
 
   if provider != "google" and (region is not None or project is not None):
     _die(f"--region/--project are Google-only; ignored on provider={provider!r}.")
@@ -838,8 +843,6 @@ def _validate_provider_flags(
     if len(inputs) > _OPENAI_MAX_INPUTS:
       _die(f"OpenAI accepts max {_OPENAI_MAX_INPUTS} input images, got {len(inputs)}")
     for p in inputs:
-      if not p.exists():
-        _die(f"input not found: {p}")
       if p.suffix.lower() not in _OPENAI_INPUT_EXTS:
         _die(f"OpenAI inputs must be {sorted(_OPENAI_INPUT_EXTS)}, got {p.suffix} ({p.name})")
       mb = p.stat().st_size / 1_048_576
