@@ -269,4 +269,4 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
 
 
 def open_in_browser(path: Path) -> None:
-  webbrowser.open(f"file://{path.absolute()}")
+  webbrowser.open(path.absolute().as_uri())
