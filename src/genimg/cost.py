@@ -17,7 +17,7 @@ _OPENAI_BASE_PER_IMAGE = {
 _OPENAI_RESOLUTION_MULT = {None: 1.0, "1K": 1.0, "2K": 2.5, "4K": 6.0}
 
 # Google flat per-image (Gemini Image / Imagen) keyed by max-edge resolution.
-# Verified rough rates from gemini-image-gsk skill cost map + cloudprice.net.
+# Rough public rates (Vertex pricing + cloudprice.net); refine as pricing changes.
 _GOOGLE_PER_IMAGE = {
   "gemini-3-pro-image-preview":     {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
   "gemini-3.1-flash-image-preview": {None: 0.025, "1K": 0.025, "2K": 0.08, "4K": 0.15},

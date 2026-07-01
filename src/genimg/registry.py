@@ -33,10 +33,10 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "gdm:imagen4-ultra":   ModelSpec("google", "imagen-4.0-ultra-generate-001",  region="us-central1", quality_rank=8),
   "google:imagen4-ultra": "gdm:imagen4-ultra",
 
-  # OpenAI / Azure OpenAI
-  # Verified from developers.openai.com/cookbook (Apr 2026 prompting guide) +
-  # OpenAI deprecations table. Azure jules-aiml-2 currently exposes
-  # gpt-image-2, gpt-image-1, gpt-image-1-mini (gpt-image-1.5 is OpenAI-direct only).
+  # OpenAI / Azure OpenAI.
+  # Availability varies by account and Azure deployment — run `genimg models` to see
+  # what your credentials can actually reach. Some ids (e.g. gpt-image-1.5) may be
+  # OpenAI-direct only and absent from a given Azure resource.
   "oai:gpt-image-2":      ModelSpec("openai", "gpt-image-2",      quality_rank=9),
   "oai:gi2":              "oai:gpt-image-2",
   "openai:gi2":           "oai:gpt-image-2",

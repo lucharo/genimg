@@ -1,7 +1,7 @@
 """OpenAI / Azure OpenAI image provider (gpt-image-* family).
 
-Per-image latency on Azure jules-aiml-2 is multi-minute even at medium quality and
-the deployment does NOT parallelize a single n>1 request server-side. We therefore
+Per-image latency can be multi-minute even at medium quality, and some Azure
+deployments do NOT parallelize a single n>1 request server-side. We therefore
 split into n parallel n=1 calls via the IImageGen base template.
 """
 from __future__ import annotations

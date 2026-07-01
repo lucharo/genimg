@@ -133,7 +133,7 @@ def _run(
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
     help="Override registry region (e.g. global, us-central1).")] = None,
   project: Annotated[str | None, typer.Option("--project", rich_help_panel=_PANEL_GOOGLE,
-    help="Override GCP project (default: gsk-rd-oaiml-kgapoc1-dev).")] = None,
+    help="GCP project for Vertex (else config.gcp_project / GOOGLE_CLOUD_PROJECT / SA-JSON / gcloud).")] = None,
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
