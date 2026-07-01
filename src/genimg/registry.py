@@ -50,9 +50,6 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "oai:gi1m":             "oai:gpt-image-1-mini",
 }
 
-DEFAULT = "gdm:nb2"
-
-
 def resolve(name: str) -> tuple[str, ModelSpec]:
   """Resolve alias chain or bare model id to (canonical_alias, spec).
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import click
 import typer
@@ -139,7 +139,13 @@ def _run(
 ):
   user_cfg = config.load()
   model_was_explicit = model is not None
-  resolved = model or user_cfg.get("default_model") or registry.DEFAULT
+  resolved = model or user_cfg.get("default_model")
+  if not resolved:
+    _die(
+      "no model specified. Pass -m <alias> (e.g. -m gdm:nb or -m oai:gi2), "
+      "set a default with `genimg models set-default <alias>`, or run `genimg setup`. "
+      "See `genimg models` for the full list."
+    )
   try:
     alias, spec = registry.resolve(resolved)
   except ValueError as e:
@@ -319,13 +325,13 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
       payload.append({
         "alias": alias, "model_id": spec.model_id, "provider": spec.provider,
         "region": spec.region, "status": p.status if p else "unknown",
-        "is_default": alias == (config.get_default_model() or registry.DEFAULT),
+        "is_default": alias == config.get_default_model(),
       })
     typer.echo(_json.dumps(payload, indent=2))
     return
 
-  current_default = config.get_default_model() or registry.DEFAULT
-  table = Table(title=f"genimg models  •  cache age: {_fmt_age(age)}  •  default: {current_default}")
+  current_default = config.get_default_model()
+  table = Table(title=f"genimg models  •  cache age: {_fmt_age(age)}  •  default: {current_default or '(none — pass -m)'}")
   table.add_column("", width=1)
   table.add_column("alias", style="cyan")
   table.add_column("model_id")
@@ -370,14 +376,13 @@ def models_get_default():
     canonical, spec = registry.resolve(user_default)
     console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]")
   else:
-    canonical, spec = registry.resolve(registry.DEFAULT)
-    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim](built-in default; use `set-default` to override)[/dim]")
+    console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")
 
 
 @models_app.command("clear-default", help="Remove the user-set default (revert to built-in).")
 def models_clear_default():
   config.clear_default_model()
-  console.print(f"[green]cleared.[/green] Built-in default: [bold]{registry.DEFAULT}[/bold]")
+  console.print("[green]cleared.[/green] No default set — pass -m each run, or `genimg models set-default <alias>`.")
 
 
 # ────────────────────── setup command ──────────────────────
@@ -850,7 +855,7 @@ def _validate_provider_flags(
         _die(f"input {p.name} is {mb:.1f}MB, exceeds OpenAI cap {_OPENAI_MAX_INPUT_MB}MB")
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
   console.print(f"[red]error:[/red] {msg}")
   raise typer.Exit(1)
 
