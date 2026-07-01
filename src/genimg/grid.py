@@ -1,29 +1,13 @@
-"""HTML grid renderer. Embeds images as base64; click image → clipboard."""
+"""HTML grid renderer. Embeds images as base64; click image → clipboard.
+
+Cost is not estimated here — the caller passes its authoritative figure (from cost.py)
+via `cost_total`. This keeps a single source of truth for pricing.
+"""
 from __future__ import annotations
 
 import base64
 import webbrowser
 from pathlib import Path
-
-from PIL import Image
-
-# Per-image cost map (rough). Google Imagen by max edge; OpenAI gpt-image-2 by quality+size.
-_GOOGLE_COST_BY_EDGE = {1024: 0.04, 2048: 0.13, 4096: 0.24}
-_OPENAI_COST_BY_QUALITY = {"low": 0.006, "medium": 0.053, "high": 0.211, "auto": 0.053}
-
-
-def estimate_cost(img_path: Path, provider: str | None = None, quality: str | None = None) -> float:
-  if provider == "openai":
-    return _OPENAI_COST_BY_QUALITY.get(quality or "high", 0.053)
-  try:
-    with Image.open(img_path) as img:
-      max_dim = max(img.size)
-      for edge, cost in sorted(_GOOGLE_COST_BY_EDGE.items()):
-        if max_dim <= edge:
-          return cost
-      return _GOOGLE_COST_BY_EDGE[4096]
-  except Exception:
-    return _GOOGLE_COST_BY_EDGE[1024]
 
 
 _HTML = '''<!DOCTYPE html>
@@ -84,29 +68,28 @@ def _data_uri(path: Path) -> str:
 
 def render(images: list[Path], output: Path, *, embed: bool = True,
            copy_format: str = "I choose {label} ({filename})",
-           provider: str | None = None, quality: str | None = None,
-           include_cost: bool = True) -> tuple[Path, float]:
-  """Render an HTML grid. If `include_cost` is False (or provider unknown),
-  the embedded cost footer is omitted to avoid misleading totals."""
+           cost_total: float | None = None) -> Path:
+  """Render an HTML grid. Pass `cost_total` (the caller's authoritative estimate) to show a
+  cost footer; omit it — as the standalone `grid` command does for arbitrary files whose
+  provenance is unknown — and the footer is left out rather than showing a guessed number."""
   cards: list[str] = []
-  costs: list[float] = []
   for i, p in enumerate(images):
     label = f"#{i + 1}"
     src = _data_uri(p) if embed else str(p.absolute())
     text = copy_format.format(label=label, filename=p.name, path=str(p.absolute())).replace("'", "\\'")
     cards.append(_CARD.format(src=src, label=label, filename=p.name, copy_text=text))
-    costs.append(estimate_cost(p, provider=provider, quality=quality))
 
-  total = sum(costs)
-  if include_cost and provider is not None:
-    detail = f"{len(images)} images x ${costs[0]:.2f}" if len(set(costs)) == 1 else f"{len(images)} images (mixed)"
-    footer = f'<div class="cost-footer"><span class="detail">{detail}</span><span class="total">Total: ${total:.2f}</span></div>'
+  if cost_total is not None:
+    footer = (
+      f'<div class="cost-footer"><span class="detail">{len(images)} images</span>'
+      f'<span class="total">Total: ${cost_total:.2f}</span></div>'
+    )
   else:
     footer = ""
   html = _HTML.replace("__CARDS__", "".join(cards)).replace("__COST_FOOTER__", footer)
   output.parent.mkdir(parents=True, exist_ok=True)
   output.write_text(html)
-  return output, total
+  return output
 
 
 def open_in_browser(path: Path) -> None:
