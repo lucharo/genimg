@@ -353,6 +353,11 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
 
   console.print(table)
   console.print("[dim]★ = current default. Change with `genimg models set-default <alias>`.[/dim]")
+  if any((p.status if p else "") == "missing" for p in probes.values()):
+    console.print(
+      "[dim]missing = not enumerated by the provider's list endpoint; on Vertex this can be a "
+      "false negative (Model Garden models may still generate). Confirm with a direct run.[/dim]"
+    )
 
 
 @models_app.command("set-default", help="Pick a default model alias for `genimg PROMPT` (no -m).")
