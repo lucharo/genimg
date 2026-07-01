@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Literal
 
@@ -31,6 +31,7 @@ class GenerateResult(BaseModel):
   paths: list[Path]
   model_used: str
   cost_usd: float | None = None
+  errors: list[str] = Field(default_factory=list)  # per-variant failures on a partially-successful n>1 batch
 
 
 class ProbeResult(BaseModel):
@@ -55,9 +56,23 @@ class IImageGen(ABC):
   def generate(self, req: GenerateRequest) -> GenerateResult:
     if req.n == 1:
       return GenerateResult(paths=[self._generate_single_image(req, 0)], model_used=req.model)
+    # Run variants independently: a batch tool should keep the images that succeeded
+    # rather than discard everything (and orphan already-written files) on one failure.
+    results: dict[int, Path] = {}
+    errors: dict[int, Exception] = {}
     with ThreadPoolExecutor(max_workers=min(req.n, self.max_parallel)) as ex:
-      paths = list(ex.map(lambda i: self._generate_single_image(req, i), range(req.n)))
-    return GenerateResult(paths=paths, model_used=req.model)
+      futures = {ex.submit(self._generate_single_image, req, i): i for i in range(req.n)}
+      for future in as_completed(futures):
+        i = futures[future]
+        try:
+          results[i] = future.result()
+        except Exception as e:  # noqa: BLE001 — re-raised (all-fail) or reported (partial) below
+          errors[i] = e
+    if not results:
+      raise errors[min(errors)]  # all variants failed — surface the first (keeps provider-friendly mapping)
+    ordered_paths = [results[i] for i in sorted(results)]
+    error_msgs = [f"#{i + 1}: {type(errors[i]).__name__}: {errors[i]}" for i in sorted(errors)]
+    return GenerateResult(paths=ordered_paths, model_used=req.model, errors=error_msgs)
 
   @staticmethod
   def numbered_path(out: Path, i: int, n: int) -> Path:

@@ -234,6 +234,8 @@ def _run(
   elapsed = time.time() - t0
   for p in result.paths:
     console.print(f"  [green]wrote[/green] {p} [dim]({p.stat().st_size:,}B)[/dim]", soft_wrap=True)
+  for err in result.errors:
+    console.print(f"  [yellow]skipped[/yellow] {_rich_escape(err)}", soft_wrap=True)
 
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
@@ -262,7 +264,7 @@ def _run(
     soft_wrap=True,
   )
 
-  if open_after:
+  if open_after and (written_grid or result.paths):
     grid_module.open_in_browser(written_grid or result.paths[0])
 
 
