@@ -134,14 +134,15 @@ __INFO_PANEL__
   function fallbackCopyText(text,label){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Copied: '+label)}
   async function copyImage(img,label){try{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);const b=await new Promise(r=>c.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':b})]);showToast('Image copied: '+label)}catch(err){showToast('Copy failed — try the button');console.error(err)}}
 
+  function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function buildGrid(){
     const g=document.getElementById('grid');
     g.innerHTML=IMAGES.map((im,i)=>`
       <div class="card">
-        <span class="label">${im.label}</span>
-        <img src="${im.src}" alt="${im.label}" onclick="copyImage(this, IMAGES[${i}].label)">
+        <span class="label">${esc(im.label)}</span>
+        <img src="${esc(im.src)}" alt="${esc(im.label)}" onclick="copyImage(this, IMAGES[${i}].label)">
         <div class="actions">
-          <span class="filename">${im.filename}</span>
+          <span class="filename">${esc(im.filename)}</span>
           <button class="btn" onclick="copyImage(this.closest('.card').querySelector('img'), IMAGES[${i}].label)">Copy Image</button>
           <button class="btn" onclick="copyText(event, IMAGES[${i}].copyText, IMAGES[${i}].label)">Copy Text</button>
         </div>
