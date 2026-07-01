@@ -235,21 +235,29 @@ def _run(
   for p in result.paths:
     console.print(f"  [green]wrote[/green] {p} [dim]({p.stat().st_size:,}B)[/dim]", soft_wrap=True)
 
-  written_grid: Path | None = None
-  if grid and len(result.paths) > 1:
-    target = planned_grid or metadata.auto_grid_path(gen_id)
-    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality)
-    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
-  elif grid and len(result.paths) == 1:
-    console.print("[dim]--grid ignored: needs n>=2[/dim]")
-
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    grid_path=written_grid,
   )
+  metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
+
+  written_grid: Path | None = None
+  if grid and len(result.paths) > 1:
+    target = planned_grid or metadata.auto_grid_path(gen_id)
+    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality, meta=meta)
+    meta = metadata.build(
+      gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
+      n=n, cost_usd=est_cost, input=input, refs=refs,
+      resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+      grid_path=written_grid,
+    )
+    meta_path = metadata.save(meta, gen_id)
+    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
+  elif grid and len(result.paths) == 1:
+    console.print("[dim]--grid ignored: needs n>=2[/dim]")
+
   console.print(
     f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
     soft_wrap=True,
@@ -283,17 +291,24 @@ def _models_root(
 
 
 def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> None:
-  cache_exists = discovery.load_cache() is not None
+  cached = None if refresh or json_out else discovery.load_cache()
   if not json_out:
-    if not cache_exists or refresh:
+    if refresh:
       n_models = len(registry.all_canonical())
-      console.print(f"[dim]first probe of {n_models} model(s) — this may take ~30s...[/dim]")
+      console.print(f"[dim]refreshing {n_models} model probe(s) in parallel...[/dim]")
+    elif cached is None:
+      n_models = len(registry.all_canonical())
+      console.print(f"[dim]first probe of {n_models} model(s) in parallel — this may take a few minutes...[/dim]")
+    elif discovery.is_cache_stale(cached):
+      n_models = len(registry.all_canonical())
+      console.print(
+        f"[dim]cache age: {_fmt_age(discovery.cache_age_seconds(cached))}; "
+        f"refreshing {n_models} model probe(s) in parallel...[/dim]"
+      )
     else:
       console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
       console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
-  t0 = time.time()
-  probes, age = discovery.get_or_probe(refresh=refresh)
-  elapsed = time.time() - t0
+  probes, age = discovery.get_or_probe(refresh=refresh, cached=cached)
 
   if json_out:
     import json as _json
@@ -378,14 +393,14 @@ def auth_cmd(
   check: Annotated[bool, typer.Option("--check", help="Run a tiny live probe per provider.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table (agent-friendly).")] = False,
 ):
-  cached = discovery.load_cache()
+  cached = discovery.load_fresh_cache()
   probes = {a: p["status"] for a, p in (cached or {}).get("probes", {}).items()}
 
   rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:")]
 
   if json_out:
     import json as _json
-    payload = {name: {**info, "models_working": sum(1 for a, s in probes.items() if a.startswith(prefix) and s == "working"),
+    payload = {name: {**info, "models_listed": sum(1 for a, s in probes.items() if a.startswith(prefix) and _status_counts_as_available(s)),
                       "models_total":  sum(1 for a in probes if a.startswith(prefix))} for name, info, prefix in rows}
     typer.echo(_json.dumps(payload, indent=2))
     return
@@ -401,8 +416,8 @@ def auth_cmd(
 
   for name, info, prefix in rows:
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
-    ok_probes = sum(1 for s in cohort if s == "working")
-    summary = f"{ok_probes}/{len(cohort)} working" if cohort else "[yellow]no cache[/yellow]"
+    ok_probes = sum(1 for s in cohort if _status_counts_as_available(s))
+    summary = f"{ok_probes}/{len(cohort)} listed" if cohort else "[yellow]no cache[/yellow]"
     cred_cell = (
       f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
       else "[red]✗ unset[/red]"
@@ -427,7 +442,7 @@ def auth_cmd(
   if not cached:
     console.print("[dim]run `genimg models` to populate the probe cache.[/dim]")
   else:
-    console.print(f"[dim]cache age: {_fmt_age(time.time() - cached['timestamp'])}  •  `genimg models --refresh` to re-probe[/dim]")
+    console.print(f"[dim]cache age: {_fmt_age(discovery.cache_age_seconds(cached))}  •  `genimg models --refresh` to re-probe[/dim]")
 
   if check:
     console.print("\n[dim]live probe...[/dim]")
@@ -841,17 +856,25 @@ def _fmt_age(seconds: float) -> str:
     return f"{seconds:.0f}s"
   if seconds < 3600:
     return f"{seconds / 60:.0f}m"
-  return f"{seconds / 3600:.1f}h"
+  if seconds < 86400:
+    return f"{seconds / 3600:.1f}h"
+  return f"{seconds / 86400:.1f}d"
 
 
 def _color_status(s: str) -> str:
   return {
+    "listed": "[green]listed[/green]",
+    "missing": "[yellow]missing[/yellow]",
     "working": "[green]working[/green]",
     "404": "[yellow]404[/yellow]",
     "403": "[red]403[/red]",
     "auth": "[red]auth[/red]",
     "error": "[red]error[/red]",
   }.get(s, s)
+
+
+def _status_counts_as_available(s: str) -> bool:
+  return s in {"listed", "working"}
 
 
 def _rm_tree(p: Path) -> None:

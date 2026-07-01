@@ -80,7 +80,7 @@ class OpenAIImageGen(IImageGen):
     except NotFoundError as e:
       raise RuntimeError(
         f"model {req.model!r} not deployed on this OpenAI endpoint. "
-        f"Hint: `genimg models` — try -m oai:gi2 (or another with status=working)."
+        f"Hint: `genimg models` — try -m oai:gi2 (or another with status=listed)."
       ) from e
     except AuthenticationError as e:
       raise RuntimeError(
