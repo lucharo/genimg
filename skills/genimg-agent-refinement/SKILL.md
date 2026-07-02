@@ -18,7 +18,7 @@ It is okay to start with the loop when the user explicitly asks for refinement, 
 ## Loop
 
 1. Generate a small batch, usually `genimg "PROMPT" -n 4 -g`.
-2. Inspect the PNGs yourself.
+2. Inspect the PNGs yourself — **zoom, don't eyeball the thumbnail.** For any detailed image (diagrams, dense text, multi-cell layouts), crop the regions that matter and Read them: `magick in.png -crop WxH+X+Y +repage /tmp/crop.png`. Full-frame thumbnails hide skipped/duplicated cells, garbled labels, wrong arrow directions, and prompt text that leaked in as a label (e.g. a "No empty boxes." instruction rendered literally). Never call a candidate final off the thumbnail alone.
 3. Pick the strongest candidate.
 4. Rewrite the prompt only to remove clear defects.
 5. If the user approved refinement, re-run once or twice, using the best prior image as a reference when helpful:
