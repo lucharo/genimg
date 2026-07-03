@@ -25,6 +25,9 @@ class GenerateRequest(BaseModel):
   quality: Quality | None = None
   region: str | None = None
   project: str | None = None
+  # Diverse mode (-d): per-index effective prompts, len == n. When set, generation i
+  # uses prompt_variants[i] instead of prompt (which stays the base prompt).
+  prompt_variants: list[str] | None = None
 
 
 class GenerateResult(BaseModel):
@@ -54,10 +57,19 @@ class IImageGen(ABC):
 
   def generate(self, req: GenerateRequest) -> GenerateResult:
     if req.n == 1:
-      return GenerateResult(paths=[self._generate_single_image(req, 0)], model_used=req.model)
+      return GenerateResult(paths=[self._generate_single_image(self.req_for_index(req, 0), 0)],
+                            model_used=req.model)
     with ThreadPoolExecutor(max_workers=min(req.n, self.max_parallel)) as ex:
-      paths = list(ex.map(lambda i: self._generate_single_image(req, i), range(req.n)))
+      paths = list(ex.map(lambda i: self._generate_single_image(self.req_for_index(req, i), i),
+                          range(req.n)))
     return GenerateResult(paths=paths, model_used=req.model)
+
+  @staticmethod
+  def req_for_index(req: GenerateRequest, i: int) -> GenerateRequest:
+    """Per-generation request: swaps in prompt_variants[i] in diverse mode."""
+    if not req.prompt_variants:
+      return req
+    return req.model_copy(update={"prompt": req.prompt_variants[i]})
 
   @staticmethod
   def numbered_path(out: Path, i: int, n: int) -> Path:

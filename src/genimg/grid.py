@@ -58,6 +58,7 @@ _HTML = '''<!DOCTYPE html>
   .card:hover{transform:translateY(-4px);box-shadow:0 12px 24px rgba(0,0,0,.4)}
   .card img{width:100%;height:auto;display:block;cursor:pointer}
   .card .label{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.5);color:#fff;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:500;pointer-events:none;z-index:2}
+  .card .delta{padding:8px 12px 0;font-size:12px;color:#8bc34a;font-style:italic}
   .card .actions{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .card .filename{font-size:12px;color:#888;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .btn{background:#333;border:1px solid #555;color:#ccc;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:background .2s,color .2s;white-space:nowrap}
@@ -76,6 +77,7 @@ _HTML = '''<!DOCTYPE html>
   .car-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 4px 0}
   .car-bar .counter{color:#aaa;font-size:13px}
   .car-bar .car-filename{color:#888;font-size:12px;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .car-bar .car-delta{color:#8bc34a;font-size:12px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* metadata panel */
   .info{max-width:1400px;margin:24px auto 0;background:#2a2a2a;border-radius:12px;padding:8px 20px;font-size:13px}
   .info .row{display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #333}
@@ -102,6 +104,7 @@ __PROMPT_TOP__
   </div>
   <div class="car-bar">
     <span class="counter" id="car-counter"></span>
+    <span class="car-delta" id="car-delta"></span>
     <span class="car-filename" id="car-filename"></span>
     <span style="display:flex;gap:8px">
       <button class="btn" onclick="copyImage(document.getElementById('car-img'), IMAGES[curIdx].label)">Copy Image</button>
@@ -141,6 +144,7 @@ __INFO_PANEL__
       <div class="card">
         <span class="label">${esc(im.label)}</span>
         <img src="${esc(im.src)}" alt="${esc(im.label)}" onclick="copyImage(this, IMAGES[${i}].label)">
+        ${im.delta?`<div class="delta">${esc(im.delta)}</div>`:''}
         <div class="actions">
           <span class="filename">${esc(im.filename)}</span>
           <button class="btn" onclick="copyImage(this.closest('.card').querySelector('img'), IMAGES[${i}].label)">Copy Image</button>
@@ -152,6 +156,7 @@ __INFO_PANEL__
     const im=IMAGES[curIdx];
     document.getElementById('car-img').src=im.src;
     document.getElementById('car-label').textContent=im.label;
+    document.getElementById('car-delta').textContent=im.delta||'';
     document.getElementById('car-filename').textContent=im.filename;
     document.getElementById('car-counter').textContent=(curIdx+1)+' / '+IMAGES.length;
   }
@@ -216,6 +221,7 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
     ("model", model or None, False),
     ("provider", meta.get("provider"), False),
     ("n", meta.get("n"), False),
+    ("diverse", "yes (per-card prompt deltas)" if meta.get("diverse") else None, False),
     ("quality", meta.get("quality"), False),
     ("resolution", meta.get("resolution"), False),
     ("aspect ratio", meta.get("aspect_ratio"), False),
@@ -241,13 +247,21 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
   from `meta` (`cost_usd_estimated`, which the CLI computes with full size/quality
   context) when available, else the renderer's own per-image estimate. If
   `include_cost` is False (or provider unknown and no meta cost), no cost is shown."""
+  # Diverse mode (-d): each card shows the prompt delta that produced it.
+  deltas_by_name: dict[str, str] = {}
+  if meta and meta.get("diverse"):
+    for out in meta.get("outputs", []):
+      if isinstance(out, dict) and out.get("path"):
+        deltas_by_name[Path(out["path"]).name] = out.get("prompt_delta") or "base prompt"
+
   items: list[dict[str, str]] = []
   costs: list[float] = []
   for i, p in enumerate(images):
     label = f"#{i + 1}"
     src = _data_uri(p) if embed else str(p.absolute())
     text = copy_format.format(label=label, filename=p.name, path=str(p.absolute()))
-    items.append({"src": src, "label": label, "filename": p.name, "copyText": text})
+    items.append({"src": src, "label": label, "filename": p.name, "copyText": text,
+                  "delta": deltas_by_name.get(p.name, "")})
     costs.append(estimate_cost(p, provider=provider, quality=quality))
 
   # Single source of truth for cost: prefer the CLI's size/quality-aware estimate.

@@ -29,8 +29,9 @@ class GeminiImageGen(IImageGen):
     return get_client(region=region or self.region, project=self.project)
 
   def generate(self, req: GenerateRequest) -> GenerateResult:
-    """Imagen short-circuits to a single batched call; Gemini falls back to template parallelism."""
-    if _is_imagen(req.model):
+    """Imagen short-circuits to a single batched call (unless diverse mode needs a
+    distinct prompt per image); Gemini falls back to template parallelism."""
+    if _is_imagen(req.model) and not req.prompt_variants:
       return self._generate_imagen_batched(req)
     try:
       return super().generate(req)
@@ -38,6 +39,8 @@ class GeminiImageGen(IImageGen):
       raise self._friendly(e, req) from e
 
   def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
+    if _is_imagen(req.model):
+      return self._generate_imagen_single(req, i)
     client = self._client(req.region)
     contents: list = [req.prompt]
     for ref in req.refs:
@@ -64,6 +67,23 @@ class GeminiImageGen(IImageGen):
       if part.text:
         print(f"[genimg/google] model said: {part.text}")
     raise RuntimeError("No image returned. Likely a safety filter — rephrase the prompt.")
+
+  def _generate_imagen_single(self, req: GenerateRequest, i: int) -> Path:
+    """One Imagen image for one prompt variant (diverse mode can't use the batched call)."""
+    client = self._client(req.region)
+    cfg_kwargs = {
+      "number_of_images": 1,
+      "aspect_ratio": req.aspect_ratio or "1:1",
+      "output_mime_type": "image/png",
+    }
+    if req.resolution:
+      cfg_kwargs["image_size"] = req.resolution
+    resp = client.models.generate_images(
+      model=req.model, prompt=req.prompt, config=types.GenerateImagesConfig(**cfg_kwargs),
+    )
+    out = self.numbered_path(req.output, i, req.n)
+    resp.generated_images[0].image.save(str(out))
+    return out
 
   def _generate_imagen_batched(self, req: GenerateRequest) -> GenerateResult:
     client = self._client(req.region)

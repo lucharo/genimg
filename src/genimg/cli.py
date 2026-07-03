@@ -12,7 +12,7 @@ from rich.markup import escape as _rich_escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
-from . import __version__, config, cost, discovery, history, metadata, registry
+from . import __version__, config, cost, discovery, diversify, history, metadata, registry
 from . import grid as grid_module
 from . import setup as setup_module
 from .auth import google as auth_google
@@ -116,6 +116,9 @@ def _run(
     help="Input image to edit (image-to-image).")] = None,
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
     help="Number of variants 1-10 (n>1 runs in parallel).")] = 1,
+  diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
+    help="Diversify the -n generations: #1 keeps the base prompt, the rest each get a distinct "
+         "style/composition delta from a curated list (recorded in metadata + grid). Requires -n >= 2.")] = False,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -137,6 +140,9 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  if diverse and n < 2:
+    _die("--diverse requires -n >= 2 (diversity across a single image is meaningless). Try -n 4 -d.")
+
   user_cfg = config.load()
   model_was_explicit = model is not None
   resolved = model or user_cfg.get("default_model") or registry.DEFAULT
@@ -167,8 +173,13 @@ def _run(
   planned_paths = _planned_output_paths(out_path, n)
   planned_grid = metadata.auto_grid_path(gen_id) if grid and n > 1 else None
 
+  deltas = diversify.pick_deltas(n) if diverse else None
+  variants = [diversify.apply(prompt, d) for d in deltas] if deltas else None
+
   effective_q = (quality or "medium") if spec.provider == "openai" else None
   params = [f"n={n}"]
+  if diverse:
+    params.append("diverse")
   if effective_q:
     params.append(f"q={effective_q}{'' if quality_was_explicit else ' (default)'}")
   if resolution:
@@ -196,6 +207,10 @@ def _run(
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
   _print_planned_paths(planned_paths)
+  if deltas:
+    for i, d in enumerate(deltas):
+      row_label = "deltas" if i == 0 else ""
+      console.print(f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(d) if d else '(base prompt)'}")
   if planned_grid:
     console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":
@@ -211,7 +226,7 @@ def _run(
     prompt=prompt, output=out_path, model=resolved,
     refs=refs or [], input=input, n=n,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    region=region, project=project,
+    region=region, project=project, prompt_variants=variants,
   )
   try:
     with Progress(
@@ -239,6 +254,7 @@ def _run(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+    prompt_deltas=deltas,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -251,7 +267,7 @@ def _run(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-      grid_path=written_grid,
+      grid_path=written_grid, prompt_deltas=deltas,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
