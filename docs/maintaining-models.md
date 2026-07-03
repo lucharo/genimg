@@ -11,9 +11,12 @@ dispatch is structural (by model-id shape), so most new models need **no code ch
 2. **Registered bare id** — `gpt-image-2` reverse-looked-up to its curated spec.
 3. **Signature inference** (`registry._infer_spec`) — a well-formed but *unregistered* id
    is dispatched by its prefix:
-   - `gpt-image-*` / `dall-e-*` → OpenAI
+   - `gpt-image-*` → OpenAI
    - `imagen-*` → Google, region `us-central1`
    - `gemini-*…image…` → Google, region `global`
+
+   (`dall-e-*` is intentionally not inferred — the OpenAI provider only speaks the
+   gpt-image request shape, so a DALL-E id would resolve then fail at generation.)
 
 So **a brand-new same-signature model just works** via its full id:
 
@@ -30,10 +33,12 @@ Only add an entry when you want one of the things inference *can't* give you:
 
 - a **short alias** (`gdm:nb2` instead of the full id),
 - a **`quality_rank`** so it sorts sensibly in `genimg models`,
-- a **pinned Vertex region** other than the inferred default,
-- a **cost estimate** in `genimg`'s output.
+- a **pinned Vertex region** other than the inferred default.
 
 If none of those matter, skip it — the model already works.
+
+A **cost estimate** is *not* a reason to touch the registry: `cost.py` is keyed by model
+id independently, so you can price any id (registered or inferred) by adding a cost row alone.
 
 ## Edit recipe
 

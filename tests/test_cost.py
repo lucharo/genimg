@@ -31,6 +31,13 @@ class CostEstimateTests(unittest.TestCase):
       0.134,
     )
 
+  def test_ga_and_preview_ids_price_identically(self) -> None:
+    # inference resolves the GA id (no -preview); it must price the same as the registry's preview id
+    ga = cost.estimate(provider="google", model_id="gemini-3.1-flash-image", n=1)
+    preview = cost.estimate(provider="google", model_id="gemini-3.1-flash-image-preview", n=1)
+    self.assertAlmostEqual(ga, 0.067)
+    self.assertAlmostEqual(ga, preview)
+
   def test_unknown_returns_zero(self) -> None:
     self.assertEqual(cost.estimate(provider="openai", model_id="nope", n=1), 0.0)
     self.assertEqual(cost.estimate(provider="google", model_id="nope", n=1), 0.0)

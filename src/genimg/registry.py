@@ -49,11 +49,15 @@ def _infer_spec(model_id: str) -> ModelSpec | None:
 
   Provider dispatch is structural — the id prefix already tells us the provider and code
   path — so a new same-signature model works via `-m <full-id>` with no code change. The
-  registry stays a pure curation layer (short aliases, quality_rank, region pins, cost);
+  registry stays a pure curation layer (short aliases, quality_rank, region pins);
   inferred specs get quality_rank=0 (never auto-ranked) and a sane default region.
+
+  Only the gpt-image request shape is inferred for OpenAI. `dall-e-*` is intentionally
+  excluded: the OpenAI provider always sends gpt-image-style size/quality params that
+  DALL-E rejects, so inferring it would resolve then fail at generation.
   """
   mid = model_id.lower()
-  if mid.startswith(("gpt-image", "dall-e")):
+  if mid.startswith("gpt-image"):
     return ModelSpec("openai", model_id, region=None, quality_rank=0)
   if mid.startswith("imagen-"):
     return ModelSpec("google", model_id, region="us-central1", quality_rank=0)
@@ -89,7 +93,7 @@ def resolve(name: str) -> tuple[str, ModelSpec]:
     return name, inferred
   raise ValueError(
     f"unknown model {name!r}. Run `genimg models` to see aliases, or pass a full provider "
-    f"model id (gpt-image-*, dall-e-*, imagen-*, or gemini-*-image)."
+    f"model id (gpt-image-*, imagen-*, or gemini-*-image)."
   )
 
 

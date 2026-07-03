@@ -60,9 +60,10 @@ class SignatureInferenceTests(unittest.TestCase):
     self.assertEqual(spec.provider, "openai")
     self.assertIsNone(spec.region)
 
-  def test_dalle_infers_openai(self) -> None:
-    _, spec = registry.resolve("dall-e-3")
-    self.assertEqual(spec.provider, "openai")
+  def test_dalle_not_inferred(self) -> None:
+    # dall-e is intentionally excluded: the OpenAI provider only speaks the gpt-image shape.
+    with self.assertRaises(ValueError):
+      registry.resolve("dall-e-3")
 
   def test_unregistered_imagen_infers_google_regional(self) -> None:
     _, spec = registry.resolve("imagen-5.0-generate-001")
