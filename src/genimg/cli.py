@@ -252,12 +252,13 @@ def _run(
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
   )
+  metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
 
   written_grid: Path | None = None
   if grid and len(result.paths) > 1:
     target = planned_grid or metadata.auto_grid_path(gen_id)
-    written_grid = grid_module.render(result.paths, target, cost_total=est_cost or None)
+    written_grid, total = grid_module.render(result.paths, target, provider=spec.provider, quality=quality, meta=meta)
     meta = metadata.build(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
@@ -265,7 +266,7 @@ def _run(
       grid_path=written_grid,
     )
     meta_path = metadata.save(meta, gen_id)
-    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${est_cost:.2f})[/dim]", soft_wrap=True)
+    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
   elif grid and len(result.paths) == 1:
     console.print("[dim]--grid ignored: needs n>=2[/dim]")
 
@@ -551,7 +552,7 @@ def grid_cmd(
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
   # No cost_total — provenance of arbitrary input files is unknown, so any estimate
   # would be misleading. The footer is omitted rather than guessed.
-  written = grid_module.render(paths, target)
+  written, _total = grid_module.render(paths, target)
   console.print(f"[green]wrote[/green] {written} [dim]({len(paths)} images)[/dim]")
   if open_after:
     grid_module.open_in_browser(written)

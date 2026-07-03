@@ -5,7 +5,11 @@ description = "Multi-provider image generation CLI (Gemini + OpenAI)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "typer>=0.12",
+  # typer<0.26: 0.26 dropped its top-level click dep AND refactored TyperGroup,
+  # breaking _DefaultGroup's default-command routing (cli.py). click is pinned
+  # directly because cli.py imports it (not transitively via typer).
+  "typer>=0.12,<0.26",
+  "click>=8.1",
   "google-genai>=0.8",
   "openai>=1.50",
   "rich>=13",
