@@ -2,9 +2,14 @@
 
 Plain `-n` samples the same prompt N times and converges on near-duplicates
 for simple subjects. Diverse mode appends a distinct style/composition delta
-to each generation instead. The pool is a fixed curated list (no LLM call —
-deterministic cost, zero latency); reproducibility comes from recording each
-generation's delta in the metadata sidecar, not from a fixed pick order.
+to each generation instead. The pool is a fixed curated list; reproducibility
+comes from recording each generation's delta in the metadata sidecar, not
+from a fixed pick order.
+
+Design invariant: genimg never calls a text LLM — only image generation
+models. Tailored (non-curated) diversity is the caller's job: an agent
+driving the CLI is itself an LLM and can compose its own prompt variants.
+Do not add an LLM-expansion strategy here.
 
 Generation #1 always keeps the base prompt untouched, so every diverse batch
 contains one un-perturbed anchor to judge the deltas against.
