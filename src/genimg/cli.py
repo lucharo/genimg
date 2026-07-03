@@ -127,11 +127,10 @@ def _run(
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
     help="Number of variants 1-10 (n>1 runs in parallel). Pair with -d for deliberate variety.")] = 1,
   mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
-    help="parallel = n separate API requests (provider default for all but Imagen); "
-         "batch = ONE n-image request (OpenAI n, Imagen number_of_images, Gemini multi-image response). "
-         "Default: provider's natural mode. Caveats: -d with batch works on Gemini image models ONLY; "
-         "Gemini batch may return fewer than n images (parallel guarantees n); "
-         "some Azure OpenAI deployments serialize n>1, making batch slower than parallel.")] = None,
+    help="parallel = n separate API requests (default for all but Imagen); batch = ONE n-image "
+         "request, Google only: Gemini multi-image response (pair with -d for a model-curated set; "
+         "may return fewer than n) or Imagen number_of_images. Rejected on OpenAI — gpt-image n>1 "
+         "returns near-duplicate independent samples (verified live), i.e. wasted spend.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -849,12 +848,18 @@ def _validate_provider_flags(
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
 
-  if mode == "batch" and diverse and (provider != "google" or (model_id and model_id.startswith("imagen-"))):
+  if mode == "batch" and provider == "openai":
+    _die(
+      "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
+      "samples of one prompt (verified live). Use the default parallel mode — add -d or "
+      '--deltas "..." for variety — or switch to a Gemini model (-m gdm:nb2) for batch.'
+    )
+
+  if mode == "batch" and diverse and model_id and model_id.startswith("imagen-"):
     _die(
       "--diverse with --mode batch needs a model that sees all n takes in one request — "
-      "Gemini image models only (-m gdm:nb2 / gdm:nbp). OpenAI n>1 and Imagen draw independent "
-      "samples of one prompt, so they can't coordinate diversity in a single call. "
-      "Use --mode parallel (the default) for per-request prompt deltas instead."
+      "Gemini image models only (-m gdm:nb2 / gdm:nbp). Imagen draws independent samples "
+      "of one prompt. Use --mode parallel (the default) for per-request prompt deltas instead."
     )
 
   if quality is not None:

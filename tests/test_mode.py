@@ -71,20 +71,19 @@ class ModeDispatchTests(unittest.TestCase):
 
 
 class OpenAIBatchTests(unittest.TestCase):
-  def test_batch_is_one_request_with_n(self) -> None:
+  def test_openai_has_no_batch_path(self) -> None:
+    # gpt-image n>1 returns near-duplicate independent samples (verified live), so the
+    # provider deliberately has no batch implementation — the base class refuses.
     client = MagicMock()
     client.images.generate.return_value = SimpleNamespace(
-      data=[SimpleNamespace(b64_json=_PNG) for _ in range(3)])
+      data=[SimpleNamespace(b64_json=_PNG)])
     with tempfile.TemporaryDirectory() as td, \
          patch("genimg.providers.openai.get_client", return_value=client):
       req = GenerateRequest(prompt="p", output=Path(td) / "img.png",
                             model="gpt-image-2", n=3, mode="batch")
-      result = OpenAIImageGen().generate(req)
-      self.assertEqual([p.name for p in result.paths], ["img_1.png", "img_2.png", "img_3.png"])
-      for p in result.paths:
-        self.assertTrue(p.exists())
-    client.images.generate.assert_called_once()
-    self.assertEqual(client.images.generate.call_args.kwargs["n"], 3)
+      with self.assertRaises(RuntimeError):
+        OpenAIImageGen().generate(req)
+    client.images.generate.assert_not_called()  # refused before any spend
 
 
 class GeminiBatchTests(unittest.TestCase):
@@ -162,10 +161,16 @@ class ModeCliTests(unittest.TestCase):
     return result, captured, payload
 
   def test_mode_batch_plumbs_through_and_is_recorded(self) -> None:
-    result, captured, payload = self._invoke(["p", "-m", "oai:gi2", "-n", "3", "--mode", "batch"])
+    result, captured, payload = self._invoke(["p", "-m", "gdm:nb2", "-n", "3", "--mode", "batch"])
     self.assertEqual(result.exit_code, 0, result.output)
     self.assertEqual(captured[0].mode, "batch")
     self.assertEqual(payload["mode"], "batch")
+
+  def test_mode_batch_rejected_on_openai(self) -> None:
+    result, captured, _ = self._invoke(["p", "-m", "oai:gi2", "-n", "3", "--mode", "batch"])
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("wasted spend", result.output)
+    self.assertEqual(captured, [])  # refused before any API call
 
   def test_default_mode_is_auto(self) -> None:
     result, captured, payload = self._invoke(["p", "-m", "oai:gi2", "-n", "2"])
@@ -182,7 +187,7 @@ class ModeCliTests(unittest.TestCase):
   def test_batch_diverse_openai_errors(self) -> None:
     result, captured, _ = self._invoke(["p", "-m", "oai:gi2", "-n", "4", "-d", "--mode", "batch"])
     self.assertEqual(result.exit_code, 1)
-    self.assertIn("Gemini image models only", result.output)
+    self.assertIn("wasted spend", result.output)  # blanket OpenAI batch rejection fires first
     self.assertEqual(captured, [])
 
   def test_batch_diverse_imagen_errors(self) -> None:
