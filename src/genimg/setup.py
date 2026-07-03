@@ -17,7 +17,7 @@ from typing import Callable
 import questionary
 from rich.console import Console
 
-from . import config
+from . import config, registry
 from .auth import google as auth_google
 from .auth import openai as auth_openai
 
@@ -342,6 +342,49 @@ def _setup_openai(cfg: dict) -> bool:
   return True
 
 
+# ────────────────────── default model ──────────────────────
+
+def _setup_default_model(cfg: dict) -> None:
+  """Offer to set a default model so `genimg PROMPT` works without -m (ADR 0001).
+
+  There is no hardcoded default; the user picks from the models their enabled
+  providers cover, or skips and passes -m each run.
+  """
+  enabled = cfg.get("enabled_providers", [])
+  providers = {p for e in enabled for p in ("google", "openai") if e.startswith(p)}
+  models = [
+    (alias, spec)
+    for alias, spec in sorted(
+      registry.all_canonical().items(),
+      key=lambda kv: (kv[1].provider, -kv[1].quality_rank, kv[0]),
+    )
+    if spec.provider in providers
+  ]
+  if not models:
+    return
+  current = cfg.get("default_model")
+  choices = [
+    questionary.Choice(f"{alias}  ({spec.provider} / {spec.model_id})", value=alias)
+    for alias, spec in models
+  ]
+  # Sentinel (not None) so an explicit Skip is distinguishable from a Ctrl-C cancel.
+  skip = "\0skip"
+  choices.append(questionary.Choice("Skip (pass -m each run)", value=skip))
+  prompt = "Default model for `genimg PROMPT` (used when you omit -m)?"
+  if current:
+    prompt += f"  [current: {current}]"
+  pick = questionary.select(prompt, choices=choices).ask()
+  if pick is None:
+    return  # cancelled — leave config untouched
+  if pick == skip:
+    # Explicit "pass -m each run": drop any stale default (e.g. for a provider just disabled).
+    if cfg.pop("default_model", None):
+      console.print("[dim]default model cleared — pass -m each run.[/dim]")
+    return
+  cfg["default_model"] = pick
+  console.print(f"[green]default model →[/green] {pick}")
+
+
 # ────────────────────── entry point ──────────────────────
 
 def run_setup() -> None:
@@ -359,11 +402,19 @@ def run_setup() -> None:
     console.print("\n[yellow]No providers enabled.[/yellow] Re-run when ready.")
     return
 
+  try:
+    _setup_default_model(cfg)
+  except KeyboardInterrupt:
+    pass  # skipping the default is fine; providers are already validated
+
   config.save(cfg)
   console.print(f"\n[green]saved[/green] {config.CONFIG_PATH}")
   console.print(f"  enabled: {', '.join(cfg.get('enabled_providers', [])) or '(none)'}")
+  if cfg.get("default_model"):
+    console.print(f"  default model: {cfg['default_model']}")
   if cfg.get("gcp_project"):
     console.print(f"  gcp project: {cfg['gcp_project']}")
   if cfg.get("openai_base_url"):
     console.print(f"  openai base url: {cfg['openai_base_url']}")
-  console.print("\n[dim]inspect: `genimg auth`  •  test: `genimg \"a robot\" -o /tmp/r.png`[/dim]")
+  test_model = "" if cfg.get("default_model") else " -m gdm:nb"
+  console.print(f"\n[dim]inspect: `genimg auth`  •  test: `genimg \"a robot\"{test_model} -o /tmp/r.png`[/dim]")
