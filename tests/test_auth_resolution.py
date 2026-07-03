@@ -102,6 +102,19 @@ class ProjectResolutionTests(_CleanEnv):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/does/not/exist.json"
     self.assertIsNone(ag._project_from_sa_json())
 
+  def test_gcloud_project_rejects_unset_and_failure(self) -> None:
+    from unittest.mock import MagicMock
+    with patch.object(ag.shutil, "which", return_value="/usr/bin/gcloud"):
+      cases = [
+        (0, "(unset)\n", None),   # gcloud's no-project sentinel
+        (0, "\n", None),          # empty
+        (1, "my-proj\n", None),   # command failed
+        (0, "my-proj\n", "my-proj"),
+      ]
+      for rc, out, expected in cases:
+        with patch.object(ag.subprocess, "run", return_value=MagicMock(returncode=rc, stdout=out)):
+          self.assertEqual(ag._gcloud_project(), expected)
+
 
 if __name__ == "__main__":
   unittest.main()

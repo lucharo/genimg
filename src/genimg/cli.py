@@ -520,6 +520,19 @@ def history_cmd(
   console.print(table)
 
 
+# ────────────────────── cost command ──────────────────────
+
+# Thin delegator to `history --summary`. Kept as a real command (not removed) because the
+# root group routes an unknown first word to the hidden generate command — so a bare
+# `genimg cost` would otherwise be treated as a prompt and could trigger a paid generation
+# when a default model is set.
+@_app.command("cost", help="Total estimated spend (shorthand for `history --summary`).")
+def cost_cmd(
+  json_out: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+):
+  history_cmd(limit=20, summary=True, json_out=json_out)
+
+
 # ────────────────────── grid command (standalone) ──────────────────────
 
 @_app.command("grid", help="Render an HTML grid from existing image files.")

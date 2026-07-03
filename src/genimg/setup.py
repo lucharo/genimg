@@ -367,14 +367,22 @@ def _setup_default_model(cfg: dict) -> None:
     questionary.Choice(f"{alias}  ({spec.provider} / {spec.model_id})", value=alias)
     for alias, spec in models
   ]
-  choices.append(questionary.Choice("Skip (pass -m each run)", value=None))
+  # Sentinel (not None) so an explicit Skip is distinguishable from a Ctrl-C cancel.
+  skip = "\0skip"
+  choices.append(questionary.Choice("Skip (pass -m each run)", value=skip))
   prompt = "Default model for `genimg PROMPT` (used when you omit -m)?"
   if current:
     prompt += f"  [current: {current}]"
   pick = questionary.select(prompt, choices=choices).ask()
-  if pick:
-    cfg["default_model"] = pick
-    console.print(f"[green]default model →[/green] {pick}")
+  if pick is None:
+    return  # cancelled — leave config untouched
+  if pick == skip:
+    # Explicit "pass -m each run": drop any stale default (e.g. for a provider just disabled).
+    if cfg.pop("default_model", None):
+      console.print("[dim]default model cleared — pass -m each run.[/dim]")
+    return
+  cfg["default_model"] = pick
+  console.print(f"[green]default model →[/green] {pick}")
 
 
 # ────────────────────── entry point ──────────────────────

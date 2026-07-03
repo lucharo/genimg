@@ -41,7 +41,11 @@ def _gcloud_project() -> str | None:
       ["gcloud", "config", "get-value", "project"],
       capture_output=True, text=True, timeout=5,
     )
-    return r.stdout.strip() or None
+    if r.returncode != 0:
+      return None
+    proj = r.stdout.strip()
+    # gcloud prints "(unset)" (and sometimes empty) when no project is configured.
+    return proj if proj and proj != "(unset)" else None
   except (subprocess.TimeoutExpired, FileNotFoundError):
     return None
 
