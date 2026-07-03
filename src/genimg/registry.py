@@ -22,6 +22,8 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "gdm:nano-banana-pro": "gdm:nbp",
   "gdm:nb2":             ModelSpec("google", "gemini-3.1-flash-image-preview", region="global", quality_rank=8),
   "gdm:nano-banana-2":   "gdm:nb2",
+  "gdm:nb2-lite":        ModelSpec("google", "gemini-3.1-flash-lite-image",    region="global", quality_rank=6),
+  "gdm:nano-banana-2-lite": "gdm:nb2-lite",
   "gdm:nb":              ModelSpec("google", "gemini-2.5-flash-image",         region="us-central1", quality_rank=6),
   "gdm:nano-banana":     "gdm:nb",
   "gdm:imagen4":         ModelSpec("google", "imagen-4.0-generate-001",        region="us-central1", quality_rank=7),

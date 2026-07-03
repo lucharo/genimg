@@ -21,6 +21,7 @@ _OPENAI_RESOLUTION_MULT = {None: 1.0, "1K": 1.0, "2K": 2.5, "4K": 6.0}
 _GOOGLE_PER_IMAGE = {
   "gemini-3-pro-image-preview":     {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
   "gemini-3.1-flash-image-preview": {None: 0.025, "1K": 0.025, "2K": 0.08, "4K": 0.15},
+  "gemini-3.1-flash-lite-image":    {None: 0.034, "1K": 0.034, "2K": 0.05, "4K": 0.076},
   "gemini-2.5-flash-image":         {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
   "imagen-4.0-generate-001":        {None: 0.04, "1K": 0.04, "2K": 0.04, "4K": 0.04},
   "imagen-4.0-fast-generate-001":   {None: 0.02, "1K": 0.02, "2K": 0.02, "4K": 0.02},
