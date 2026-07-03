@@ -37,6 +37,27 @@ class DiversifyTests(unittest.TestCase):
     self.assertEqual(diversify.apply("a fox", "isometric 3D perspective"),
                      "a fox — isometric 3D perspective")
 
+  def test_custom_pool_is_used_in_order(self) -> None:
+    deltas = diversify.pick_deltas(3, pool=["first", "second", "third"])
+    self.assertEqual(deltas, [None, "first", "second"])  # in order, anchor kept
+
+  def test_custom_pool_too_small_errors(self) -> None:
+    with self.assertRaises(ValueError):
+      diversify.pick_deltas(4, pool=["only", "two"])
+
+  def test_parse_deltas_comma_separated(self) -> None:
+    self.assertEqual(diversify.parse_deltas_arg("isometric, blueprint , macro photo"),
+                     ["isometric", "blueprint", "macro photo"])
+    with self.assertRaises(ValueError):
+      diversify.parse_deltas_arg(" , ,")
+
+  def test_parse_deltas_file(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      f = Path(td) / "styles.txt"
+      f.write_text("# subject-specific styles\nphotoreal macro\n\nacademic diagram style\n")
+      self.assertEqual(diversify.parse_deltas_arg(f"@{f}"),
+                       ["photoreal macro", "academic diagram style"])
+
 
 class _FakeGen(IImageGen):
   """Records the prompt each single-image call received."""
@@ -140,7 +161,31 @@ class DiverseCliTests(unittest.TestCase):
     self.assertIsNone(captured[0].prompt_variants)
     self.assertFalse(payload["diverse"])
     self.assertNotIn("prompt_delta", payload["outputs"][0])
-    self.assertIn("-d/--diverse", result.output)  # discoverability hint on plain n>=2
+    self.assertIn("hint", result.output)  # discoverability hint on plain n>=2
+    self.assertIn("near-duplicates", result.output)
+
+  def test_custom_deltas_imply_diverse_and_apply_in_order(self) -> None:
+    result, captured, payload = self._invoke_diverse(
+      ["a graph", "-m", "oai:gi2", "-n", "3", "--deltas", "blueprint schematic, hand-drawn whiteboard"])
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertEqual(captured[0].prompt_variants,
+                     ["a graph", "a graph — blueprint schematic", "a graph — hand-drawn whiteboard"])
+    self.assertTrue(payload["diverse"])
+    self.assertEqual(payload["outputs"][1]["prompt_delta"], "blueprint schematic")
+
+  def test_custom_deltas_rejected_in_batch_mode(self) -> None:
+    result, captured, _ = self._invoke_diverse(
+      ["p", "-m", "gdm:nb2", "-n", "3", "--deltas", "a, b", "--mode", "batch"])
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("parallel-mode mechanism", result.output)
+    self.assertEqual(captured, [])
+
+  def test_custom_deltas_pool_too_small_errors(self) -> None:
+    result, captured, _ = self._invoke_diverse(
+      ["p", "-m", "oai:gi2", "-n", "4", "--deltas", "only one"])
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("--deltas needs at least", result.output)
+    self.assertEqual(captured, [])
 
   def test_no_hint_for_single_image_or_diverse_runs(self) -> None:
     result, _, _ = self._invoke_diverse(["prompt", "-m", "oai:gi2"])

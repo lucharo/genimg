@@ -17,6 +17,7 @@ contains one un-perturbed anchor to judge the deltas against.
 from __future__ import annotations
 
 import random
+from pathlib import Path
 
 # Mix of style, palette, lighting, and composition levers. Must hold at least
 # MAX_N - 1 entries (CLI caps -n at 10; index 0 is the base prompt).
@@ -36,12 +37,35 @@ DELTAS: list[str] = [
 ]
 
 
-def pick_deltas(n: int, rng: random.Random | None = None) -> list[str | None]:
-  """One delta per generation: [None, d1, ..., d(n-1)], sampled without replacement."""
+def pick_deltas(n: int, rng: random.Random | None = None,
+                pool: list[str] | None = None) -> list[str | None]:
+  """One delta per generation: [None, d1, ..., d(n-1)].
+
+  A user-supplied pool (--deltas) is applied IN ORDER — the caller chose it
+  deliberately, so #2 gets the first delta, #3 the second, and so on. The
+  built-in pool is sampled randomly without replacement for cross-run variety.
+  """
+  if pool is not None:
+    if len(pool) < n - 1:
+      raise ValueError(f"--deltas needs at least n-1 = {n - 1} entries for -n {n}, got {len(pool)}")
+    return [None, *pool[: n - 1]]
   if n - 1 > len(DELTAS):
     raise ValueError(f"diverse mode supports at most n={len(DELTAS) + 1}, got n={n}")
   picks = (rng or random).sample(DELTAS, n - 1)
   return [None, *picks]
+
+
+def parse_deltas_arg(value: str) -> list[str]:
+  """--deltas value → pool. Comma-separated inline, or @path to a file with one
+  delta per line (blank lines and #-comments skipped)."""
+  if value.startswith("@"):
+    lines = Path(value[1:]).read_text().splitlines()
+    pool = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+  else:
+    pool = [part.strip() for part in value.split(",") if part.strip()]
+  if not pool:
+    raise ValueError(f"--deltas: no deltas found in {value!r}")
+  return pool
 
 
 def apply(prompt: str, delta: str | None) -> str:

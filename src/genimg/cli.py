@@ -119,6 +119,11 @@ def _run(
          "near-duplicates for simple subjects. Parallel mode: #1 keeps the base prompt, the rest each get "
          "a distinct style/composition delta from a curated list (recorded in metadata + grid). "
          "Batch mode (Gemini only): the model is asked to differentiate its n takes itself. Requires -n >= 2.")] = False,
+  deltas_arg: Annotated[str | None, typer.Option("--deltas", rich_help_panel=_PANEL_CORE,
+    help='Your own diversity deltas (implies -d): comma-separated ("isometric, blueprint, macro photo") '
+         'or @file with one delta per line. Applied in order to generations #2..#n (#1 keeps the base prompt). '
+         'Prefer this over the built-in pool when the subject is not an illustration/logo — '
+         'pass deltas that fit diagrams, photos, etc. Parallel mode only.')] = None,
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
     help="Number of variants 1-10 (n>1 runs in parallel). Pair with -d for deliberate variety.")] = 1,
   mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
@@ -148,10 +153,20 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  diverse = diverse or deltas_arg is not None
   if diverse and n < 2:
     _die("--diverse requires -n >= 2 (diversity across a single image is meaningless). Try -n 4 -d.")
   if mode is not None and mode not in ("parallel", "batch"):
     _die(f"--mode must be 'parallel' or 'batch', got {mode!r}")
+  custom_pool = None
+  if deltas_arg is not None:
+    if mode == "batch":
+      _die("--deltas is a parallel-mode mechanism (one delta per request); with --mode batch "
+           "the model diversifies its own takes. Drop --deltas or use --mode parallel.")
+    try:
+      custom_pool = diversify.parse_deltas_arg(deltas_arg)
+    except (ValueError, OSError) as e:
+      _die(f"--deltas: {e}" if not str(e).startswith("--deltas") else str(e))
 
   user_cfg = config.load()
   model_was_explicit = model is not None
@@ -186,7 +201,13 @@ def _run(
   # Diverse mechanics differ by mode: parallel gets per-request curated deltas;
   # batch (Gemini) asks the model to differentiate its n takes in the one request.
   batch_diverse = diverse and mode == "batch"
-  deltas = diversify.pick_deltas(n) if diverse and not batch_diverse else None
+  if diverse and not batch_diverse:
+    try:
+      deltas = diversify.pick_deltas(n, pool=custom_pool)
+    except ValueError as e:
+      _die(str(e))
+  else:
+    deltas = None
   variants = [diversify.apply(prompt, d) for d in deltas] if deltas else None
 
   effective_q = (quality or "medium") if spec.provider == "openai" else None
@@ -229,7 +250,10 @@ def _run(
   elif batch_diverse:
     console.print("  [dim]diverse[/dim]  model-coordinated: the single batched request asks for deliberately different takes")
   elif n >= 2:
-    console.print("  [dim]hint[/dim]     plain -n often converges on near-duplicates — add -d/--diverse for deliberately varied takes")
+    console.print(
+      "  [dim]hint[/dim]     plain -n often converges on near-duplicates — add -d for curated variety, "
+      'or pass your own subject-appropriate deltas: --deltas "isometric, blueprint, macro photo" (or --deltas @file, one per line)'
+    )
   if planned_grid:
     console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":
