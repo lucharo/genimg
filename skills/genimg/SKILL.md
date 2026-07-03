@@ -10,6 +10,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 ## The patterns that aren't obvious (read these)
 
 - **To get N variations, use `-n N` with a SINGLE-subject prompt.** `-n` runs N generations in parallel and writes `name_1.png … name_N.png`. Do NOT ask the prompt to "explore variations / show options / a few takes" — that makes the model pack a **contact-sheet/grid into one image**. Say "a SINGLE centered X, NOT a grid, not a montage" and let `-n` create the variety.
+- **For simple subjects (logo, icon, single object), add `-d`/`--diverse` to `-n`.** Plain `-n` relies on sampling temperature alone and converges on near-duplicates when the prompt is simple. `-d` appends a distinct curated style/composition delta to each generation (#1 keeps the base prompt as anchor); the delta each card used is shown in the grid and recorded in metadata, so a pick is reproducible. `-d` needs `-n >= 2` — alone it errors out. Long, complex prompts often diversify fine without it.
 - **`-i FILE` edits that image (image-to-image); it stays CLOSE to the input.** Use it to iterate on a chosen result ("same icon, thicker strokes"). For *related but freely varied* results, pass the image as a **reference after the prompt** (`genimg "new layout, same palette" ref.png`) instead — it guides style, not composition.
 - **Review candidates with `-g --open`** (when `-n ≥ 2`): writes an HTML grid and opens it in the browser. Best way to let a human pick. The grid embeds generation metadata (collapsible prompt + a per-line panel: model, params, single cost) and offers both a grid and a carousel view.
   - **Open without stealing focus (macOS):** `--open` raises the browser to the foreground. To load it in the background instead, drop `--open` and run `open -g <grid.html>` yourself (the CLI prints the grid path). Good when the user is mid-task and doesn't want focus yanked.
@@ -42,6 +43,9 @@ Structured diagrams — flowcharts, layered/systems diagrams, anything with **ar
 # Explore options for a human to pick (4 takes + grid + open).
 genimg "a SINGLE centered editorial illustration of a sprint board, flat vector, off-white bg, NOT a grid" -n 4 -g --open -a 16:9
 
+# Simple subject → engineer the spread with -d (per-generation prompt deltas, shown in the grid).
+genimg "a SINGLE minimal fox logo, NOT a grid" -n 4 -d -g --open
+
 # A logo / app icon — one mark, flat, exact colors, square.
 genimg "A SINGLE minimal flat-vector app icon, one mark centered, NOT a grid/montage: <subject>. Black line-art + one emerald-green accent on warm off-white. NO gradient, NO 3D, NO text." -n 4 -g --open -a 1:1 -q high -o logo.png
 
@@ -60,6 +64,6 @@ genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.p
 
 ## Defaults
 - `genimg setup` if auth is missing; omit `-m` unless the user wants a specific provider.
-- Exploring → `-n 4 -g --open`; never run parallel shell jobs as a substitute for `-n N`, and **vary styles across prompts** (photorealistic, illustrated, cartoony, sketch, minimalist) to find the right register in round 1, not round 2.
+- Exploring → `-n 4 -g --open`; never run parallel shell jobs as a substitute for `-n N`. For simple subjects add `-d` so the tool varies style/composition per generation; for complex prompts you can also **vary styles across prompts yourself** (photorealistic, illustrated, cartoony, sketch, minimalist) to find the right register in round 1, not round 2.
 - Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — the CLI rejects it on gdm models, so omit it there.
 - When a human must review, generate to a real `-o` path and `--open` the grid; don't describe images you can't show — open or read them.
