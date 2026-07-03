@@ -149,6 +149,7 @@ class ModeCliTests(unittest.TestCase):
         return GenerateResult(paths=paths, model_used="m")
 
       with (
+        patch.object(cli.config, "load", return_value={}),  # isolate from the dev's real saved defaults
         patch.object(metadata, "META_DIR", meta_dir),
         patch.object(metadata, "make_id", return_value="test-gen"),
         patch.object(cli, "run_generate", side_effect=fake_generate),
