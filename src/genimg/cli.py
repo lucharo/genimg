@@ -114,17 +114,19 @@ def _run(
     help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to user-set default → built-in.")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
     help="Input image to edit (image-to-image).")] = None,
-  n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
-    help="Number of variants 1-10 (n>1 runs in parallel).")] = 1,
   diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
-    help="Diversify the -n generations. Parallel mode: #1 keeps the base prompt, the rest each get "
+    help="Diversify the -n generations — usually what you want with -n; plain -n converges on "
+         "near-duplicates for simple subjects. Parallel mode: #1 keeps the base prompt, the rest each get "
          "a distinct style/composition delta from a curated list (recorded in metadata + grid). "
          "Batch mode (Gemini only): the model is asked to differentiate its n takes itself. Requires -n >= 2.")] = False,
+  n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
+    help="Number of variants 1-10 (n>1 runs in parallel). Pair with -d for deliberate variety.")] = 1,
   mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
     help="parallel = n separate API requests (provider default for all but Imagen); "
          "batch = ONE n-image request (OpenAI n, Imagen number_of_images, Gemini multi-image response). "
-         "Default: provider's natural mode. Caveats: Gemini batch may return fewer than n images "
-         "(parallel guarantees n); some Azure OpenAI deployments serialize n>1, making batch slower than parallel.")] = None,
+         "Default: provider's natural mode. Caveats: -d with batch works on Gemini image models ONLY; "
+         "Gemini batch may return fewer than n images (parallel guarantees n); "
+         "some Azure OpenAI deployments serialize n>1, making batch slower than parallel.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -226,6 +228,8 @@ def _run(
       console.print(f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(d) if d else '(base prompt)'}")
   elif batch_diverse:
     console.print("  [dim]diverse[/dim]  model-coordinated: the single batched request asks for deliberately different takes")
+  elif n >= 2:
+    console.print("  [dim]hint[/dim]     plain -n often converges on near-duplicates — add -d/--diverse for deliberately varied takes")
   if planned_grid:
     console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":

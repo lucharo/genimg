@@ -134,12 +134,19 @@ class DiverseCliTests(unittest.TestCase):
       self.assertIn(d, diversify.DELTAS)
       self.assertEqual(o["prompt_effective"], f"a SINGLE fox logo — {d}")
 
-  def test_plain_n_stays_undiversified(self) -> None:
+  def test_plain_n_stays_undiversified_and_hints_at_diverse(self) -> None:
     result, captured, payload = self._invoke_diverse(["prompt", "-m", "oai:gi2", "-n", "2"])
     self.assertEqual(result.exit_code, 0, result.output)
     self.assertIsNone(captured[0].prompt_variants)
     self.assertFalse(payload["diverse"])
     self.assertNotIn("prompt_delta", payload["outputs"][0])
+    self.assertIn("-d/--diverse", result.output)  # discoverability hint on plain n>=2
+
+  def test_no_hint_for_single_image_or_diverse_runs(self) -> None:
+    result, _, _ = self._invoke_diverse(["prompt", "-m", "oai:gi2"])
+    self.assertNotIn("hint", result.output)
+    result, _, _ = self._invoke_diverse(["prompt", "-m", "oai:gi2", "-n", "2", "-d"])
+    self.assertNotIn("hint", result.output)
 
 
 class DiverseGridTests(unittest.TestCase):
