@@ -82,6 +82,6 @@ so this can under-report there (direct APIs are reliable).
 - **GA vs `-preview` ids**: `gdm:nb2`/`gdm:nbp` pin `-preview` ids; the official docs now
   list GA ids without the suffix. Both resolve (tier 3), but if you want the *short alias*
   to point at the GA id, update the `ModelSpec` — verify the id is live on your account first.
-- **Google cost rows are approximate and drift**: e.g. current pricing lists
-  `gemini-3.1-flash-image` at ~$0.067/1K, while `cost.py` still carries an older ~$0.025.
-  Refresh from the pricing page when accuracy matters (all cost numbers are labelled estimates).
+- **Cost rows are approximate and drift**: they track *standard* (non-batch) per-image
+  pricing at a ~1K basis and are labelled estimates. Refresh from the pricing page when a
+  provider changes prices.

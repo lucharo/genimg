@@ -28,7 +28,7 @@ class CostEstimateTests(unittest.TestCase):
   def test_google_resolution_keyed(self) -> None:
     self.assertAlmostEqual(
       cost.estimate(provider="google", model_id="gemini-3-pro-image-preview", n=1, resolution="2K"),
-      0.13,
+      0.134,
     )
 
   def test_unknown_returns_zero(self) -> None:
