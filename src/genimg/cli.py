@@ -202,7 +202,7 @@ def _run(
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
   if dry_run:
-    console.print(f"[dim]dry-run: no API call made.[/dim]")
+    console.print("[dim]dry-run: no API call made.[/dim]")
     return
 
   t0 = time.time()
@@ -796,8 +796,8 @@ def _validate_provider_flags(
 
   if resolution and provider == "google" and model_id and not model_id.startswith("imagen-"):
     _die(
-      f"--resolution is silently ignored by Gemini Image models (verified). "
-      f"Drop the flag, switch to -m oai:gi2, or use Imagen (-m gdm:imagen4)."
+      "--resolution is silently ignored by Gemini Image models (verified). "
+      "Drop the flag, switch to -m oai:gi2, or use Imagen (-m gdm:imagen4)."
     )
 
   if model_id and model_id.startswith("imagen-") and (input or refs):

@@ -145,7 +145,7 @@ def _fetch_secret(provider_url_key: str, var: str, label: str) -> bool:
     _append_export(var, val)
   else:
     os.environ[var] = val
-    console.print(f"[dim]session-only — won't persist after this terminal closes[/dim]")
+    console.print("[dim]session-only — won't persist after this terminal closes[/dim]")
   return True
 
 
