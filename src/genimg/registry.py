@@ -44,11 +44,32 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "oai:gi1-mini":         "oai:gpt-image-1-mini",
 }
 
-def resolve(name: str) -> tuple[str, ModelSpec]:
-  """Resolve alias chain or bare model id to (canonical_alias, spec).
+def _infer_spec(model_id: str) -> ModelSpec | None:
+  """Infer a spec for a well-formed but unregistered model id from its shape.
 
-  Accepts bare model IDs like 'gpt-image-2' or 'gemini-3.1-flash-image-preview'
-  by reverse-looking-up in the registry.
+  Provider dispatch is structural — the id prefix already tells us the provider and code
+  path — so a new same-signature model works via `-m <full-id>` with no code change. The
+  registry stays a pure curation layer (short aliases, quality_rank, region pins, cost);
+  inferred specs get quality_rank=0 (never auto-ranked) and a sane default region.
+  """
+  mid = model_id.lower()
+  if mid.startswith(("gpt-image", "dall-e")):
+    return ModelSpec("openai", model_id, region=None, quality_rank=0)
+  if mid.startswith("imagen-"):
+    return ModelSpec("google", model_id, region="us-central1", quality_rank=0)
+  if mid.startswith("gemini-") and "image" in mid:
+    return ModelSpec("google", model_id, region="global", quality_rank=0)
+  return None
+
+
+def resolve(name: str) -> tuple[str, ModelSpec]:
+  """Resolve an alias, a registered bare model id, or an unregistered same-signature id.
+
+  Three tiers, tried in order:
+    1. alias chain in the registry (gdm:nb2 → …)
+    2. reverse lookup of a registered bare model id (e.g. 'gpt-image-2')
+    3. structural inference for a well-formed but unregistered id (see _infer_spec) —
+       lets a brand-new same-shape model work via its full id without a registry edit.
   """
   seen: set[str] = set()
   key = name
@@ -63,7 +84,13 @@ def resolve(name: str) -> tuple[str, ModelSpec]:
   for alias, val in _REGISTRY.items():
     if isinstance(val, ModelSpec) and val.model_id == name:
       return alias, val
-  raise ValueError(f"unknown model {name!r}. Run `genimg models` to see available aliases.")
+  inferred = _infer_spec(name)
+  if inferred is not None:
+    return name, inferred
+  raise ValueError(
+    f"unknown model {name!r}. Run `genimg models` to see aliases, or pass a full provider "
+    f"model id (gpt-image-*, dall-e-*, imagen-*, or gemini-*-image)."
+  )
 
 
 def all_canonical() -> dict[str, ModelSpec]:

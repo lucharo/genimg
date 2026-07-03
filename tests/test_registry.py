@@ -42,6 +42,44 @@ class RegistryResolveTests(unittest.TestCase):
         registry.resolve("x:a")
 
 
+class SignatureInferenceTests(unittest.TestCase):
+  def test_unregistered_gemini_image_infers_google_global(self) -> None:
+    alias, spec = registry.resolve("gemini-9.9-flash-image")  # not in registry
+    self.assertEqual(alias, "gemini-9.9-flash-image")
+    self.assertEqual(spec.provider, "google")
+    self.assertEqual(spec.region, "global")
+    self.assertEqual(spec.model_id, "gemini-9.9-flash-image")
+
+  def test_ga_id_infers_when_registry_pins_preview(self) -> None:
+    # registry pins gemini-3.1-flash-image-preview; the GA id (no -preview) still resolves
+    _, spec = registry.resolve("gemini-3.1-flash-image")
+    self.assertEqual(spec.provider, "google")
+
+  def test_unregistered_gpt_image_infers_openai(self) -> None:
+    _, spec = registry.resolve("gpt-image-9")
+    self.assertEqual(spec.provider, "openai")
+    self.assertIsNone(spec.region)
+
+  def test_dalle_infers_openai(self) -> None:
+    _, spec = registry.resolve("dall-e-3")
+    self.assertEqual(spec.provider, "openai")
+
+  def test_unregistered_imagen_infers_google_regional(self) -> None:
+    _, spec = registry.resolve("imagen-5.0-generate-001")
+    self.assertEqual(spec.provider, "google")
+    self.assertEqual(spec.region, "us-central1")
+
+  def test_registered_bare_id_keeps_curated_spec(self) -> None:
+    # a registered id keeps its curated rank/region, not the inferred rank 0
+    _, spec = registry.resolve("gpt-image-2")
+    self.assertEqual(spec.quality_rank, 9)
+
+  def test_non_image_and_garbage_still_unknown(self) -> None:
+    for bad in ("gemini-2.5-flash", "google:nb2", "nope:nothing", "random", "gdm:typo"):
+      with self.assertRaises(ValueError):
+        registry.resolve(bad)
+
+
 class RegistryHelperTests(unittest.TestCase):
   def test_all_canonical_only_specs(self) -> None:
     canon = registry.all_canonical()
