@@ -11,6 +11,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 
 - **To get N variations, use `-n N` with a SINGLE-subject prompt.** `-n` runs N generations in parallel and writes `name_1.png … name_N.png`. Do NOT ask the prompt to "explore variations / show options / a few takes" — that makes the model pack a **contact-sheet/grid into one image**. Say "a SINGLE centered X, NOT a grid, not a montage" and let `-n` create the variety.
 - **For simple subjects (logo, icon, single object), add `-d`/`--diverse` to `-n`.** Plain `-n` relies on sampling temperature alone and converges on near-duplicates when the prompt is simple. `-d` appends a distinct curated style/composition delta to each generation (#1 keeps the base prompt as anchor); the delta each card used is shown in the grid and recorded in metadata, so a pick is reproducible. `-d` needs `-n >= 2` — alone it errors out. Long, complex prompts often diversify fine without it.
+- **`--mode parallel|batch` picks HOW the n generations are submitted** (orthogonal to `-d`). Default is the provider's natural mode: everything fans out as n parallel single-image requests except Imagen, which batches server-side. `--mode batch` forces ONE n-image request: OpenAI `n=4` (note: Azure deployments may serialize it — slower than parallel), Imagen `number_of_images`, Gemini a single multi-image response (model-discretionary — may return fewer than n; parallel guarantees n). **`-d --mode batch` is Gemini-only**: the model sees all n takes in one request and differentiates them itself using its own judgment — the model-knowledge alternative to the curated deltas of parallel `-d`. On OpenAI/Imagen it errors (independent samples of one prompt can't coordinate diversity).
 - **`-i FILE` edits that image (image-to-image); it stays CLOSE to the input.** Use it to iterate on a chosen result ("same icon, thicker strokes"). For *related but freely varied* results, pass the image as a **reference after the prompt** (`genimg "new layout, same palette" ref.png`) instead — it guides style, not composition.
 - **Review candidates with `-g --open`** (when `-n ≥ 2`): writes an HTML grid and opens it in the browser. Best way to let a human pick. The grid embeds generation metadata (collapsible prompt + a per-line panel: model, params, single cost) and offers both a grid and a carousel view.
   - **Open without stealing focus (macOS):** `--open` raises the browser to the foreground. To load it in the background instead, drop `--open` and run `open -g <grid.html>` yourself (the CLI prints the grid path). Good when the user is mid-task and doesn't want focus yanked.
@@ -45,6 +46,9 @@ genimg "a SINGLE centered editorial illustration of a sprint board, flat vector,
 
 # Simple subject → engineer the spread with -d (per-generation prompt deltas, shown in the grid).
 genimg "a SINGLE minimal fox logo, NOT a grid" -n 4 -d -g --open
+
+# Let the MODEL diversify instead: one Gemini request, model differentiates its own 4 takes.
+genimg "a SINGLE minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
 
 # A logo / app icon — one mark, flat, exact colors, square.
 genimg "A SINGLE minimal flat-vector app icon, one mark centered, NOT a grid/montage: <subject>. Black line-art + one emerald-green accent on warm off-white. NO gradient, NO 3D, NO text." -n 4 -g --open -a 1:1 -q high -o logo.png

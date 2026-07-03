@@ -99,7 +99,8 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
           quality: str | None = None, grid_path: Path | None = None,
-          prompt_deltas: list[str | None] | None = None) -> dict[str, Any]:
+          prompt_deltas: list[str | None] | None = None,
+          mode: str | None = None, diverse: bool = False) -> dict[str, Any]:
   from . import diversify
 
   def _output_entry(i: int, p: Path) -> dict[str, Any]:
@@ -123,7 +124,8 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "quality": quality,
     "input": str(input) if input else None,
     "refs": [str(r) for r in (refs or [])],
-    "diverse": prompt_deltas is not None,
+    "mode": mode or "auto",
+    "diverse": diverse or prompt_deltas is not None,
     "outputs": [_output_entry(i, p) for i, p in enumerate(paths)],
     "cost_usd_estimated": round(cost_usd, 4),
     "workdir": str(Path.cwd()),

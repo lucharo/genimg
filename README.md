@@ -17,6 +17,8 @@ genimg "with refs" a.png b.png -o out.png        # reference images (positional)
 genimg "edit this" -i input.png -o edited.png    # image-to-image
 genimg "X" -n 4 -g --open                        # batch + auto HTML grid
 genimg "X" -n 4 -d -g --open                     # diversified batch (per-gen prompt deltas)
+genimg "X" -n 4 --mode batch                     # ONE n-image request instead of n parallel ones
+genimg "X" -n 4 -d --mode batch -m gdm:nb2       # model-side diversity in one request (Gemini only)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard

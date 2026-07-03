@@ -58,7 +58,8 @@ class OpenAIImageGen(IImageGen):
       )
     return size
 
-  def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
+  def _request(self, req: GenerateRequest, n: int):
+    """One images API call producing n image(s), with friendly error mapping."""
     client = self._client()
     size = self._size_for(req)
     quality = req.quality or "medium"  # high is 30-90s/image; medium is the fast-ish default
@@ -68,15 +69,14 @@ class OpenAIImageGen(IImageGen):
       if inputs:
         with ExitStack() as stack:
           handles = [stack.enter_context(open(p, "rb")) for p in inputs]
-          resp = client.images.edit(
+          return client.images.edit(
             model=req.model, image=handles, prompt=req.prompt,
-            size=size, quality=quality, n=1,
+            size=size, quality=quality, n=n,
           )
-      else:
-        resp = client.images.generate(
-          model=req.model, prompt=req.prompt,
-          size=size, quality=quality, n=1,
-        )
+      return client.images.generate(
+        model=req.model, prompt=req.prompt,
+        size=size, quality=quality, n=n,
+      )
     except NotFoundError as e:
       raise RuntimeError(
         f"model {req.model!r} not deployed on this OpenAI endpoint. "
@@ -90,10 +90,24 @@ class OpenAIImageGen(IImageGen):
     except APIStatusError as e:
       raise RuntimeError(f"OpenAI API error {e.status_code}: {str(e)[:200]}") from e
 
+  def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
+    resp = self._request(req, n=1)
     out = self.numbered_path(req.output, i, req.n)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(base64.b64decode(resp.data[0].b64_json))
     return out
+
+  def _generate_batch(self, req: GenerateRequest) -> list[Path]:
+    """--mode batch: one n-image request. Note: some Azure deployments serialize n>1
+    server-side, so this can be slower than the parallel default."""
+    resp = self._request(req, n=req.n)
+    req.output.parent.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for i, item in enumerate(resp.data):
+      out = self.numbered_path(req.output, i, req.n)
+      out.write_bytes(base64.b64decode(item.b64_json))
+      paths.append(out)
+    return paths
 
   def probe(self, model: str, region: str | None = None) -> ProbeResult:
     try:

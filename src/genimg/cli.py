@@ -117,8 +117,13 @@ def _run(
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
     help="Number of variants 1-10 (n>1 runs in parallel).")] = 1,
   diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
-    help="Diversify the -n generations: #1 keeps the base prompt, the rest each get a distinct "
-         "style/composition delta from a curated list (recorded in metadata + grid). Requires -n >= 2.")] = False,
+    help="Diversify the -n generations. Parallel mode: #1 keeps the base prompt, the rest each get "
+         "a distinct style/composition delta from a curated list (recorded in metadata + grid). "
+         "Batch mode (Gemini only): the model is asked to differentiate its n takes itself. Requires -n >= 2.")] = False,
+  mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
+    help="parallel = n separate API requests (provider default for all but Imagen); "
+         "batch = ONE n-image request (OpenAI n, Imagen number_of_images, Gemini multi-image response). "
+         "Default: provider's natural mode.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -142,6 +147,8 @@ def _run(
 ):
   if diverse and n < 2:
     _die("--diverse requires -n >= 2 (diversity across a single image is meaningless). Try -n 4 -d.")
+  if mode is not None and mode not in ("parallel", "batch"):
+    _die(f"--mode must be 'parallel' or 'batch', got {mode!r}")
 
   user_cfg = config.load()
   model_was_explicit = model is not None
@@ -165,7 +172,7 @@ def _run(
   _validate_provider_flags(
     spec.provider, quality=quality, region=region, project=project, auth=auth,
     resolution=resolution, aspect_ratio=aspect_ratio, refs=refs, input=input,
-    model_id=spec.model_id,
+    model_id=spec.model_id, mode=mode, diverse=diverse,
   )
 
   gen_id = metadata.make_id(prompt, spec.model_id)
@@ -173,11 +180,16 @@ def _run(
   planned_paths = _planned_output_paths(out_path, n)
   planned_grid = metadata.auto_grid_path(gen_id) if grid and n > 1 else None
 
-  deltas = diversify.pick_deltas(n) if diverse else None
+  # Diverse mechanics differ by mode: parallel gets per-request curated deltas;
+  # batch (Gemini) asks the model to differentiate its n takes in the one request.
+  batch_diverse = diverse and mode == "batch"
+  deltas = diversify.pick_deltas(n) if diverse and not batch_diverse else None
   variants = [diversify.apply(prompt, d) for d in deltas] if deltas else None
 
   effective_q = (quality or "medium") if spec.provider == "openai" else None
   params = [f"n={n}"]
+  if mode:
+    params.append(f"mode={mode}")
   if diverse:
     params.append("diverse")
   if effective_q:
@@ -211,6 +223,8 @@ def _run(
     for i, d in enumerate(deltas):
       row_label = "deltas" if i == 0 else ""
       console.print(f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(d) if d else '(base prompt)'}")
+  elif batch_diverse:
+    console.print("  [dim]diverse[/dim]  model-coordinated: the single batched request asks for deliberately different takes")
   if planned_grid:
     console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":
@@ -227,6 +241,7 @@ def _run(
     refs=refs or [], input=input, n=n,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
     region=region, project=project, prompt_variants=variants,
+    mode=mode, diverse=diverse,
   )
   try:
     with Progress(
@@ -236,7 +251,7 @@ def _run(
       console=console,
       transient=True,
     ) as progress:
-      label = _progress_label(n, grid)
+      label = _progress_label(n, grid, mode)
       progress.add_task(label, total=None)
       result = run_generate(req, force_openai_auth=auth)
   except RuntimeError as e:
@@ -254,7 +269,7 @@ def _run(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    prompt_deltas=deltas,
+    prompt_deltas=deltas, mode=mode, diverse=diverse,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -267,7 +282,7 @@ def _run(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-      grid_path=written_grid, prompt_deltas=deltas,
+      grid_path=written_grid, prompt_deltas=deltas, mode=mode, diverse=diverse,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
@@ -789,20 +804,29 @@ def _print_planned_paths(paths: list[Path]) -> None:
     console.print(f"  [dim]{row_label:<7}[/dim]  {_short_path(path)}")
 
 
-def _progress_label(n: int, grid: bool) -> str:
+def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
   if n == 1:
     return "generating 1 image..."
+  how = "in one batched request" if mode == "batch" else "in parallel"
   if grid:
-    return f"generating {n} images for grid in parallel..."
-  return f"generating {n} images in parallel..."
+    return f"generating {n} images for grid {how}..."
+  return f"generating {n} images {how}..."
 
 
 def _validate_provider_flags(
   provider: str, *, quality, region, project, auth, resolution, aspect_ratio, refs, input,
-  model_id: str | None = None,
+  model_id: str | None = None, mode: str | None = None, diverse: bool = False,
 ) -> None:
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
+
+  if mode == "batch" and diverse and (provider != "google" or (model_id and model_id.startswith("imagen-"))):
+    _die(
+      "--diverse with --mode batch needs a model that sees all n takes in one request — "
+      "Gemini image models only (-m gdm:nb2 / gdm:nbp). OpenAI n>1 and Imagen draw independent "
+      "samples of one prompt, so they can't coordinate diversity in a single call. "
+      "Use --mode parallel (the default) for per-request prompt deltas instead."
+    )
 
   if quality is not None:
     if quality not in _QUALITY_VALUES:

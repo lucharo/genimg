@@ -213,6 +213,14 @@ def _prompt_top(meta: dict[str, Any] | None) -> str:
   )
 
 
+def _diverse_note(meta: dict[str, Any]) -> str | None:
+  """Info-panel value for the diverse row: names WHICH mechanism produced the spread."""
+  if not meta.get("diverse"):
+    return None
+  has_deltas = any(isinstance(o, dict) and "prompt_delta" in o for o in meta.get("outputs", []))
+  return "yes (per-card prompt deltas)" if has_deltas else "yes (model-diversified in one batched request)"
+
+
 def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
   """Bottom metadata panel: one field per line, single harmonized cost."""
   meta = meta or {}
@@ -221,7 +229,8 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
     ("model", model or None, False),
     ("provider", meta.get("provider"), False),
     ("n", meta.get("n"), False),
-    ("diverse", "yes (per-card prompt deltas)" if meta.get("diverse") else None, False),
+    ("mode", meta.get("mode"), False),
+    ("diverse", _diverse_note(meta), False),
     ("quality", meta.get("quality"), False),
     ("resolution", meta.get("resolution"), False),
     ("aspect ratio", meta.get("aspect_ratio"), False),
