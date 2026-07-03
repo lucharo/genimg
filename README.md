@@ -20,9 +20,11 @@ genimg "X" -n 4 -d -g --open                     # diversified batch (per-gen pr
 genimg "X" -n 4 --mode batch                     # ONE n-image request instead of n parallel ones
 genimg "X" -n 4 -d --mode batch -m gdm:nb2       # model-side diversity in one request (Gemini only)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
+genimg "X" -n 6 -q high --dry-run                # preview model/params/cost, no API call
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard
 genimg auth                                      # show ✓/✗ readiness per provider
+genimg config show                               # inspect saved config (config path|edit too)
 ```
 
 ## Skills

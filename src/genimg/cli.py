@@ -123,7 +123,8 @@ def _run(
   mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
     help="parallel = n separate API requests (provider default for all but Imagen); "
          "batch = ONE n-image request (OpenAI n, Imagen number_of_images, Gemini multi-image response). "
-         "Default: provider's natural mode.")] = None,
+         "Default: provider's natural mode. Caveats: Gemini batch may return fewer than n images "
+         "(parallel guarantees n); some Azure OpenAI deployments serialize n>1, making batch slower than parallel.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -133,7 +134,7 @@ def _run(
   open_after: Annotated[bool, typer.Option("--open", rich_help_panel=_PANEL_OUTPUT,
     help="Open the grid (n>1) or first image (n=1) in browser.")] = False,
   resolution: Annotated[str | None, typer.Option("-r", "--resolution", rich_help_panel=_PANEL_CORE,
-    help="1K | 2K | 4K. Honored on OpenAI + Imagen only; ignored by Gemini Image.")] = None,
+    help="1K | 2K | 4K. OpenAI + Imagen only; rejected on Gemini Image models (which would silently ignore it).")] = None,
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
     help="low | medium (default) | high | auto. high = 30-90s/image.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
