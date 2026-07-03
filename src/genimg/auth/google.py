@@ -7,15 +7,73 @@ Three modes:
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 from google import genai
 
 from .. import config as _cfg
 
-ORG_DEFAULT_PROJECT = "example-gcp-project"
+
+def _project_from_sa_json() -> str | None:
+  """project_id embedded in the service-account JSON (CLAUDE_GCP_CRED /
+  GOOGLE_APPLICATION_CREDENTIALS), if present and parseable. Reading the id does
+  not authenticate as the SA."""
+  path = os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+  if not path:
+    return None
+  try:
+    pid = json.loads(Path(path).read_text()).get("project_id")
+  except (OSError, json.JSONDecodeError, AttributeError):
+    return None
+  return pid if isinstance(pid, str) and pid else None
+
+
+def _gcloud_project() -> str | None:
+  """gcloud's active project, if the CLI is installed and configured."""
+  if not shutil.which("gcloud"):
+    return None
+  try:
+    r = subprocess.run(
+      ["gcloud", "config", "get-value", "project"],
+      capture_output=True, text=True, timeout=5,
+    )
+    if r.returncode != 0:
+      return None
+    proj = r.stdout.strip()
+    # gcloud prints "(unset)" (and sometimes empty) when no project is configured.
+    return proj if proj and proj != "(unset)" else None
+  except (subprocess.TimeoutExpired, FileNotFoundError):
+    return None
+
+
+def _resolve_project(project: str | None, user_cfg: dict, *, use_gcloud: bool) -> str | None:
+  """--project → config → GOOGLE_CLOUD_PROJECT → SA-JSON project_id → (gcloud, ADC only).
+
+  No hardcoded fallback: a wrong project silently routes requests to the wrong place.
+  `use_gcloud` gates the gcloud subprocess so it stays off the hot path for non-ADC modes.
+  """
+  return (
+    project
+    or user_cfg.get("gcp_project")
+    or os.getenv("GOOGLE_CLOUD_PROJECT")
+    or _project_from_sa_json()
+    or (_gcloud_project() if use_gcloud else None)
+  )
+
+
+def _require_project(project: str | None, user_cfg: dict, *, use_gcloud: bool) -> str:
+  proj = _resolve_project(project, user_cfg, use_gcloud=use_gcloud)
+  if not proj:
+    raise RuntimeError(
+      "No GCP project for Vertex. Set one via `genimg setup`, --project, config.gcp_project, "
+      "or GOOGLE_CLOUD_PROJECT (a service-account JSON's project_id and gcloud's active "
+      "project are used automatically when available)."
+    )
+  return proj
 
 
 def _vertex(project: str | None, region: str) -> genai.Client:
@@ -23,8 +81,7 @@ def _vertex(project: str | None, region: str) -> genai.Client:
   if cred:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred
   user_cfg = _cfg.load()
-  proj = project or user_cfg.get("gcp_project") or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") \
-    or os.getenv("GOOGLE_CLOUD_PROJECT") or ORG_DEFAULT_PROJECT
+  proj = _require_project(project, user_cfg, use_gcloud=False)
   loc = user_cfg.get("gcp_region") or region
   return genai.Client(vertexai=True, project=proj, location=loc)
 
@@ -38,7 +95,7 @@ def _vertex_adc(project: str | None, region: str) -> genai.Client:
   Hide those vars during client construction so ADC actually wins.
   """
   user_cfg = _cfg.load()
-  proj = project or user_cfg.get("gcp_project") or os.getenv("GOOGLE_CLOUD_PROJECT") or ORG_DEFAULT_PROJECT
+  proj = _require_project(project, user_cfg, use_gcloud=True)
   loc = user_cfg.get("gcp_region") or region
   hidden = {k: os.environ.pop(k, None) for k in ("GOOGLE_APPLICATION_CREDENTIALS", "CLAUDE_GCP_CRED")}
   try:
@@ -140,8 +197,9 @@ def auth_info() -> dict[str, object]:
   enabled = user_cfg.get("enabled_providers", [])
   in_config = any(m in enabled for m in ("google_vertex", "google_vertex_adc", "google_direct"))
   source = "config" if in_config else "env"
-  project = user_cfg.get("gcp_project") or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID") \
-    or os.getenv("GOOGLE_CLOUD_PROJECT") or ORG_DEFAULT_PROJECT
+  # Display-only: use_gcloud=False keeps the gcloud subprocess off the generate hot path
+  # (auth_info runs on every generate for the mode banner).
+  project = _resolve_project(None, user_cfg, use_gcloud=False) or "-"
 
   if "google_vertex_adc" in enabled:
     ok = adc_token_present()
