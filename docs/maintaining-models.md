@@ -1,0 +1,87 @@
+# Maintaining the model list
+
+Model support is intentionally **almost separate from the tool's mechanics**. Provider
+dispatch is structural (by model-id shape), so most new models need **no code change**.
+
+## How a model id resolves
+
+`registry.resolve(name)` tries three tiers, in order:
+
+1. **Alias chain** — `gdm:nb2` → `ModelSpec(...)`. Curated, with a short name.
+2. **Registered bare id** — `gpt-image-2` reverse-looked-up to its curated spec.
+3. **Signature inference** (`registry._infer_spec`) — a well-formed but *unregistered* id
+   is dispatched by its prefix:
+   - `gpt-image-*` / `dall-e-*` → OpenAI
+   - `imagen-*` → Google, region `us-central1`
+   - `gemini-*…image…` → Google, region `global`
+
+So **a brand-new same-signature model just works** via its full id:
+
+```bash
+genimg "a robot" -m gemini-4.0-flash-image -o out.png   # no registry entry needed
+```
+
+Inference also absorbs GA-vs-preview id drift: the registry may pin
+`gemini-3.1-flash-image-preview`, but `-m gemini-3.1-flash-image` resolves too.
+
+## When to actually edit the registry
+
+Only add an entry when you want one of the things inference *can't* give you:
+
+- a **short alias** (`gdm:nb2` instead of the full id),
+- a **`quality_rank`** so it sorts sensibly in `genimg models`,
+- a **pinned Vertex region** other than the inferred default,
+- a **cost estimate** in `genimg`'s output.
+
+If none of those matter, skip it — the model already works.
+
+## Edit recipe
+
+1. **`src/genimg/registry.py`** — add to `_REGISTRY`:
+   ```python
+   "gdm:<short>":  ModelSpec("google", "<model-id>", region="global", quality_rank=<0-10>),
+   "gdm:<nice-name>": "gdm:<short>",   # optional descriptive alias
+   ```
+   (`ModelSpec(provider, model_id, region=None, quality_rank=5)`; `region` is Google-only.)
+
+2. **`src/genimg/cost.py`** — add a per-image price row keyed by model id
+   (`_GOOGLE_PER_IMAGE` or `_OPENAI_BASE_PER_IMAGE`). Optional; a missing row just
+   shows `~$0.0000`.
+
+3. Add a resolve test in `tests/test_registry.py`.
+
+## Where to check for new models + pricing
+
+- **Google**: <https://ai.google.dev/gemini-api/docs/image-generation> (ids),
+  <https://ai.google.dev/gemini-api/docs/pricing> (per-image price).
+- **OpenAI**: <https://developers.openai.com/api/docs/models> (ids),
+  the image-generation guide for pricing.
+
+## Detecting drift programmatically (dev snippet)
+
+`models.list()` is free and already wired into `discovery.py`. To list model ids your
+credentials expose that are **not** in the registry (paste into `uv run python -`):
+
+```python
+from genimg.auth import openai as ao, google as ag
+from genimg.discovery import _listed_model_ids
+from genimg.registry import all_canonical
+
+registered = {s.model_id for s in all_canonical().values()}
+for name, client in [("openai", ao.get_client()), ("google", ag.get_client())]:
+    listed = _listed_model_ids(client.models.list())
+    imageish = {m for m in listed if "image" in m.lower() or "imagen" in m.lower()}
+    print(name, "unregistered:", sorted(imageish - registered))
+```
+
+Caveat: on **Vertex**, `models.list()` may not enumerate Model Garden publisher models,
+so this can under-report there (direct APIs are reliable).
+
+## Known caveats to reconcile
+
+- **GA vs `-preview` ids**: `gdm:nb2`/`gdm:nbp` pin `-preview` ids; the official docs now
+  list GA ids without the suffix. Both resolve (tier 3), but if you want the *short alias*
+  to point at the GA id, update the `ModelSpec` — verify the id is live on your account first.
+- **Google cost rows are approximate and drift**: e.g. current pricing lists
+  `gemini-3.1-flash-image` at ~$0.067/1K, while `cost.py` still carries an older ~$0.025.
+  Refresh from the pricing page when accuracy matters (all cost numbers are labelled estimates).
