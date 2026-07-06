@@ -110,6 +110,9 @@ def _probe_openai_from_model_list(entries: list[tuple[str, ModelSpec]]) -> dict[
 def _probe_google_from_model_list(region: str, entries: list[tuple[str, ModelSpec]]) -> dict[str, ProbeResult]:
   try:
     client = auth_google.get_client(region=region)
+    # NOTE (Vertex): models.list() may enumerate only the project's own/tuned models, not the
+    # Model Garden publisher catalog (publishers/google/models/*). A registry model can therefore
+    # read "missing" here yet still generate fine. Treat missing as "unconfirmed", not "absent".
     listed_ids = _listed_model_ids(client.models.list())
     return _results_from_model_ids(entries, listed_ids)
   except ClientError as e:
@@ -144,7 +147,7 @@ def _results_from_model_ids(entries: list[tuple[str, ModelSpec]], listed_ids: se
     alias: ProbeResult(
       model=spec.model_id,
       status="listed" if spec.model_id in listed_ids else "missing",
-      detail="" if spec.model_id in listed_ids else "not listed by provider model endpoint",
+      detail="" if spec.model_id in listed_ids else "not enumerated by the provider list endpoint (may still be usable)",
     )
     for alias, spec in entries
   }

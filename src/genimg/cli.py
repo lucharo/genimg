@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import click
 import typer
@@ -42,6 +42,10 @@ class _DefaultGroup(typer.core.TyperGroup):
 
     rich_click renders help via console.print side-effects (not via return value),
     so we capture _run's help to a buffer, filter to named panels, and append.
+
+    NOTE (deferred): this scrapes rendered help text for panel titles, so it is fragile
+    to typer/rich_click rendering changes. Kept because it works and a clean reimplementation
+    is non-trivial. If option panels ever stop showing in `genimg -h`, start here.
     """
     import contextlib
     import io
@@ -148,7 +152,7 @@ def _run(
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
     help="Override registry region (e.g. global, us-central1).")] = None,
   project: Annotated[str | None, typer.Option("--project", rich_help_panel=_PANEL_GOOGLE,
-    help="Override GCP project (default: gsk-rd-oaiml-kgapoc1-dev).")] = None,
+    help="GCP project for Vertex (else config.gcp_project / GOOGLE_CLOUD_PROJECT / SA-JSON / gcloud).")] = None,
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
@@ -169,7 +173,13 @@ def _run(
 
   user_cfg = config.load()
   model_was_explicit = model is not None
-  resolved = model or user_cfg.get("default_model") or registry.DEFAULT
+  resolved = model or user_cfg.get("default_model")
+  if not resolved:
+    _die(
+      "no model specified. Pass -m <alias> (e.g. -m gdm:nb or -m oai:gi2), "
+      "set a default with `genimg models set-default <alias>`, or run `genimg setup`. "
+      "See `genimg models` for the full list."
+    )
   try:
     alias, spec = registry.resolve(resolved)
   except ValueError as e:
@@ -292,6 +302,8 @@ def _run(
   elapsed = time.time() - t0
   for p in result.paths:
     console.print(f"  [green]wrote[/green] {p} [dim]({p.stat().st_size:,}B)[/dim]", soft_wrap=True)
+  for err in result.errors:
+    console.print(f"  [yellow]skipped[/yellow] {_rich_escape(err)}", soft_wrap=True)
 
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
@@ -322,7 +334,7 @@ def _run(
     soft_wrap=True,
   )
 
-  if open_after:
+  if open_after and (written_grid or result.paths):
     grid_module.open_in_browser(written_grid or result.paths[0])
 
 
@@ -377,13 +389,13 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
       payload.append({
         "alias": alias, "model_id": spec.model_id, "provider": spec.provider,
         "region": spec.region, "status": p.status if p else "unknown",
-        "is_default": alias == (config.get_default_model() or registry.DEFAULT),
+        "is_default": alias == config.get_default_model(),
       })
     typer.echo(_json.dumps(payload, indent=2))
     return
 
-  current_default = config.get_default_model() or registry.DEFAULT
-  table = Table(title=f"genimg models  •  cache age: {_fmt_age(age)}  •  default: {current_default}")
+  current_default = config.get_default_model()
+  table = Table(title=f"genimg models  •  cache age: {_fmt_age(age)}  •  default: {current_default or '(none — pass -m)'}")
   table.add_column("", width=1)
   table.add_column("alias", style="cyan")
   table.add_column("model_id")
@@ -405,6 +417,11 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
 
   console.print(table)
   console.print("[dim]★ = current default. Change with `genimg models set-default <alias>`.[/dim]")
+  if any((p.status if p else "") == "missing" for p in probes.values()):
+    console.print(
+      "[dim]missing = not enumerated by the provider's list endpoint; on Vertex this can be a "
+      "false negative (Model Garden models may still generate). Confirm with a direct run.[/dim]"
+    )
 
 
 @models_app.command("set-default", help="Pick a default model alias for `genimg PROMPT` (no -m).")
@@ -428,14 +445,13 @@ def models_get_default():
     canonical, spec = registry.resolve(user_default)
     console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]")
   else:
-    canonical, spec = registry.resolve(registry.DEFAULT)
-    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim](built-in default; use `set-default` to override)[/dim]")
+    console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")
 
 
 @models_app.command("clear-default", help="Remove the user-set default (revert to built-in).")
 def models_clear_default():
   config.clear_default_model()
-  console.print(f"[green]cleared.[/green] Built-in default: [bold]{registry.DEFAULT}[/bold]")
+  console.print("[green]cleared.[/green] No default set — pass -m each run, or `genimg models set-default <alias>`.")
 
 
 # ────────────────────── setup command ──────────────────────
@@ -564,9 +580,13 @@ def history_cmd(
   console.print(table)
 
 
-# ────────────────────── cost command (alias for history --summary) ──────────────────────
+# ────────────────────── cost command ──────────────────────
 
-@_app.command("cost", help="Alias for `history --summary` — total estimated spend.")
+# Thin delegator to `history --summary`. Kept as a real command (not removed) because the
+# root group routes an unknown first word to the hidden generate command — so a bare
+# `genimg cost` would otherwise be treated as a prompt and could trigger a paid generation
+# when a default model is set.
+@_app.command("cost", help="Total estimated spend (shorthand for `history --summary`).")
 def cost_cmd(
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
 ):
@@ -589,8 +609,8 @@ def grid_cmd(
       console.print(f"[red]error:[/red] not found: {p}")
       raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
-  # Don't pass provider/quality — provenance of arbitrary input files is unknown,
-  # so any cost estimate would be misleading. Suppress the dollar figure here.
+  # No cost_total — provenance of arbitrary input files is unknown, so any estimate
+  # would be misleading. The footer is omitted rather than guessed.
   written, _total = grid_module.render(paths, target)
   console.print(f"[green]wrote[/green] {written} [dim]({len(paths)} images)[/dim]")
   if open_after:
@@ -729,6 +749,9 @@ def skills_install(
           console.print(f"[yellow]{name}/{skill_name}:[/yellow] {target} exists (use --force or `skills update {name} {skill_name}`)")
           continue
         target.unlink() if target.is_symlink() else _rm_tree(target)
+      # NOTE (deferred): symlink into the (possibly uv-tool-managed) package dir. A `uv tool`
+      # upgrade can recreate that dir and break the link — re-run `genimg skills update`. A
+      # copy-based install would survive upgrades but needs its own staleness detection.
       target.symlink_to(src)
       console.print(f"[green]installed → {name}/{skill_name}:[/green] {target}")
 
@@ -848,6 +871,12 @@ def _validate_provider_flags(
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
 
+  # Provider-neutral: every input/reference path must exist. Without this, Google refs
+  # only failed deep inside the provider as a generic error (OpenAI pre-checked, Google didn't).
+  for p in ([input] if input else []) + refs:
+    if not p.exists():
+      _die(f"input not found: {p}")
+
   if mode == "batch" and provider == "openai":
     _die(
       "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
@@ -880,25 +909,24 @@ def _validate_provider_flags(
       "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
     )
 
-  if provider == "openai":
-    # Use the effective resolution (1K is the implicit default in _size_for) so bare
-    # --aspect-ratio without --resolution gets the same upstream error as the explicit form.
-    effective_res = resolution or "1K"
-    if effective_res == "4K" and aspect_ratio in ("4:3", "3:4"):
-      _die(
-        "OpenAI: 4K + 4:3/3:4 exceeds total pixel cap (8.3M). "
-        "Use 2K + 4:3/3:4 or 4K + 16:9/9:16."
-      )
-    if effective_res == "1K" and aspect_ratio in ("16:9", "9:16"):
-      _die(
-        "OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. "
-        "Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default."
-      )
-
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
     _die(f"--aspect-ratio must be one of {sorted(_ASPECT_VALUES)}, got {aspect_ratio!r}")
+
+  if provider == "openai":
+    # Validate the (resolution, aspect) pair against the provider's real size table so this
+    # can't drift from _size_for. Mirror its implicit defaults (1K square when unset).
+    from .providers.openai import _SIZE_MAP
+    effective_res = resolution or "1K"
+    effective_ar = aspect_ratio or "1:1"
+    if (effective_res, effective_ar) not in _SIZE_MAP:
+      if effective_res == "4K" and effective_ar in ("4:3", "3:4"):
+        _die("OpenAI: 4K + 4:3/3:4 exceeds the total pixel cap (8.3M). Use 2K + 4:3/3:4, or 4K + 16:9/9:16.")
+      if effective_res == "1K" and effective_ar in ("16:9", "9:16"):
+        _die("OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default.")
+      supported = ", ".join(f"{r}+{a}" for r, a in sorted(_SIZE_MAP))
+      _die(f"OpenAI: unsupported ({effective_res}, {effective_ar}) size combo. Supported: {supported}.")
 
   if provider != "google" and (region is not None or project is not None):
     _die(f"--region/--project are Google-only; ignored on provider={provider!r}.")
@@ -911,8 +939,6 @@ def _validate_provider_flags(
     if len(inputs) > _OPENAI_MAX_INPUTS:
       _die(f"OpenAI accepts max {_OPENAI_MAX_INPUTS} input images, got {len(inputs)}")
     for p in inputs:
-      if not p.exists():
-        _die(f"input not found: {p}")
       if p.suffix.lower() not in _OPENAI_INPUT_EXTS:
         _die(f"OpenAI inputs must be {sorted(_OPENAI_INPUT_EXTS)}, got {p.suffix} ({p.name})")
       mb = p.stat().st_size / 1_048_576
@@ -920,7 +946,7 @@ def _validate_provider_flags(
         _die(f"input {p.name} is {mb:.1f}MB, exceeds OpenAI cap {_OPENAI_MAX_INPUT_MB}MB")
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
   console.print(f"[red]error:[/red] {msg}")
   raise typer.Exit(1)
 

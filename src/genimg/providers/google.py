@@ -61,6 +61,7 @@ class GeminiImageGen(IImageGen):
 
     resp = self._call_with_retry(client, req.model, contents, config)
     out = self.numbered_path(req.output, i, req.n)
+    out.parent.mkdir(parents=True, exist_ok=True)
     for part in resp.parts:
       if part.inline_data is not None:
         part.as_image().save(out)
@@ -141,9 +142,12 @@ class GeminiImageGen(IImageGen):
       resp = client.models.generate_images(model=req.model, prompt=req.prompt, config=config)
     except ClientError as e:
       raise self._friendly(e, req) from e
+    if not resp.generated_images:
+      raise RuntimeError("No images returned. Likely a safety filter — rephrase the prompt.")
     paths: list[Path] = []
     for i, gen in enumerate(resp.generated_images):
       out = self.numbered_path(req.output, i, req.n)
+      out.parent.mkdir(parents=True, exist_ok=True)
       gen.image.save(str(out))
       paths.append(out)
     return GenerateResult(paths=paths, model_used=req.model)
