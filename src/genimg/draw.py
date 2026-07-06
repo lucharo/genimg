@@ -335,7 +335,8 @@ PAGE = r"""<!doctype html>
   @keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:var(--btnb);border-radius:4px}
   textarea:focus,select:focus{outline:1px solid var(--accent)}
-  select{background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
+  select{background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:7px 32px 7px 12px;font-size:13px;cursor:pointer}
+  @media (max-width:520px){#hint .sub{display:none}}
   .tbtn{background:var(--btn);border:1px solid var(--btnb);color:var(--text);width:32px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .tbtn.on{border-color:var(--accent);background:var(--btnb)}
   .grp{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px}
@@ -394,9 +395,9 @@ const BOOT = /*__BOOT__*/;
                 <button class="icon" style="width:26px;height:24px;font-size:12px" data-act="shortcuts" title="Shortcuts (?)">?</button>
                 <button class="icon" style="width:26px;height:24px" data-act="zoomFit" title="Fit (F)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
               </div>
-              <div id="hint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none">
+              <div id="hint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;padding:0 24px;text-align:center">
                 <div style="font-size:15px;color:var(--faint)">Drop images or start drawing</div>
-                <div style="font-size:12px;color:var(--faint)">scroll to pan · ⌘/ctrl-scroll to zoom · move tool (V) to drag images</div>
+                <div class="sub" style="font-size:12px;color:var(--faint);max-width:360px;line-height:1.5">scroll to pan · ⌘/ctrl-scroll to zoom · move tool (V) to drag images</div>
               </div>
             </div>
             <div id="promptbox" style="display:flex;flex-direction:column;gap:4px"></div>
