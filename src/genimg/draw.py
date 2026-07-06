@@ -436,6 +436,7 @@ PAGE = r"""<!doctype html>
   .icon:hover{background:var(--btn)}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   .job img{width:100%;border-radius:6px;display:block;cursor:zoom-in;background:#fff}
+  .job img.g{aspect-ratio:1/1;object-fit:contain}
   .srcthumb{width:100%;border-radius:6px;display:block;cursor:pointer;background:#fff;border:1px solid var(--border)}
   .srcthumb:hover{border-color:var(--accent)}
 </style></head>
@@ -620,13 +621,13 @@ const BOOT = /*__BOOT__*/;
     const parts=[]; if(i.model)parts.push(esc(i.model)); if(i.time)parts.push((""+i.time).slice(0,16).replace("T"," "));
     return parts.join(" · ");
   }
-  function thumb(i){ return `<img src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="${esc(i.fileName||'')} — click to enlarge · drag onto canvas">`; }
+  function thumb(i,grid){ return `<img class="${grid?'g':''}" src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="${esc(i.fileName||'')} — click to enlarge · drag onto canvas">`; }
   function tweakBtn(i,compact){ return `<button data-act="tweak" data-url="${esc(i.url)}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);${compact?'width:22px;height:20px;padding:0':'padding:4px 12px'};font-size:11px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✎${compact?'':' Tweak'}</button>`; }
   function doneListCard(i){
     return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${i.session?'<span style="color:var(--accent)">✓ saved</span>':''}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span style="white-space:nowrap">${rightMeta(i)}</span>${tweakBtn(i,false)}</div></div></div>`;
   }
   function doneGridCard(i){
-    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:4px">${thumb(i)}<div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(i.fileName||'')}">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${esc(i.fileName||"")}</div><div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rightMeta(i)}</span>${tweakBtn(i,true)}</div></div>`;
+    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:4px">${thumb(i,true)}<div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(i.fileName||'')}">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${esc(i.fileName||"")}</div><div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rightMeta(i)}</span>${tweakBtn(i,true)}</div></div>`;
   }
   function renderTray(){
     const col = $("traycol");
@@ -650,7 +651,7 @@ const BOOT = /*__BOOT__*/;
     const body = empty
       ? `<div style="flex:1;border:1px dashed var(--btnb);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:24px;font-size:13px;color:var(--faint);text-align:center;line-height:1.6">${emptyMsg}</div>`
       : statusHtml + doneHtml;
-    const seg=(label,val)=>`<button data-act="trayScope" data-scope="${val}" style="background:${S.trayScope===val?'var(--btnb)':'transparent'};border:none;color:var(--text);padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer">${label}</button>`;
+    const seg=(label,val)=>`<button data-act="trayScope" data-scope="${val}" style="background:${S.trayScope===val?'var(--btnb)':'transparent'};border:none;color:var(--text);height:24px;padding:0 10px;border-radius:6px;font-size:11px;cursor:pointer;display:flex;align-items:center">${label}</button>`;
     const vbtn=(val,svg,title)=>`<button data-act="trayView" data-view="${val}" title="${title}" style="background:${S.trayView===val?'var(--btnb)':'transparent'};border:none;color:var(--text);width:26px;height:24px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">${svg}</button>`;
     const listIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
     const gridIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
