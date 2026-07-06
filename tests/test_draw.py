@@ -155,6 +155,33 @@ class StudioModelsTests(unittest.TestCase):
       self.assertIn(a, aliases)
 
 
+class AvailableModelsTests(unittest.TestCase):
+  def test_no_cache_or_empty_probes_shows_all(self) -> None:
+    self.assertEqual(draw.available_models(None), list(draw.STUDIO_MODELS))
+    self.assertEqual(draw.available_models({"probes": {}}), list(draw.STUDIO_MODELS))
+
+  def test_openai_missing_hidden_but_google_missing_kept(self) -> None:
+    cache = {"probes": {
+      "gdm:nb2": {"status": "missing"},            # Vertex under-reports → keep
+      "oai:gpt-image-2": {"status": "listed"},     # keep
+      "oai:gpt-image-1.5": {"status": "missing"},  # OpenAI list is authoritative → hide
+    }}
+    aliases = [m["alias"] for m in draw.available_models(cache)]
+    self.assertIn("gdm:nb2", aliases)
+    self.assertIn("oai:gpt-image-2", aliases)
+    self.assertNotIn("oai:gpt-image-1.5", aliases)
+
+  def test_provider_region_failure_hidden_unknown_kept(self) -> None:
+    cache = {"probes": {"gdm:nb": {"status": "403"}}}  # gdm:nb unreachable; the rest unprobed
+    aliases = [m["alias"] for m in draw.available_models(cache)]
+    self.assertNotIn("gdm:nb", aliases)
+    self.assertIn("gdm:nb2", aliases)  # unknown status → not hidden
+
+  def test_everything_filtered_falls_back_to_all(self) -> None:
+    cache = {"probes": {m["alias"]: {"status": "auth"} for m in draw.STUDIO_MODELS}}
+    self.assertEqual(draw.available_models(cache), list(draw.STUDIO_MODELS))
+
+
 class DrawCommandModelTests(unittest.TestCase):
   """The studio always sends -i, so the initial model must be an image-capable studio model."""
 

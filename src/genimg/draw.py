@@ -26,7 +26,7 @@ from http import server as _http_server
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from . import cost, metadata, registry
+from . import cost, discovery, metadata, registry
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -54,6 +54,33 @@ def _studio_models() -> list[dict]:
 
 # Models offered in the studio dropdown (alias sent to genimg + display label + provider/model_id).
 STUDIO_MODELS = _studio_models()
+
+# Provider/region-level failures: the whole cohort is unreachable (bad/missing creds, wrong region).
+_UNREACHABLE = {"auth", "403", "404", "error"}
+
+
+def available_models(cache: dict | None) -> list[dict]:
+  """Filter STUDIO_MODELS by a `genimg models` probe cache.
+
+  - OpenAI: keep only listed/working — its list endpoint is authoritative, so "missing" == absent.
+  - Google/Vertex: keep unless the provider/region call itself failed; "missing" stays, because
+    models.list() under-reports Model Garden models that still generate (discovery.py caveat).
+  - No cache, unknown status, or everything filtered out → show all (never an empty dropdown).
+  """
+  probes = (cache or {}).get("probes") or {}
+  if not probes:
+    return list(STUDIO_MODELS)
+  out: list[dict] = []
+  for m in STUDIO_MODELS:
+    status = (probes.get(m["alias"]) or {}).get("status")
+    if status is None:
+      out.append(m)  # not probed → don't hide
+    elif m["provider"] == "openai":
+      if status in ("listed", "working"):
+        out.append(m)
+    elif status not in _UNREACHABLE:  # google/vertex: keep listed + missing (unconfirmed)
+      out.append(m)
+  return out or list(STUDIO_MODELS)
 DEFAULT_PROMPT = (
   "- handwritten marks = edit instructions, don't copy them literally\n"
   "- keep un-annotated parts unchanged\n"
@@ -153,11 +180,13 @@ class Studio:
 
   def boot_data(self) -> dict:
     drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
+    visible = available_models(discovery.load_cache())
+    default = self.default_model if any(m["alias"] == self.default_model for m in visible) else visible[0]["alias"]
     return {
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
       "models": [{"alias": m["alias"], "label": m["label"], "modelId": m["modelId"],
-                  "provider": m["provider"]} for m in STUDIO_MODELS],
-      "defaultModel": self.default_model,
+                  "provider": m["provider"]} for m in visible],
+      "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
       # Real cost tables from cost.py so the client estimate is per-model accurate + stays in sync.
       "costs": {
