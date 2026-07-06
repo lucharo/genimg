@@ -208,15 +208,19 @@ class Studio:
     meta_dir = Path(metadata.META_DIR)
     if not meta_dir.exists():
       return out
-    for f in meta_dir.glob("*.json"):
+    # Oldest → newest so a later sidecar writing the same output path wins on collision.
+    for f in sorted(meta_dir.glob("*.json"), key=lambda p: p.stat().st_mtime):
       try:
         data = json.loads(f.read_text())
       except (json.JSONDecodeError, OSError):
         continue
       info = {"model": data.get("alias") or data.get("model_id"), "time": data.get("time")}
+      workdir = data.get("workdir")
       for o in data.get("outputs", []):
-        key = str(Path(o["path"] if isinstance(o, dict) else o).resolve())
-        out[key] = info
+        p = Path(o["path"] if isinstance(o, dict) else o)
+        if not p.is_absolute() and workdir:  # resolve against the recorded cwd, not ours
+          p = Path(workdir) / p
+        out[str(p.resolve())] = info
     return out
 
   def history_items(self, limit: int = 80) -> list[dict]:

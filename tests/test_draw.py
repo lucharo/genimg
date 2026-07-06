@@ -244,6 +244,22 @@ class HistoryItemsTests(unittest.TestCase):
       items = studio.history_items()
     self.assertEqual(items[0], {"name": "g.png", "url": "/gen/g.png", "model": "gdm:nb2", "time": "2026-07-06T12:00:00"})
 
+  def test_relative_output_path_resolved_against_workdir(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    with (
+      patch.object(metadata, "GENIMG_HOME", tmp),
+      patch.object(metadata, "GEN_DIR", tmp / "generations"),
+      patch.object(metadata, "META_DIR", tmp / "metadata"),
+    ):
+      studio = draw.Studio([], "gdm:nb2")
+      (studio.gen_dir / "r.png").write_bytes(b"x")
+      metadata.META_DIR.mkdir(parents=True, exist_ok=True)
+      # sidecar stores a RELATIVE output path + the workdir it was generated in
+      (metadata.META_DIR / "id.json").write_text(json.dumps(
+        {"alias": "gdm:nbp", "time": "2026-01-01T00:00", "workdir": str(studio.gen_dir), "outputs": [{"path": "r.png"}]}))
+      items = studio.history_items()
+    self.assertEqual(items[0]["model"], "gdm:nbp")
+
 
 class BootDataModelFilterTests(unittest.TestCase):
   def _models(self, fresh_cache) -> list[str]:
