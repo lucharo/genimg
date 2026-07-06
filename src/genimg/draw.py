@@ -545,7 +545,7 @@ const BOOT = /*__BOOT__*/;
   function renderTray(){
     const col = $("traycol");
     if (S.trayCollapsed){
-      col.innerHTML = `<button class="card" data-act="toggleTray" title="Show generated images" style="width:44px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;color:var(--sub);cursor:pointer;border:1px solid var(--border)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg><span style="writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button>`;
+      col.innerHTML = `<button class="card" data-act="toggleTray" title="Show generated images" style="width:44px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;color:var(--sub);cursor:pointer;border:1px solid var(--border)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg><span style="writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button>`;
       return;
     }
     const list = S.jobs.slice().sort((a,b)=>b.createdAt-a.createdAt);
