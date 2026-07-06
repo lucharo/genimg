@@ -134,6 +134,17 @@ class SafeNameTests(unittest.TestCase):
     self.assertEqual(draw._safe_name("../../etc/passwd"), "passwd")
 
 
+class OriginGuardTests(unittest.TestCase):
+  def test_missing_origin_allowed(self) -> None:  # curl/tests — not a CSRF vector
+    self.assertTrue(draw._origin_allowed(None, "localhost:8788"))
+
+  def test_same_origin_allowed(self) -> None:
+    self.assertTrue(draw._origin_allowed("http://localhost:8788", "localhost:8788"))
+
+  def test_cross_origin_refused(self) -> None:
+    self.assertFalse(draw._origin_allowed("https://evil.example", "localhost:8788"))
+
+
 class BootJsonTests(unittest.TestCase):
   def test_angle_bracket_in_source_name_is_escaped(self) -> None:
     tmp = Path(tempfile.mkdtemp())
@@ -197,6 +208,15 @@ class HistoryItemsTests(unittest.TestCase):
       items = studio.history_items(limit=2)
     self.assertEqual([i["name"] for i in items], ["new.png", "mid.png"])
     self.assertEqual(items[0], {"name": "new.png", "url": "/gen/new.png", "model": None, "time": None})
+
+  def test_special_char_filename_is_url_encoded(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    with patch.object(metadata, "GENIMG_HOME", tmp), patch.object(metadata, "GEN_DIR", tmp / "generations"):
+      studio = draw.Studio([], "gdm:nb2")
+      (studio.gen_dir / "a b&c.png").write_bytes(b"x")
+      items = studio.history_items()
+    self.assertEqual(items[0]["name"], "a b&c.png")
+    self.assertEqual(items[0]["url"], "/gen/a%20b%26c.png")
 
   def test_enriches_from_metadata_sidecar(self) -> None:
     tmp = Path(tempfile.mkdtemp())

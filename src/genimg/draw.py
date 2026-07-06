@@ -24,7 +24,7 @@ import time
 import webbrowser
 from http import server as _http_server
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 from . import cost, discovery, metadata, registry
 
@@ -215,8 +215,8 @@ class Studio:
         continue
       info = {"model": data.get("alias") or data.get("model_id"), "time": data.get("time")}
       for o in data.get("outputs", []):
-        name = Path(o["path"] if isinstance(o, dict) else o).name
-        out[name] = info
+        key = str(Path(o["path"] if isinstance(o, dict) else o).resolve())
+        out[key] = info
     return out
 
   def history_items(self, limit: int = 80) -> list[dict]:
@@ -227,9 +227,12 @@ class Studio:
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     files = files[:limit]
     meta = self._meta_by_output()
-    return [{"name": p.name, "url": f"/gen/{p.name}",
-             "model": meta.get(p.name, {}).get("model"),
-             "time": meta.get(p.name, {}).get("time")} for p in files]
+    out = []
+    for p in files:
+      info = meta.get(str(p.resolve()), {})
+      out.append({"name": p.name, "url": f"/gen/{quote(p.name, safe='')}",
+                  "model": info.get("model"), "time": info.get("time")})
+    return out
 
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str, prompt: str, model: str,
@@ -291,6 +294,15 @@ def _safe_name(name: str) -> str:
   return os.path.basename(unquote(name))
 
 
+def _origin_allowed(origin: str | None, host: str | None) -> bool:
+  """CSRF guard for mutating requests. Allow when there's no Origin header (non-browser client
+  like curl/tests — not a CSRF vector) or the Origin's host matches the request Host. Blocks a
+  drive-by cross-origin POST from a web page while the studio is open on localhost."""
+  if not origin:
+    return True
+  return urlparse(origin).netloc == host
+
+
 def _boot_json(studio: Studio) -> str:
   """Serialize boot data for inline injection, escaping '<' so a source filename containing
   '<' (or '</script>') can't break out of the inline <script> element."""
@@ -348,6 +360,8 @@ def _make_handler(studio: Studio):
       route = urlparse(self.path).path
       if route != "/generate":
         return self._send(404, "text/plain", b"not found")
+      if not _origin_allowed(self.headers.get("Origin"), self.headers.get("Host")):
+        return self._send(403, "application/json", json.dumps({"error": "cross-origin request refused"}))
       length = int(self.headers.get("Content-Length", 0))
       try:
         data = json.loads(self.rfile.read(length) or b"{}")
@@ -446,7 +460,7 @@ const BOOT = /*__BOOT__*/;
 (function(){
   "use strict";
   const MM={}; BOOT.models.forEach(m=>{MM[m.alias]={modelId:m.modelId,provider:m.provider};});
-  const BRUSH_PX = [2,4,6,10,14], BRUSH_DOT=[6,9,12,15,18];
+  const BRUSH_PX = [2,4,6,10,14], BRUSH_DOT=[6,9,12,15,18], PAD=12;
   const SWATCHES = ["#FF3B30","#2979FF","#FF9100","#111111"];
   const S = {
     prompt: BOOT.defaultPrompt, promptExpanded:false,
@@ -618,10 +632,10 @@ const BOOT = /*__BOOT__*/;
   }
   function rightMeta(i){
     if(i.session) return esc(i.model||"")+" · "+Math.round(i.elapsed||0)+"s";
-    const parts=[]; if(i.model)parts.push(esc(i.model)); if(i.time)parts.push((""+i.time).slice(0,16).replace("T"," "));
+    const parts=[]; if(i.model)parts.push(esc(i.model)); if(i.time)parts.push(esc((""+i.time).slice(0,16).replace("T"," ")));
     return parts.join(" · ");
   }
-  function thumb(i,grid){ return `<img class="${grid?'g':''}" src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="${esc(i.fileName||'')} — click to enlarge · drag onto canvas">`; }
+  function thumb(i,grid){ return `<img class="${grid?'g':''}" src="${esc(i.url)}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="${esc(i.fileName||'')} — click to enlarge · drag onto canvas">`; }
   function tweakBtn(i,compact){ return `<button data-act="tweak" data-url="${esc(i.url)}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);${compact?'width:22px;height:20px;padding:0':'padding:4px 12px'};font-size:11px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✎${compact?'':' Tweak'}</button>`; }
   function doneListCard(i){
     return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${i.session?'<span style="color:var(--accent)">✓ saved</span>':''}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span style="white-space:nowrap">${rightMeta(i)}</span>${tweakBtn(i,false)}</div></div></div>`;
@@ -687,7 +701,7 @@ const BOOT = /*__BOOT__*/;
       usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
       // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → mirror cost.py's mult
       const b=contentBounds();
-      if(b){const a=nearestAspect(b[2]-b[0],b[3]-b[1]); if(a==="16:9"||a==="9:16") usd*=((C.openaiResMult||{})["2K"]||2.5);}
+      if(b){const a=nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2); if(a==="16:9"||a==="9:16") usd*=((C.openaiResMult||{})["2K"]||2.5);}  // match flatten()'s padded dims
     } else {
       const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id
       const t=(C.googlePerImage||{})[key]||{};
@@ -806,9 +820,8 @@ const BOOT = /*__BOOT__*/;
   // ---------- flatten + generate ----------
   function flatten(){
     const b=contentBounds(); if(!b)return null;
-    const pad=12;  // small white margin so strokes/diagrams aren't flush to the edge
-    const x1=b[0]-pad, y1=b[1]-pad;
-    const bw=Math.max(1,(b[2]-b[0])+pad*2), bh=Math.max(1,(b[3]-b[1])+pad*2);
+    const x1=b[0]-PAD, y1=b[1]-PAD;  // small white margin so strokes/diagrams aren't flush to the edge
+    const bw=Math.max(1,(b[2]-b[0])+PAD*2), bh=Math.max(1,(b[3]-b[1])+PAD*2);
     const scale=Math.min(2048,Math.max(bw,bh)*2)/Math.max(bw,bh);
     const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(bw*scale)); c.height=Math.max(1,Math.round(bh*scale));
     const ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height);
