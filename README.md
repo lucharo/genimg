@@ -21,6 +21,7 @@ genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --de
 genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Google-only; rejected on OpenAI)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
+genimg draw diagrams/                            # draw studio: annotate/sketch on a canvas → generate
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard (also sets a default)
 genimg auth                                      # show ✓/✗ readiness per provider

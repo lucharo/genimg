@@ -144,7 +144,7 @@ def _run(
   open_after: Annotated[bool, typer.Option("--open", rich_help_panel=_PANEL_OUTPUT,
     help="Open the grid (n>1) or first image (n=1) in browser.")] = False,
   resolution: Annotated[str | None, typer.Option("-r", "--resolution", rich_help_panel=_PANEL_CORE,
-    help="1K | 2K | 4K. OpenAI + Imagen only; rejected on Gemini Image models (which would silently ignore it).")] = None,
+    help="1K | 2K | 4K. Honored on OpenAI, Imagen, and Gemini 3 image models (image_size).")] = None,
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
     help="low | medium (default) | high | auto. high = 30-90s/image.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
@@ -623,6 +623,45 @@ def grid_cmd(
     grid_module.open_in_browser(written)
 
 
+# ────────────────────── draw command (studio web app) ──────────────────────
+
+@_app.command("draw", help="Open the draw studio: sketch/annotate on a canvas, generate via genimg.")
+def draw_cmd(
+  paths: Annotated[list[Path] | None, typer.Argument(
+    help="Image files and/or directories to load into the studio (optional).")] = None,
+  port: Annotated[int, typer.Option("--port", help="Port to serve on (auto-bumps if busy).")] = 8788,
+  model: Annotated[str | None, typer.Option("-m", "--model",
+    help="Initial model alias (default: your set default → gdm:nb2).")] = None,
+  no_open: Annotated[bool, typer.Option("--no-open", help="Don't auto-open the browser.")] = False,
+):
+  from . import draw as draw_module
+
+  sources = draw_module.discover_images(paths or [])
+  if paths and not sources:
+    console.print("[yellow]no images found in the given path(s); starting with an empty canvas.[/yellow]")
+
+  # The studio edits images (always sends -i), so the initial model must be one of the
+  # image-capable dropdown models. Canonicalize aliases; fall back to gdm:nb2 otherwise
+  # (e.g. an Imagen default, which is text-to-image only and would fail every generation).
+  studio_aliases = [m["alias"] for m in draw_module.STUDIO_MODELS]
+  requested = model or config.get_default_model() or "gdm:nb2"
+  try:
+    canonical = registry.resolve(requested)[0]
+  except ValueError:
+    canonical = requested
+  if canonical in studio_aliases:
+    default_model = canonical
+  else:
+    if model:
+      console.print(f"[yellow]{requested!r} isn't a studio model (the studio edits images); starting with gdm:nb2.[/yellow]")
+    default_model = "gdm:nb2"
+
+  try:
+    draw_module.serve(sources, port=port, model=default_model, open_browser=not no_open)
+  except RuntimeError as e:
+    _die(str(e))
+
+
 # ────────────────────── config sub-typer ──────────────────────
 
 config_app = typer.Typer(
@@ -902,12 +941,6 @@ def _validate_provider_flags(
       _die(f"--quality must be one of {sorted(_QUALITY_VALUES)}, got {quality!r}")
     if provider != "openai":
       _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
-
-  if resolution and provider == "google" and model_id and not model_id.startswith("imagen-"):
-    _die(
-      f"--resolution is silently ignored by Gemini Image models (verified). "
-      f"Drop the flag, switch to -m oai:gi2, or use Imagen (-m gdm:imagen4)."
-    )
 
   if model_id and model_id.startswith("imagen-") and (input or refs):
     _die(
