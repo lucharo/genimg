@@ -44,6 +44,10 @@ class GenerateResult(BaseModel):
   model_used: str
   cost_usd: float | None = None
   errors: list[str] = Field(default_factory=list)  # per-variant failures on a partially-successful n>1 batch
+  # Original generation index of each entry in paths. On a partial success the paths
+  # list is compacted, so per-index data (e.g. -d prompt deltas) must be selected via
+  # these indices, not by position. None = identity (no failures possible/observed).
+  indices: list[int] | None = None
 
 
 class ProbeResult(BaseModel):
@@ -94,7 +98,8 @@ class IImageGen(ABC):
       raise errors[min(errors)]  # all variants failed — surface the first (keeps provider-friendly mapping)
     ordered_paths = [results[i] for i in sorted(results)]
     error_msgs = [f"#{i + 1}: {type(errors[i]).__name__}: {errors[i]}" for i in sorted(errors)]
-    return GenerateResult(paths=ordered_paths, model_used=req.model, errors=error_msgs)
+    return GenerateResult(paths=ordered_paths, model_used=req.model, errors=error_msgs,
+                          indices=sorted(results))
 
   @staticmethod
   def req_for_index(req: GenerateRequest, i: int) -> GenerateRequest:

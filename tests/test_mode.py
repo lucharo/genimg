@@ -160,6 +160,12 @@ class ModeCliTests(unittest.TestCase):
           payload = json.loads(meta_path.read_text())
     return result, captured, payload
 
+  def test_no_diverse_hint_in_batch_mode(self) -> None:
+    # -d/--deltas guidance doesn't apply to batch submissions (roborev 3618, Low)
+    result, _, _ = self._invoke(["p", "-m", "gdm:nb2", "-n", "3", "--mode", "batch"])
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertNotIn("near-duplicates", result.output)
+
   def test_mode_batch_plumbs_through_and_is_recorded(self) -> None:
     result, captured, payload = self._invoke(["p", "-m", "gdm:nb2", "-n", "3", "--mode", "batch"])
     self.assertEqual(result.exit_code, 0, result.output)

@@ -258,7 +258,7 @@ def _run(
       console.print(f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(d) if d else '(base prompt)'}")
   elif batch_diverse:
     console.print("  [dim]diverse[/dim]  model-coordinated: the single batched request asks for deliberately different takes")
-  elif n >= 2:
+  elif n >= 2 and mode != "batch":  # -d/--deltas guidance doesn't apply to batch submissions
     console.print(
       "  [dim]hint[/dim]     plain -n often converges on near-duplicates — add -d for curated variety, "
       'or pass your own subject-appropriate deltas: --deltas "isometric, blueprint, macro photo" (or --deltas @file, one per line)'
@@ -305,11 +305,17 @@ def _run(
   for err in result.errors:
     console.print(f"  [yellow]skipped[/yellow] {_rich_escape(err)}", soft_wrap=True)
 
+  # On partial success paths is compacted — realign per-generation deltas by the
+  # surviving original indices, or image #3 would inherit failed #2's delta.
+  output_deltas = deltas
+  if deltas is not None and result.indices is not None:
+    output_deltas = [deltas[i] for i in result.indices]
+
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    prompt_deltas=deltas, mode=mode, diverse=diverse,
+    prompt_deltas=output_deltas, mode=mode, diverse=diverse,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -322,7 +328,7 @@ def _run(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-      grid_path=written_grid, prompt_deltas=deltas, mode=mode, diverse=diverse,
+      grid_path=written_grid, prompt_deltas=output_deltas, mode=mode, diverse=diverse,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)

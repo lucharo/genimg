@@ -94,6 +94,53 @@ class PromptVariantPlumbingTests(unittest.TestCase):
     self.assertEqual(gen.prompts_by_index, {0: "base", 1: "base"})
 
 
+class PartialFailureDeltaAlignmentTests(unittest.TestCase):
+  def test_result_carries_surviving_indices(self) -> None:
+    class _FlakyGen(_FakeGen):
+      def _generate_single_image(self, req: GenerateRequest, i: int):
+        if i == 1:
+          raise RuntimeError("variant 2 failed")
+        return super()._generate_single_image(req, i)
+
+    with tempfile.TemporaryDirectory() as td:
+      gen = _FlakyGen()
+      req = GenerateRequest(prompt="base", output=Path(td) / "img.png", model="fake", n=3,
+                            prompt_variants=["base", "base — v2", "base — v3"])
+      result = gen.generate(req)
+    self.assertEqual(result.indices, [0, 2])
+    self.assertEqual([p.name for p in result.paths], ["img_1.png", "img_3.png"])
+    self.assertEqual(gen.prompts_by_index[2], "base — v3")  # variant prompt still per original index
+
+  def test_metadata_deltas_realigned_after_partial_failure(self) -> None:
+    """Regression (roborev 3618): with #2 failed, #3's sidecar entry must carry #3's delta."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+      out_path = Path(td) / "image.png"
+      meta_dir = Path(td) / "metadata"
+
+      def fake_generate(req: GenerateRequest, **kwargs) -> GenerateResult:
+        paths = [IImageGen.numbered_path(out_path, i, req.n) for i in (0, 2)]  # variant 1 failed
+        for p in paths:
+          p.write_bytes(b"png")
+        return GenerateResult(paths=paths, model_used="m", indices=[0, 2],
+                              errors=["#2: RuntimeError: boom"])
+
+      with (
+        patch.object(cli.config, "load", return_value={}),
+        patch.object(metadata, "META_DIR", meta_dir),
+        patch.object(metadata, "make_id", return_value="test-gen"),
+        patch.object(cli, "run_generate", side_effect=fake_generate),
+      ):
+        result = runner.invoke(cli._app, [
+          "a fox", "-m", "oai:gi2", "-n", "3", "--deltas", "delta-two, delta-three",
+          "-o", str(out_path)])
+        payload = json.loads((meta_dir / "test-gen.json").read_text())
+
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertEqual([o["prompt_delta"] for o in payload["outputs"]], [None, "delta-three"])
+    self.assertEqual(payload["outputs"][1]["prompt_effective"], "a fox — delta-three")
+
+
 class DiverseCliTests(unittest.TestCase):
   def _invoke_diverse(self, args: list[str]):
     """Run the CLI with generation mocked; returns (result, captured requests, meta_dir)."""

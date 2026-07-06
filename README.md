@@ -20,7 +20,7 @@ genimg "X" -m oai:gi2 -n 4 -d -g --open          # diversified batch (curated pe
 genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --deltas @file, one per line)
 genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Google-only; rejected on OpenAI)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
-genimg "X" -n 6 -q high --dry-run                # preview model/params/cost, no API call
+genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard (also sets a default)
 genimg auth                                      # show ✓/✗ readiness per provider
