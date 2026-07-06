@@ -145,6 +145,16 @@ class OriginGuardTests(unittest.TestCase):
     self.assertFalse(draw._origin_allowed("https://evil.example", "localhost:8788"))
 
 
+class HostGuardTests(unittest.TestCase):
+  def test_loopback_hosts_allowed(self) -> None:
+    for h in ("localhost:8788", "127.0.0.1:8788", "[::1]:8788", "localhost"):
+      self.assertTrue(draw._host_allowed(h), h)
+
+  def test_rebinding_host_and_missing_host_refused(self) -> None:  # DNS-rebinding defense
+    self.assertFalse(draw._host_allowed("attacker.example:8788"))
+    self.assertFalse(draw._host_allowed(None))
+
+
 class BootJsonTests(unittest.TestCase):
   def test_angle_bracket_in_source_name_is_escaped(self) -> None:
     tmp = Path(tempfile.mkdtemp())

@@ -294,6 +294,18 @@ def _safe_name(name: str) -> str:
   return os.path.basename(unquote(name))
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _host_allowed(host: str | None) -> bool:
+  """Anti-DNS-rebinding guard for ALL routes: the Host header must name an explicit loopback
+  address. A rebinding page (Host: attacker.example) is rejected even though it resolves to
+  127.0.0.1, so it can't reach /generate or read /history, /gen, /src."""
+  if not host:
+    return False
+  return urlparse("//" + host).hostname in _LOCAL_HOSTS
+
+
 def _origin_allowed(origin: str | None, host: str | None) -> bool:
   """CSRF guard for mutating requests. Allow when there's no Origin header (non-browser client
   like curl/tests — not a CSRF vector) or the Origin's host matches the request Host. Blocks a
@@ -339,6 +351,8 @@ def _make_handler(studio: Studio):
       self._send(200, mime, path.read_bytes())
 
     def do_GET(self):
+      if not _host_allowed(self.headers.get("Host")):
+        return self._send(403, "text/plain", b"forbidden")
       route = urlparse(self.path).path
       if route in ("/", "/index.html"):
         return self._send(200, "text/html; charset=utf-8", page_bytes)
@@ -357,6 +371,8 @@ def _make_handler(studio: Studio):
       return self._send(404, "text/plain", b"not found")
 
     def do_POST(self):
+      if not _host_allowed(self.headers.get("Host")):
+        return self._send(403, "text/plain", b"forbidden")
       route = urlparse(self.path).path
       if route != "/generate":
         return self._send(404, "text/plain", b"not found")
@@ -643,7 +659,7 @@ const BOOT = /*__BOOT__*/;
   function doneGridCard(i){
     // Single-line footer — the file names are opaque ids, so we skip them in grid (still on
     // hover via the thumbnail title, and shown in list view). Just model + date/time + Tweak.
-    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:5px">${thumb(i,true)}<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${rightMeta(i)||esc(i.fileName||"")}</span>${tweakBtn(i,true)}</div></div>`;
+    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:5px">${thumb(i,true)}<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${rightMeta(i)}</span>${tweakBtn(i,true)}</div></div>`;
   }
   function renderTray(){
     const col = $("traycol");
