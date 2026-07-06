@@ -36,9 +36,10 @@ class ValidationMatrixTests(unittest.TestCase):
     with self.assertRaises(typer.Exit):
       _validate(provider="google", quality="high", model_id="gemini-2.5-flash-image")
 
-  def test_resolution_on_gemini_rejected(self) -> None:
-    with self.assertRaises(typer.Exit):
-      _validate(provider="google", resolution="2K", model_id="gemini-2.5-flash-image")
+  def test_resolution_on_gemini_allowed(self) -> None:
+    # Gemini 3 image models honor image_size (providers/google.py sets image_config.image_size;
+    # cost.py prices per 1K/2K/4K), so -r must pass validation for them.
+    _validate(provider="google", resolution="2K", model_id="gemini-3.1-flash-image-preview")
 
   def test_resolution_on_imagen_ok(self) -> None:
     _validate(provider="google", resolution="2K", model_id="imagen-4.0-generate-001")

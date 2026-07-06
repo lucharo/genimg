@@ -17,6 +17,7 @@ genimg "with refs" a.png b.png -m gdm:nbp -o out.png     # reference images (pos
 genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
 genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
 genimg grid *.png -o g.html --open               # standalone grid from existing files
+genimg draw diagrams/                            # draw studio: annotate/sketch on a canvas → generate
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard (also sets a default)
 genimg auth                                      # show ✓/✗ readiness per provider
