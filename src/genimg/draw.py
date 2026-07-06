@@ -579,8 +579,10 @@ const BOOT = /*__BOOT__*/;
   function contentBounds(){
     let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
     for(const it of S.items){x1=Math.min(x1,it.x);y1=Math.min(y1,it.y);x2=Math.max(x2,it.x+it.w);y2=Math.max(y2,it.y+it.h);}
-    for(const st of S.strokes) if(!st.erase) for(const p of st.pts){x1=Math.min(x1,p[0]);y1=Math.min(y1,p[1]);x2=Math.max(x2,p[0]);y2=Math.max(y2,p[1]);}
-    return x2>x1?[x1,y1,x2,y2]:null;
+    // Expand strokes by their radius so edge marks aren't clipped and a perfectly
+    // vertical/horizontal stroke still has non-zero extent (won't read as empty).
+    for(const st of S.strokes) if(!st.erase){const r=Math.max(1,st.size); for(const p of st.pts){x1=Math.min(x1,p[0]-r);y1=Math.min(y1,p[1]-r);x2=Math.max(x2,p[0]+r);y2=Math.max(y2,p[1]+r);}}
+    return x1===Infinity?null:[x1,y1,x2,y2];
   }
   function zoomFit(){
     const b=contentBounds();
@@ -651,7 +653,8 @@ const BOOT = /*__BOOT__*/;
     e.preventDefault(); S.dragActive=false; const wrap=$("cvwrap"); wrap.style.borderColor="var(--border)"; wrap.style.borderStyle="solid";
     const at=cv?toWorld(e):null;
     const url=e.dataTransfer&&(e.dataTransfer.getData("text/plain")||e.dataTransfer.getData("text/uri-list"));
-    if(url&&(url.indexOf("data:image/")===0||url.indexOf("/gen/")===0||url.indexOf("/src/")===0||url.indexOf("http")===0)){addImage(url,at);return;}
+    // Only same-origin/data URLs — cross-origin http images would taint the canvas and break toDataURL().
+    if(url&&(url.indexOf("data:image/")===0||url.indexOf("/gen/")===0||url.indexOf("/src/")===0)){addImage(url,at);return;}
     const files=(e.dataTransfer&&e.dataTransfer.files)?Array.from(e.dataTransfer.files):[];
     files.filter(f=>f.type.startsWith("image/")).forEach((f,i)=>{const rd=new FileReader();rd.onload=()=>addImage(rd.result,at?[at[0]+i*40,at[1]+i*40]:null);rd.readAsDataURL(f);});
   }
@@ -660,7 +663,9 @@ const BOOT = /*__BOOT__*/;
   // ---------- flatten + generate ----------
   function flatten(){
     const b=contentBounds(); if(!b)return null;
-    const [x1,y1,x2,y2]=b, bw=x2-x1, bh=y2-y1;
+    const pad=12;  // small white margin so strokes/diagrams aren't flush to the edge
+    const x1=b[0]-pad, y1=b[1]-pad;
+    const bw=Math.max(1,(b[2]-b[0])+pad*2), bh=Math.max(1,(b[3]-b[1])+pad*2);
     const scale=Math.min(2048,Math.max(bw,bh)*2)/Math.max(bw,bh);
     const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(bw*scale)); c.height=Math.max(1,Math.round(bh*scale));
     const ctx=c.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height);
@@ -674,7 +679,9 @@ const BOOT = /*__BOOT__*/;
     return {url:c.toDataURL("image/png"), w:c.width, h:c.height};
   }
   async function generate(){
-    const flat=flatten();
+    let flat=null;
+    try{ flat=flatten(); }
+    catch(e){ toast("can't export the canvas (a cross-origin image tainted it)"); return; }
     if(!flat){toast("nothing to generate — draw or drop an image");return;}
     try{
       const r=await fetch("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
