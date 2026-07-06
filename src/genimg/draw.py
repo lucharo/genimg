@@ -180,7 +180,10 @@ class Studio:
 
   def boot_data(self) -> dict:
     drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
-    visible = available_models(discovery.load_cache())
+    # load_fresh_cache() returns None once the probe cache is older than the refresh interval
+    # (5 days) → available_models() then shows ALL models. We never filter on stale data; the
+    # user re-enables filtering by running `genimg models`.
+    visible = available_models(discovery.load_fresh_cache())
     default = self.default_model if any(m["alias"] == self.default_model for m in visible) else visible[0]["alias"]
     return {
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
@@ -195,6 +198,13 @@ class Studio:
         "googlePerImage": {mid: drop_none(tbl) for mid, tbl in cost._GOOGLE_PER_IMAGE.items()},
       },
     }
+
+  def history_items(self, limit: int = 80) -> list[dict]:
+    """Recent images in ~/.genimg/generations/ (all past genimg output), newest first — the
+    'History' rail's import library. Served via the existing /gen/<name> route."""
+    files = [p for p in self.gen_dir.glob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return [{"name": p.name, "url": f"/gen/{p.name}"} for p in files[:limit]]
 
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str, prompt: str, model: str,
@@ -297,6 +307,8 @@ def _make_handler(studio: Studio):
         return self._send(200, "text/html; charset=utf-8", page_bytes)
       if route.startswith("/status/"):
         return self._send(200, "application/json", json.dumps(studio.status(route[len("/status/"):])))
+      if route == "/history":
+        return self._send(200, "application/json", json.dumps({"items": studio.history_items()}))
       if route.startswith("/gen/"):
         return self._send_file(studio.gen_dir / _safe_name(route[len("/gen/"):]))
       if route.startswith("/src/"):
@@ -417,6 +429,7 @@ const BOOT = /*__BOOT__*/;
     strokes:[], items:[], selectedId:null,
     view:{x:0,y:0,s:1},
     jobs:[], splitPct:50, trayCollapsed:false, srcCollapsed:false,
+    trayScope:"session", trayView:"list", historyItems:[],
     lightbox:null, shortcutsOpen:false, dragActive:false
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
@@ -558,33 +571,65 @@ const BOOT = /*__BOOT__*/;
       <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:2px">${thumbs}</div>
     </div>`;
   }
-  function jobCard(j){
-    if (j.status==="queued") return `<div class="card job" style="padding:10px"><div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px dashed var(--btnb)"></span><span style="font-size:12px;color:var(--sub)">${esc(j.model)} · queued…</span></div></div>`;
-    if (j.status==="running") return `<div class="card job" style="padding:10px"><div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--btnb);border-top-color:var(--accent);animation:spin 1s linear infinite"></span><span style="font-size:12px;color:var(--sub)">${esc(j.model)} · generating · <span data-elapsed="${j.id}">${Math.round(j.elapsed||0)}s</span></span></div></div>`;
-    if (j.status==="error") return `<div class="card job" style="padding:10px;border-color:rgba(255,107,107,.45)"><div style="display:flex;align-items:center;gap:8px"><span style="color:#ff6b6b;font-size:13px">⚠</span><span style="font-size:12px;color:#ff6b6b;font-weight:500;flex:1">generation failed</span><button data-act="retry" data-id="${j.id}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">Retry</button></div><div style="font-size:11px;color:var(--sub);line-height:1.4;margin-top:6px;max-height:80px;overflow:auto;white-space:pre-wrap">${esc((j.error||"").slice(-240))}</div></div>`;
-    return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">
-      <img src="${j.resultUrl}" data-act="open" data-id="${j.id}" data-drag="job" draggable="true" title="Click to enlarge · drag onto canvas to tweak">
-      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">
-        <span style="color:var(--accent)">✓ saved</span>
-        <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.fileName||"")}</span>
-        <span>${esc(j.model)} · ${Math.round(j.elapsed||0)}s</span>
-        <button data-act="tweak" data-id="${j.id}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">✎ Tweak</button>
-      </div></div></div>`;
+  async function loadHistory(){
+    try{ const d=await (await fetch("/history")).json(); S.historyItems=d.items||[]; }catch(e){ S.historyItems=[]; }
+    renderTray();
   }
+  // Items for the Generated panel: session jobs, or (scope=all) in-flight jobs + the whole on-disk
+  // history. Disk already holds completed session outputs, so drop done jobs to dedup.
+  function trayItems(){
+    const jobs=S.jobs.slice().sort((a,b)=>b.createdAt-a.createdAt);
+    if(S.trayScope==="session")
+      return jobs.map(j=>({status:j.status,id:j.id,url:j.resultUrl,fileName:j.fileName,model:j.model,elapsed:j.elapsed,error:j.error,session:true}));
+    const live=jobs.filter(j=>j.status!=="done").map(j=>({status:j.status,id:j.id,model:j.model,elapsed:j.elapsed,error:j.error,session:true}));
+    const hist=(S.historyItems||[]).map(h=>({status:"done",url:h.url,fileName:h.name,session:false}));
+    return live.concat(hist);
+  }
+  function statusCard(i){
+    if(i.status==="queued") return `<div class="card job" style="padding:10px"><div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px dashed var(--btnb)"></span><span style="font-size:12px;color:var(--sub)">${esc(i.model||"")} · queued…</span></div></div>`;
+    if(i.status==="running") return `<div class="card job" style="padding:10px"><div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--btnb);border-top-color:var(--accent);animation:spin 1s linear infinite"></span><span style="font-size:12px;color:var(--sub)">${esc(i.model||"")} · generating · <span data-elapsed="${i.id}">${Math.round(i.elapsed||0)}s</span></span></div></div>`;
+    return `<div class="card job" style="padding:10px;border-color:rgba(255,107,107,.45)"><div style="display:flex;align-items:center;gap:8px"><span style="color:#ff6b6b;font-size:13px">⚠</span><span style="font-size:12px;color:#ff6b6b;font-weight:500;flex:1">generation failed</span><button data-act="retry" data-id="${i.id}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">Retry</button></div><div style="font-size:11px;color:var(--sub);line-height:1.4;margin-top:6px;max-height:80px;overflow:auto;white-space:pre-wrap">${esc((i.error||"").slice(-240))}</div></div>`;
+  }
+  function thumb(i){ return `<img src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="Click to enlarge · drag onto canvas">`; }
+  function doneListCard(i){
+    const meta = i.session
+      ? `<span style="color:var(--accent)">✓ saved</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span>${esc(i.model||"")} · ${Math.round(i.elapsed||0)}s</span>`
+      : `<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span>`;
+    return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${meta}<button data-act="tweak" data-url="${esc(i.url)}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">✎ Tweak</button></div></div></div>`;
+  }
+  function doneGridCard(i){ return `<div class="card job" style="padding:6px">${thumb(i)}</div>`; }
   function renderTray(){
     const col = $("traycol");
     if (S.trayCollapsed){
       col.innerHTML = `<button class="card" data-act="toggleTray" title="Show generated images" style="width:44px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;color:var(--sub);cursor:pointer;border:1px solid var(--border)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg><span style="writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button>`;
       return;
     }
-    const list = S.jobs.slice().sort((a,b)=>b.createdAt-a.createdAt);
-    const body = list.length
-      ? list.map(jobCard).join("")
-      : `<div style="flex:1;border:1px dashed var(--btnb);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:24px;font-size:13px;color:var(--faint);text-align:center;line-height:1.6">Draw, then hit ⚡ Generate.<br>Results appear here and save automatically.</div>`;
+    const items=trayItems();
+    const statusHtml=items.filter(i=>i.status!=="done").map(statusCard).join("");
+    const done=items.filter(i=>i.status==="done");
+    let doneHtml="";
+    if(done.length){
+      doneHtml = S.trayView==="grid"
+        ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start">${done.map(doneGridCard).join("")}</div>`
+        : `<div style="display:flex;flex-direction:column;gap:10px">${done.map(doneListCard).join("")}</div>`;
+    }
+    const empty = !statusHtml && !done.length;
+    const emptyMsg = S.trayScope==="all"
+      ? "No generations yet.<br>Results save to ~/.genimg/generations/."
+      : "Draw, then hit ⚡ Generate.<br>Results appear here and save automatically.";
+    const body = empty
+      ? `<div style="flex:1;border:1px dashed var(--btnb);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:24px;font-size:13px;color:var(--faint);text-align:center;line-height:1.6">${emptyMsg}</div>`
+      : statusHtml + doneHtml;
+    const seg=(label,val)=>`<button data-act="trayScope" data-scope="${val}" style="background:${S.trayScope===val?'var(--btnb)':'transparent'};border:none;color:var(--text);padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer">${label}</button>`;
+    const vbtn=(val,svg,title)=>`<button data-act="trayView" data-view="${val}" title="${title}" style="background:${S.trayView===val?'var(--btnb)':'transparent'};border:none;color:var(--text);width:26px;height:24px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">${svg}</button>`;
+    const listIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+    const gridIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
     col.innerHTML = `
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-size:13px;font-weight:600">Generated</span>
-        <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">saved to ~/.genimg/generations/</span>
+        <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
+        <span style="flex:1"></span>
+        <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
         <button class="icon" data-act="toggleTray" title="Collapse" style="width:22px;height:22px;color:var(--sub)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
       </div>
       <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0">${body}</div>`;
@@ -596,8 +641,7 @@ const BOOT = /*__BOOT__*/;
       const rows=[["V","move / select"],["P","pen"],["E","eraser"],["D","trace eraser — delete a stroke"],["[ ]","brush size"],["⌘Z","undo"],["delete","remove selected image"],["scroll","pan"],["⌘/ctrl-scroll","zoom at cursor"],["0","reset zoom"],["F","fit content"],["?","this sheet"]];
       parts.push(`<div data-act="closeShortcuts" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:950;display:flex;align-items:center;justify-content:center"><div class="card" style="padding:20px 24px;min-width:340px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:14px;font-weight:600;flex:1">Keyboard shortcuts</span><span style="font-size:11px;color:var(--faint)">? toggle · esc close</span></div><div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px">${rows.map(r=>`<span style="background:var(--btn);border:1px solid var(--btnb);border-radius:5px;padding:2px 8px;font-family:ui-monospace,Menlo,monospace;text-align:center">${esc(r[0])}</span><span style="color:var(--sub);align-self:center">${esc(r[1])}</span>`).join("")}</div></div></div>`);
     }
-    const lb = S.jobs.find(j=>j.id===S.lightbox && j.status==="done");
-    if (lb) parts.push(`<div data-act="closeLightbox" style="position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:900;display:flex;align-items:center;justify-content:center;cursor:zoom-out"><div style="width:82vw;height:82vh;border-radius:12px;background:#fff url('${lb.resultUrl}') center/contain no-repeat;box-shadow:0 24px 64px rgba(0,0,0,.6)"></div></div>`);
+    if (S.lightbox) parts.push(`<div data-act="closeLightbox" style="position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:900;display:flex;align-items:center;justify-content:center;cursor:zoom-out"><div style="width:82vw;height:82vh;border-radius:12px;background:#fff url('${S.lightbox}') center/contain no-repeat;box-shadow:0 24px 64px rgba(0,0,0,.6)"></div></div>`);
     $("overlays").innerHTML = parts.join("");
   }
   function toast(m){ S.toast=m; renderOverlays(); clearTimeout(toast._t); toast._t=setTimeout(()=>{S.toast="";renderOverlays();},2800); }
@@ -775,7 +819,7 @@ const BOOT = /*__BOOT__*/;
         else if(s.status==="unknown"){ j.status="error"; j.error="job lost"; dirty=true; }
       }catch(e){}
     }));
-    if(dirty)renderTray();
+    if(dirty){ if(S.trayScope==="all")loadHistory(); else renderTray(); }
     else for(const j of live){const el=document.querySelector('[data-elapsed="'+j.id+'"]'); if(el)el.textContent=Math.round(j.elapsed||0)+"s";}
   },1000);
 
@@ -800,12 +844,14 @@ const BOOT = /*__BOOT__*/;
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
     else if(a==="toggleSrc"){S.srcCollapsed=!S.srcCollapsed;renderSrc();}
     else if(a==="srcLoad"){loadSource(parseInt(t.dataset.idx,10));}
-    else if(a==="open"){S.lightbox=t.dataset.id;renderOverlays();}
-    else if(a==="tweak"){const j=S.jobs.find(x=>x.id===t.dataset.id); if(j&&j.resultUrl)addImage(j.resultUrl);}
+    else if(a==="trayScope"){S.trayScope=t.dataset.scope; if(S.trayScope==="all")loadHistory(); else renderTray();}
+    else if(a==="trayView"){S.trayView=t.dataset.view; renderTray();}
+    else if(a==="open"){S.lightbox=t.dataset.url;renderOverlays();}
+    else if(a==="tweak"){addImage(t.dataset.url);}
     else if(a==="retry"){retry(t.dataset.id);}
   });
   document.addEventListener("change",(e)=>{ if(e.target.dataset&&e.target.dataset.act==="custom"){S.customColor=e.target.value;S.color=e.target.value;S.tool="pen";renderToolbar();} });
-  document.addEventListener("dragstart",(e)=>{ const t=e.target.closest("[data-drag]"); if(!t)return; const url=t.dataset.drag==="job"?(S.jobs.find(j=>j.id===t.dataset.id)||{}).resultUrl:t.getAttribute("src"); if(url){e.dataTransfer.setData("text/plain",url);e.dataTransfer.effectAllowed="copy";} });
+  document.addEventListener("dragstart",(e)=>{ const t=e.target.closest("[data-drag]"); if(!t)return; const url=t.getAttribute("src")||t.dataset.url; if(url){e.dataTransfer.setData("text/plain",url);e.dataTransfer.effectAllowed="copy";} });
   document.addEventListener("pointerdown",(e)=>{
     const t=e.target.closest&&e.target.closest('[data-act="split"]'); if(!t)return;
     e.preventDefault(); const grid=$("studiogrid"), rect=grid.getBoundingClientRect();

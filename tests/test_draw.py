@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -180,6 +181,41 @@ class AvailableModelsTests(unittest.TestCase):
   def test_everything_filtered_falls_back_to_all(self) -> None:
     cache = {"probes": {m["alias"]: {"status": "auth"} for m in draw.STUDIO_MODELS}}
     self.assertEqual(draw.available_models(cache), list(draw.STUDIO_MODELS))
+
+
+class HistoryItemsTests(unittest.TestCase):
+  def test_lists_images_newest_first_capped_and_url(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    with patch.object(metadata, "GENIMG_HOME", tmp), patch.object(metadata, "GEN_DIR", tmp / "generations"):
+      studio = draw.Studio([], "gdm:nb2")
+      for name, mt in [("old.png", 1000), ("mid.png", 2000), ("new.png", 3000)]:
+        p = studio.gen_dir / name
+        p.write_bytes(b"x")
+        os.utime(p, (mt, mt))
+      (studio.gen_dir / "notes.txt").write_text("x")  # non-image → excluded
+      items = studio.history_items(limit=2)
+    self.assertEqual([i["name"] for i in items], ["new.png", "mid.png"])
+    self.assertEqual(items[0], {"name": "new.png", "url": "/gen/new.png"})
+
+
+class BootDataModelFilterTests(unittest.TestCase):
+  def _models(self, fresh_cache) -> list[str]:
+    tmp = Path(tempfile.mkdtemp())
+    with (
+      patch.object(metadata, "GENIMG_HOME", tmp),
+      patch.object(metadata, "GEN_DIR", tmp / "generations"),
+      patch.object(draw.discovery, "load_fresh_cache", return_value=fresh_cache),
+    ):
+      return [m["alias"] for m in draw.Studio([], "gdm:nb2").boot_data()["models"]]
+
+  def test_stale_or_absent_cache_shows_all(self) -> None:
+    # load_fresh_cache() returns None when stale/absent → no filtering.
+    self.assertEqual(len(self._models(None)), len(draw.STUDIO_MODELS))
+
+  def test_fresh_cache_filters_unreachable(self) -> None:
+    aliases = self._models({"probes": {"oai:gpt-image-1.5": {"status": "missing"}}})
+    self.assertNotIn("oai:gpt-image-1.5", aliases)
+    self.assertIn("gdm:nb2", aliases)
 
 
 class DrawCommandModelTests(unittest.TestCase):
