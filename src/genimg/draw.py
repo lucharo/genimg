@@ -627,7 +627,9 @@ const BOOT = /*__BOOT__*/;
     return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${i.session?'<span style="color:var(--accent)">✓ saved</span>':''}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span style="white-space:nowrap">${rightMeta(i)}</span>${tweakBtn(i,false)}</div></div></div>`;
   }
   function doneGridCard(i){
-    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:4px">${thumb(i,true)}<div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(i.fileName||'')}">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${esc(i.fileName||"")}</div><div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rightMeta(i)}</span>${tweakBtn(i,true)}</div></div>`;
+    // Single-line footer — the file names are opaque ids, so we skip them in grid (still on
+    // hover via the thumbnail title, and shown in list view). Just model + date/time + Tweak.
+    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:5px">${thumb(i,true)}<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.session?'<span style="color:var(--accent)">✓ </span>':''}${rightMeta(i)||esc(i.fileName||"")}</span>${tweakBtn(i,true)}</div></div>`;
   }
   function renderTray(){
     const col = $("traycol");
