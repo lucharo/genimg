@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import secrets
 import socketserver
 import subprocess
 import sys
@@ -131,7 +132,6 @@ class Studio:
     self.gen_dir.mkdir(parents=True, exist_ok=True)
     self.jobs: dict[str, _Job] = {}
     self.lock = threading.Lock()
-    self._counter = 0
 
   def boot_data(self) -> dict:
     return {
@@ -145,9 +145,7 @@ class Studio:
   def start_job(self, *, image_b64: str, prompt: str, model: str,
                 quality: str | None, resolution: str | None, w: int, h: int) -> str:
     png = base64.b64decode(image_b64.split(",", 1)[-1])
-    with self.lock:
-      self._counter += 1
-      jid = f"draw{int(time.time())}{self._counter}"
+    jid = "draw" + secrets.token_hex(6)  # collision-resistant across processes/restarts
     draft = self.workdir / f"{jid}_in.png"
     draft.write_bytes(png)
     out = self.gen_dir / f"draw_{jid}.png"
@@ -478,7 +476,8 @@ const BOOT = /*__BOOT__*/;
     const ta = $("promptta");
     if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; });
   }
-  function renderCost(){ $("costtext").textContent = "· " + costEstimate(); }
+  function renderCost(){ const el=$("costtext"); if(el) el.textContent = "· " + costEstimate(); }
+  function nearestAspect(w,h){const A={"1:1":1,"4:3":4/3,"3:4":3/4,"16:9":16/9,"9:16":9/16};const r=h?w/h:1;let best="1:1",bd=1e9;for(const a in A){const d=Math.abs(A[a]-r);if(d<bd){bd=d;best=a;}}return best;}
   function renderGrid(){
     const g = $("studiogrid");
     if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 44px";
@@ -549,7 +548,12 @@ const BOOT = /*__BOOT__*/;
   // ---------- cost (mirrors genimg cost.py) ----------
   function costEstimate(){
     let usd;
-    if (isOai()){ usd = {low:.006,medium:.053,high:.211}[S.quality] || .053; }
+    if (isOai()){
+      usd = {low:.006,medium:.053,high:.211}[S.quality] || .053;
+      // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → ~2.5x (mirrors cost.py)
+      const b=contentBounds();
+      if(b){const a=nearestAspect(b[2]-b[0],b[3]-b[1]); if(a==="16:9"||a==="9:16") usd*=2.5;}
+    }
     else { const t = S.model==="gdm:nbp" ? {"1K":.134,"2K":.134,"4K":.24} : {"1K":.067,"2K":.101,"4K":.151}; usd = t[S.resolution] || t["1K"]; }
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
@@ -633,6 +637,7 @@ const BOOT = /*__BOOT__*/;
     ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(off,0,0);
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
+    renderCost();  // aspect can change the OpenAI estimate as content changes
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
 
