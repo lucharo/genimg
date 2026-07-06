@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import tempfile
 import unittest
@@ -195,7 +196,23 @@ class HistoryItemsTests(unittest.TestCase):
       (studio.gen_dir / "notes.txt").write_text("x")  # non-image → excluded
       items = studio.history_items(limit=2)
     self.assertEqual([i["name"] for i in items], ["new.png", "mid.png"])
-    self.assertEqual(items[0], {"name": "new.png", "url": "/gen/new.png"})
+    self.assertEqual(items[0], {"name": "new.png", "url": "/gen/new.png", "model": None, "time": None})
+
+  def test_enriches_from_metadata_sidecar(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    with (
+      patch.object(metadata, "GENIMG_HOME", tmp),
+      patch.object(metadata, "GEN_DIR", tmp / "generations"),
+      patch.object(metadata, "META_DIR", tmp / "metadata"),
+    ):
+      studio = draw.Studio([], "gdm:nb2")
+      img = studio.gen_dir / "g.png"
+      img.write_bytes(b"x")
+      metadata.META_DIR.mkdir(parents=True, exist_ok=True)
+      (metadata.META_DIR / "id.json").write_text(
+        json.dumps({"alias": "gdm:nb2", "time": "2026-07-06T12:00:00", "outputs": [{"path": str(img)}]}))
+      items = studio.history_items()
+    self.assertEqual(items[0], {"name": "g.png", "url": "/gen/g.png", "model": "gdm:nb2", "time": "2026-07-06T12:00:00"})
 
 
 class BootDataModelFilterTests(unittest.TestCase):

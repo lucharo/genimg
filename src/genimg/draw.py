@@ -191,6 +191,7 @@ class Studio:
                   "provider": m["provider"]} for m in visible],
       "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
+      "genDir": str(self.gen_dir).replace(str(Path.home()), "~"),
       # Real cost tables from cost.py so the client estimate is per-model accurate + stays in sync.
       "costs": {
         "openaiBase": cost._OPENAI_BASE_PER_IMAGE,
@@ -199,12 +200,36 @@ class Studio:
       },
     }
 
+  def _meta_by_output(self) -> dict[str, dict]:
+    """Map each generated file name → its {model, time} from the metadata sidecars, so history
+    thumbnails can show what produced them. (Generation *duration* isn't recorded on disk — that's
+    only known for this session's own jobs.)"""
+    out: dict[str, dict] = {}
+    meta_dir = Path(metadata.META_DIR)
+    if not meta_dir.exists():
+      return out
+    for f in meta_dir.glob("*.json"):
+      try:
+        data = json.loads(f.read_text())
+      except (json.JSONDecodeError, OSError):
+        continue
+      info = {"model": data.get("alias") or data.get("model_id"), "time": data.get("time")}
+      for o in data.get("outputs", []):
+        name = Path(o["path"] if isinstance(o, dict) else o).name
+        out[name] = info
+    return out
+
   def history_items(self, limit: int = 80) -> list[dict]:
     """Recent images in ~/.genimg/generations/ (all past genimg output), newest first — the
-    'History' rail's import library. Served via the existing /gen/<name> route."""
+    'All' history view's import library. Served via the existing /gen/<name> route; each is
+    enriched with model + timestamp from its metadata sidecar when available."""
     files = [p for p in self.gen_dir.glob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return [{"name": p.name, "url": f"/gen/{p.name}"} for p in files[:limit]]
+    files = files[:limit]
+    meta = self._meta_by_output()
+    return [{"name": p.name, "url": f"/gen/{p.name}",
+             "model": meta.get(p.name, {}).get("model"),
+             "time": meta.get(p.name, {}).get("time")} for p in files]
 
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str, prompt: str, model: str,
@@ -582,7 +607,7 @@ const BOOT = /*__BOOT__*/;
     if(S.trayScope==="session")
       return jobs.map(j=>({status:j.status,id:j.id,url:j.resultUrl,fileName:j.fileName,model:j.model,elapsed:j.elapsed,error:j.error,session:true}));
     const live=jobs.filter(j=>j.status!=="done").map(j=>({status:j.status,id:j.id,model:j.model,elapsed:j.elapsed,error:j.error,session:true}));
-    const hist=(S.historyItems||[]).map(h=>({status:"done",url:h.url,fileName:h.name,session:false}));
+    const hist=(S.historyItems||[]).map(h=>({status:"done",url:h.url,fileName:h.name,model:h.model,time:h.time,session:false}));
     return live.concat(hist);
   }
   function statusCard(i){
@@ -590,14 +615,19 @@ const BOOT = /*__BOOT__*/;
     if(i.status==="running") return `<div class="card job" style="padding:10px"><div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--btnb);border-top-color:var(--accent);animation:spin 1s linear infinite"></span><span style="font-size:12px;color:var(--sub)">${esc(i.model||"")} · generating · <span data-elapsed="${i.id}">${Math.round(i.elapsed||0)}s</span></span></div></div>`;
     return `<div class="card job" style="padding:10px;border-color:rgba(255,107,107,.45)"><div style="display:flex;align-items:center;gap:8px"><span style="color:#ff6b6b;font-size:13px">⚠</span><span style="font-size:12px;color:#ff6b6b;font-weight:500;flex:1">generation failed</span><button data-act="retry" data-id="${i.id}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">Retry</button></div><div style="font-size:11px;color:var(--sub);line-height:1.4;margin-top:6px;max-height:80px;overflow:auto;white-space:pre-wrap">${esc((i.error||"").slice(-240))}</div></div>`;
   }
-  function thumb(i){ return `<img src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="Click to enlarge · drag onto canvas">`; }
-  function doneListCard(i){
-    const meta = i.session
-      ? `<span style="color:var(--accent)">✓ saved</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span>${esc(i.model||"")} · ${Math.round(i.elapsed||0)}s</span>`
-      : `<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span>`;
-    return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${meta}<button data-act="tweak" data-url="${esc(i.url)}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer">✎ Tweak</button></div></div></div>`;
+  function rightMeta(i){
+    if(i.session) return esc(i.model||"")+" · "+Math.round(i.elapsed||0)+"s";
+    const parts=[]; if(i.model)parts.push(esc(i.model)); if(i.time)parts.push((""+i.time).slice(0,10));
+    return parts.join(" · ");
   }
-  function doneGridCard(i){ return `<div class="card job" style="padding:6px">${thumb(i)}</div>`; }
+  function thumb(i){ return `<img src="${i.url}" data-act="open" data-url="${esc(i.url)}" data-drag="img" draggable="true" title="${esc(i.fileName||'')} — click to enlarge · drag onto canvas">`; }
+  function tweakBtn(i,compact){ return `<button data-act="tweak" data-url="${esc(i.url)}" title="Put on canvas to annotate" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);${compact?'width:22px;height:20px;padding:0':'padding:4px 12px'};font-size:11px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✎${compact?'':' Tweak'}</button>`; }
+  function doneListCard(i){
+    return `<div class="card job" style="padding:10px"><div style="display:flex;flex-direction:column;gap:8px">${thumb(i)}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)">${i.session?'<span style="color:var(--accent)">✓ saved</span>':''}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.fileName||"")}</span><span style="white-space:nowrap">${rightMeta(i)}</span>${tweakBtn(i,false)}</div></div></div>`;
+  }
+  function doneGridCard(i){
+    return `<div class="card job" style="padding:6px;display:flex;flex-direction:column;gap:5px">${thumb(i)}<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--sub)"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rightMeta(i)||esc(i.fileName||"")}</span>${tweakBtn(i,true)}</div></div>`;
+  }
   function renderTray(){
     const col = $("traycol");
     if (S.trayCollapsed){
@@ -627,8 +657,8 @@ const BOOT = /*__BOOT__*/;
     col.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-size:13px;font-weight:600">Generated</span>
+        <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(BOOT.genDir||'')}">${esc(BOOT.genDir||"~/.genimg/generations/")}</span>
         <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
-        <span style="flex:1"></span>
         <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
         <button class="icon" data-act="toggleTray" title="Collapse" style="width:22px;height:22px;color:var(--sub)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
       </div>
