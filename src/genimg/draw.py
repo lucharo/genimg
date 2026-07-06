@@ -26,16 +26,34 @@ from http import server as _http_server
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from . import metadata
+from . import cost, metadata, registry
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-# Models offered in the studio dropdown (label shown → alias sent to genimg).
-STUDIO_MODELS = [
-  ("gdm:nb2", "gdm:nb2 · gemini-3.1-flash-image"),
-  ("gdm:nbp", "gdm:nbp · gemini-3-pro-image"),
-  ("oai:gpt-image-2", "oai:gi2 · gpt-image-2"),
-]
+
+
+def _studio_models() -> list[dict]:
+  """Every image-editable model in the registry (excludes text-to-image Imagen, which can't take
+  -i), as dropdown entries. Built from the registry so the studio never drifts out of sync with
+  what genimg supports. Ordered google→openai, best quality first."""
+  out: list[dict] = []
+  for alias, spec in registry.all_canonical().items():
+    if spec.model_id.startswith("imagen-"):
+      continue
+    out.append({
+      "alias": alias,
+      "label": f"{alias} · {spec.model_id.replace('-preview', '')}",
+      "modelId": spec.model_id,
+      "provider": spec.provider,
+      "rank": spec.quality_rank,
+    })
+  order = {"google": 0, "openai": 1}
+  out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
+  return out
+
+
+# Models offered in the studio dropdown (alias sent to genimg + display label + provider/model_id).
+STUDIO_MODELS = _studio_models()
 DEFAULT_PROMPT = (
   "- handwritten marks = edit instructions, don't copy them literally\n"
   "- keep un-annotated parts unchanged\n"
@@ -134,11 +152,19 @@ class Studio:
     self.lock = threading.Lock()
 
   def boot_data(self) -> dict:
+    drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
     return {
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
-      "models": STUDIO_MODELS,
+      "models": [{"alias": m["alias"], "label": m["label"], "modelId": m["modelId"],
+                  "provider": m["provider"]} for m in STUDIO_MODELS],
       "defaultModel": self.default_model,
       "defaultPrompt": DEFAULT_PROMPT,
+      # Real cost tables from cost.py so the client estimate is per-model accurate + stays in sync.
+      "costs": {
+        "openaiBase": cost._OPENAI_BASE_PER_IMAGE,
+        "openaiResMult": drop_none(cost._OPENAI_RESOLUTION_MULT),
+        "googlePerImage": {mid: drop_none(tbl) for mid, tbl in cost._GOOGLE_PER_IMAGE.items()},
+      },
     }
 
   # ---- job lifecycle ----
@@ -352,6 +378,7 @@ PAGE = r"""<!doctype html>
 const BOOT = /*__BOOT__*/;
 (function(){
   "use strict";
+  const MM={}; BOOT.models.forEach(m=>{MM[m.alias]={modelId:m.modelId,provider:m.provider};});
   const BRUSH_PX = [2,4,6,10,14], BRUSH_DOT=[6,9,12,15,18];
   const SWATCHES = ["#FF3B30","#2979FF","#FF9100","#111111"];
   const S = {
@@ -370,7 +397,7 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- static shell ----------
   function shell(){
-    const modelOpts = BOOT.models.map(m=>`<option value="${esc(m[0])}"${m[0]===S.model?" selected":""}>${esc(m[1])}</option>`).join("");
+    const modelOpts = BOOT.models.map(m=>`<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}>${esc(m.label)}</option>`).join("");
     $("app").innerHTML = `
       <div style="background:var(--bg);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;gap:16px;align-items:center">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
@@ -426,7 +453,7 @@ const BOOT = /*__BOOT__*/;
     sizeCanvas();
   }
 
-  const isOai = ()=>S.model.indexOf("oai:")===0;
+  const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
   function renderTopbar(){
@@ -548,14 +575,18 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- cost (mirrors genimg cost.py) ----------
   function costEstimate(){
+    const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
     let usd;
     if (isOai()){
-      usd = {low:.006,medium:.053,high:.211}[S.quality] || .053;
-      // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → ~2.5x (mirrors cost.py)
+      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
+      // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → mirror cost.py's mult
       const b=contentBounds();
-      if(b){const a=nearestAspect(b[2]-b[0],b[3]-b[1]); if(a==="16:9"||a==="9:16") usd*=2.5;}
+      if(b){const a=nearestAspect(b[2]-b[0],b[3]-b[1]); if(a==="16:9"||a==="9:16") usd*=((C.openaiResMult||{})["2K"]||2.5);}
+    } else {
+      const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id
+      const t=(C.googlePerImage||{})[key]||{};
+      usd=t[S.resolution]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
     }
-    else { const t = S.model==="gdm:nbp" ? {"1K":.134,"2K":.134,"4K":.24} : {"1K":.067,"2K":.101,"4K":.151}; usd = t[S.resolution] || t["1K"]; }
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
 

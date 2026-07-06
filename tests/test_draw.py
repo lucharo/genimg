@@ -143,6 +143,18 @@ class BootJsonTests(unittest.TestCase):
     self.assertNotIn("<", js)
 
 
+class StudioModelsTests(unittest.TestCase):
+  def test_excludes_imagen_and_includes_editable_models(self) -> None:
+    models = draw._studio_models()
+    aliases = [m["alias"] for m in models]
+    # Imagen is text-to-image only → must not appear (the studio always sends -i).
+    self.assertNotIn("gdm:imagen4", aliases)
+    self.assertTrue(all(not m["modelId"].startswith("imagen-") for m in models))
+    # The image-editable models (incl. the ones previously missing from the hardcoded 3) are present.
+    for a in ("gdm:nb2", "gdm:nbp", "gdm:nb2-lite", "oai:gpt-image-2", "oai:gpt-image-1.5"):
+      self.assertIn(a, aliases)
+
+
 class DrawCommandModelTests(unittest.TestCase):
   """The studio always sends -i, so the initial model must be an image-capable studio model."""
 
