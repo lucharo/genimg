@@ -574,7 +574,23 @@ def draw_cmd(
   sources = draw_module.discover_images(paths or [])
   if paths and not sources:
     console.print("[yellow]no images found in the given path(s); starting with an empty canvas.[/yellow]")
-  default_model = model or config.get_default_model() or "gdm:nb2"
+
+  # The studio edits images (always sends -i), so the initial model must be one of the
+  # image-capable dropdown models. Canonicalize aliases; fall back to gdm:nb2 otherwise
+  # (e.g. an Imagen default, which is text-to-image only and would fail every generation).
+  studio_aliases = [m[0] for m in draw_module.STUDIO_MODELS]
+  requested = model or config.get_default_model() or "gdm:nb2"
+  try:
+    canonical = registry.resolve(requested)[0]
+  except ValueError:
+    canonical = requested
+  if canonical in studio_aliases:
+    default_model = canonical
+  else:
+    if model:
+      console.print(f"[yellow]{requested!r} isn't a studio model (the studio edits images); starting with gdm:nb2.[/yellow]")
+    default_model = "gdm:nb2"
+
   try:
     draw_module.serve(sources, port=port, model=default_model, open_browser=not no_open)
   except RuntimeError as e:

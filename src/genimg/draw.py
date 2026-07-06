@@ -15,7 +15,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-import shutil
 import socketserver
 import subprocess
 import sys
@@ -103,10 +102,8 @@ def pick_size(provider: str, w: int, h: int, param: str | None) -> tuple[str, st
 
 
 def _genimg_cmd() -> list[str]:
-  """How to invoke genimg as a subprocess: the installed entry point, else `python -m genimg`."""
-  exe = shutil.which("genimg")
-  if exe:
-    return [exe]
+  """Invoke genimg via the SAME interpreter running the studio, so the spawned subprocess is
+  always this exact install — never a different/stale `genimg` earlier on PATH."""
   return [sys.executable, "-m", "genimg"]
 
 
@@ -158,11 +155,15 @@ class Studio:
 
     provider = _provider_of(model)
     aspect, res = pick_size(provider, w, h, resolution)
-    cmd = _genimg_cmd() + [prompt, "-i", str(draft), "-m", model, "-a", aspect, "-o", str(out)]
+    # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
+    # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
+    # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
+    cmd = _genimg_cmd() + ["_run", "-m", model, "-i", str(draft), "-a", aspect, "-o", str(out)]
     if res:
       cmd += ["-r", res]
     if provider == "openai" and quality:
       cmd += ["-q", quality]
+    cmd += ["--", prompt]
 
     with open(logp, "wb") as logf:  # child dups the fd; parent closes its copy
       proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT)
@@ -202,8 +203,14 @@ def _safe_name(name: str) -> str:
   return os.path.basename(unquote(name))
 
 
+def _boot_json(studio: Studio) -> str:
+  """Serialize boot data for inline injection, escaping '<' so a source filename containing
+  '<' (or '</script>') can't break out of the inline <script> element."""
+  return json.dumps(studio.boot_data()).replace("<", "\\u003c")
+
+
 def _make_handler(studio: Studio):
-  page = PAGE.replace("/*__BOOT__*/", json.dumps(studio.boot_data()))
+  page = PAGE.replace("/*__BOOT__*/", _boot_json(studio))
   page_bytes = page.encode("utf-8")
 
   class Handler(_http_server.BaseHTTPRequestHandler):

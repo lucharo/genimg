@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from genimg import draw, metadata
+from typer.testing import CliRunner
+
+from genimg import cli, draw, metadata
 
 _IMG_DATAURL = "data:image/png;base64," + base64.b64encode(b"not-a-real-png").decode()
 
@@ -74,6 +76,14 @@ class StartJobArgvTests(unittest.TestCase):
     self.assertIn("-q", argv)
     self.assertEqual(argv[argv.index("-q") + 1], "high")
 
+  def test_leading_dash_prompt_passed_after_double_dash(self) -> None:
+    # The default prompt starts with "-"; it must be routed through `_run … -- <prompt>` so
+    # click parses it as a positional, not an unknown option.
+    argv = self._argv(prompt="- edit marks", model="gdm:nb2", quality="medium", resolution="1K", w=1000, h=1000)
+    self.assertEqual(argv[1], "_run")
+    self.assertEqual(argv[-1], "- edit marks")
+    self.assertEqual(argv.index("--"), len(argv) - 2)  # prompt is the sole token after --
+
 
 class StatusTests(unittest.TestCase):
   def setUp(self) -> None:
@@ -120,6 +130,43 @@ class StatusTests(unittest.TestCase):
 class SafeNameTests(unittest.TestCase):
   def test_path_traversal_is_stripped_to_basename(self) -> None:
     self.assertEqual(draw._safe_name("../../etc/passwd"), "passwd")
+
+
+class BootJsonTests(unittest.TestCase):
+  def test_angle_bracket_in_source_name_is_escaped(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    f = tmp / "a<b.png"
+    f.write_bytes(b"x")
+    with patch.object(metadata, "GENIMG_HOME", tmp), patch.object(metadata, "GEN_DIR", tmp / "gen"):
+      js = draw._boot_json(draw.Studio([f], "gdm:nb2"))
+    self.assertIn("a\\u003cb.png", js)
+    self.assertNotIn("<", js)
+
+
+class DrawCommandModelTests(unittest.TestCase):
+  """The studio always sends -i, so the initial model must be an image-capable studio model."""
+
+  def _serve_model(self, args: list[str], default_cfg: str | None) -> str:
+    captured: dict[str, str] = {}
+
+    def fake_serve(sources, *, port, model, open_browser):
+      captured["model"] = model
+
+    with (
+      patch.object(draw, "serve", side_effect=fake_serve),
+      patch.object(cli.config, "get_default_model", return_value=default_cfg),
+    ):
+      CliRunner().invoke(cli._app, ["draw", "--no-open", *args])
+    return captured["model"]
+
+  def test_imagen_default_falls_back_to_nb2(self) -> None:
+    self.assertEqual(self._serve_model(["-m", "gdm:imagen4"], None), "gdm:nb2")
+
+  def test_alias_is_canonicalized_to_studio_model(self) -> None:
+    self.assertEqual(self._serve_model(["-m", "oai:gi2"], None), "oai:gpt-image-2")
+
+  def test_no_model_uses_config_default_when_supported(self) -> None:
+    self.assertEqual(self._serve_model([], "gdm:nbp"), "gdm:nbp")
 
 
 if __name__ == "__main__":
