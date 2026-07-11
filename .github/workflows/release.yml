@@ -57,6 +57,10 @@ jobs:
       - name: Checkout
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/checkout@v4
+        with:
+          # On scheduled/dispatch runs the release PR was merged inside THIS run,
+          # so the event SHA predates the version bump — build the tag instead.
+          ref: ${{ steps.release.outputs.tag_name }}
 
       - name: Install uv
         if: ${{ steps.release.outputs.release_created }}
