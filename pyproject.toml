@@ -1,6 +1,6 @@
 [project]
 name = "genimg"
-version = "0.2.0"
+version = "0.1.0"
 description = "Multi-provider image generation CLI (Gemini + OpenAI)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,18 @@ dependencies = [
 
 [project.scripts]
 genimg = "genimg.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 88
+indent-width = 2
+
+[tool.ruff.lint]
+# Lint only, no style enforcement: pyflakes (F, real bugs) + import sorting (I).
+# Deliberately no E501/line-length — the code is intentionally not wrapped to 88.
+select = ["F", "I"]
 
 [build-system]
 requires = ["hatchling"]

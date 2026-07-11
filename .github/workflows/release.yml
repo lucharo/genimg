@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Fridays 09:00 UTC — auto-ship whatever release-please has queued.
+    - cron: "0 9 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      # On the scheduled/manual path there is no human merge to trigger the
+      # release, so merge the standing Release PR here — but only if its checks
+      # are green. Steps below then create the release and publish in the SAME
+      # run, so we never depend on GITHUB_TOKEN triggering a downstream workflow.
+      - name: Merge pending release PR
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                 --label "autorelease: pending" --state open \
+                 --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            echo "No pending release PR — nothing to ship."
+            exit 0
+          fi
+          echo "Found release PR #$pr; checking status…"
+          if gh pr checks "$pr" --repo "$GITHUB_REPOSITORY"; then
+            echo "Checks green — merging."
+            gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --squash
+          else
+            echo "Release PR checks not green yet — leaving it for next run."
+            exit 0
+          fi
+
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Everything below only runs when a release was actually cut.
+      - name: Checkout
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@v4
+        with:
+          # On scheduled/dispatch runs the release PR was merged inside THIS run,
+          # so the event SHA predates the version bump — build the tag instead.
+          ref: ${{ steps.release.outputs.tag_name }}
+
+      - name: Install uv
+        if: ${{ steps.release.outputs.release_created }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Build distributions
+        if: ${{ steps.release.outputs.release_created }}
+        run: uv build
+
+      - name: Publish to PyPI (Trusted Publishing / OIDC)
+        if: ${{ steps.release.outputs.release_created }}
+        run: uv publish --trusted-publishing always
