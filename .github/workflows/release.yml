@@ -3,9 +3,10 @@ name: Release
 on:
   push:
     branches: [main]
-  schedule:
-    # Fridays 09:00 UTC — auto-ship whatever release-please has queued.
-    - cron: "0 9 * * 5"
+  # Friday auto-ship is paused until the PyPI pending publisher exists and the
+  # first release (0.1.0) has been merged by hand. Re-enable by restoring:
+  #   schedule:
+  #     - cron: "0 9 * * 5"   # Fridays 09:00 UTC
   workflow_dispatch:
 
 permissions:
