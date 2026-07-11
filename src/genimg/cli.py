@@ -212,7 +212,7 @@ def _run(
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
   if dry_run:
-    console.print(f"[dim]dry-run: no API call made.[/dim]")
+    console.print("[dim]dry-run: no API call made.[/dim]")
     return
 
   t0 = time.time()
