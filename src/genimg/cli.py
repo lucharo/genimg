@@ -12,7 +12,7 @@ from rich.markup import escape as _rich_escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
-from . import __version__, config, cost, discovery, history, metadata, registry
+from . import __version__, config, cost, discovery, diversify, history, metadata, registry
 from . import grid as grid_module
 from . import setup as setup_module
 from .auth import google as auth_google
@@ -118,8 +118,23 @@ def _run(
     help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to user-set default → built-in.")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
     help="Input image to edit (image-to-image).")] = None,
+  diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
+    help="Diversify the -n generations — usually what you want with -n; plain -n converges on "
+         "near-duplicates for simple subjects. Parallel mode: #1 keeps the base prompt, the rest each get "
+         "a distinct style/composition delta from a curated list (recorded in metadata + grid). "
+         "Batch mode (Gemini only): the model is asked to differentiate its n takes itself. Requires -n >= 2.")] = False,
+  deltas_arg: Annotated[str | None, typer.Option("--deltas", rich_help_panel=_PANEL_CORE,
+    help='Your own diversity deltas (implies -d): comma-separated ("isometric, blueprint, macro photo") '
+         'or @file with one delta per line. Applied in order to generations #2..#n (#1 keeps the base prompt). '
+         'Prefer this over the built-in pool when the subject is not an illustration/logo — '
+         'pass deltas that fit diagrams, photos, etc. Parallel mode only.')] = None,
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
-    help="Number of variants 1-10 (n>1 runs in parallel).")] = 1,
+    help="Number of variants 1-10 (n>1 runs in parallel). Pair with -d for deliberate variety.")] = 1,
+  mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
+    help="parallel = n separate API requests (default for all but Imagen); batch = ONE n-image "
+         "request, Google only: Gemini multi-image response (pair with -d for a model-curated set; "
+         "may return fewer than n) or Imagen number_of_images. Rejected on OpenAI — gpt-image n>1 "
+         "returns near-duplicate independent samples (verified live), i.e. wasted spend.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
@@ -141,6 +156,21 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  diverse = diverse or deltas_arg is not None
+  if diverse and n < 2:
+    _die("--diverse requires -n >= 2 (diversity across a single image is meaningless). Try -n 4 -d.")
+  if mode is not None and mode not in ("parallel", "batch"):
+    _die(f"--mode must be 'parallel' or 'batch', got {mode!r}")
+  custom_pool = None
+  if deltas_arg is not None:
+    if mode == "batch":
+      _die("--deltas is a parallel-mode mechanism (one delta per request); with --mode batch "
+           "the model diversifies its own takes. Drop --deltas or use --mode parallel.")
+    try:
+      custom_pool = diversify.parse_deltas_arg(deltas_arg)
+    except (ValueError, OSError) as e:
+      _die(f"--deltas: {e}" if not str(e).startswith("--deltas") else str(e))
+
   user_cfg = config.load()
   model_was_explicit = model is not None
   resolved = model or user_cfg.get("default_model")
@@ -169,7 +199,7 @@ def _run(
   _validate_provider_flags(
     spec.provider, quality=quality, region=region, project=project, auth=auth,
     resolution=resolution, aspect_ratio=aspect_ratio, refs=refs, input=input,
-    model_id=spec.model_id,
+    model_id=spec.model_id, mode=mode, diverse=diverse,
   )
 
   gen_id = metadata.make_id(prompt, spec.model_id)
@@ -177,8 +207,24 @@ def _run(
   planned_paths = _planned_output_paths(out_path, n)
   planned_grid = metadata.auto_grid_path(gen_id) if grid and n > 1 else None
 
+  # Diverse mechanics differ by mode: parallel gets per-request curated deltas;
+  # batch (Gemini) asks the model to differentiate its n takes in the one request.
+  batch_diverse = diverse and mode == "batch"
+  if diverse and not batch_diverse:
+    try:
+      deltas = diversify.pick_deltas(n, pool=custom_pool)
+    except ValueError as e:
+      _die(str(e))
+  else:
+    deltas = None
+  variants = [diversify.apply(prompt, d) for d in deltas] if deltas else None
+
   effective_q = (quality or "medium") if spec.provider == "openai" else None
   params = [f"n={n}"]
+  if mode:
+    params.append(f"mode={mode}")
+  if diverse:
+    params.append("diverse")
   if effective_q:
     params.append(f"q={effective_q}{'' if quality_was_explicit else ' (default)'}")
   if resolution:
@@ -206,6 +252,17 @@ def _run(
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
   _print_planned_paths(planned_paths)
+  if deltas:
+    for i, d in enumerate(deltas):
+      row_label = "deltas" if i == 0 else ""
+      console.print(f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(d) if d else '(base prompt)'}")
+  elif batch_diverse:
+    console.print("  [dim]diverse[/dim]  model-coordinated: the single batched request asks for deliberately different takes")
+  elif n >= 2 and mode != "batch":  # -d/--deltas guidance doesn't apply to batch submissions
+    console.print(
+      "  [dim]hint[/dim]     plain -n often converges on near-duplicates — add -d for curated variety, "
+      'or pass your own subject-appropriate deltas: --deltas "isometric, blueprint, macro photo" (or --deltas @file, one per line)'
+    )
   if planned_grid:
     console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
   if effective_q == "high":
@@ -221,7 +278,8 @@ def _run(
     prompt=prompt, output=out_path, model=resolved,
     refs=refs or [], input=input, n=n,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    region=region, project=project,
+    region=region, project=project, prompt_variants=variants,
+    mode=mode, diverse=diverse,
   )
   try:
     with Progress(
@@ -231,7 +289,7 @@ def _run(
       console=console,
       transient=True,
     ) as progress:
-      label = _progress_label(n, grid)
+      label = _progress_label(n, grid, mode)
       progress.add_task(label, total=None)
       result = run_generate(req, force_openai_auth=auth)
   except RuntimeError as e:
@@ -247,10 +305,17 @@ def _run(
   for err in result.errors:
     console.print(f"  [yellow]skipped[/yellow] {_rich_escape(err)}", soft_wrap=True)
 
+  # On partial success paths is compacted — realign per-generation deltas by the
+  # surviving original indices, or image #3 would inherit failed #2's delta.
+  output_deltas = deltas
+  if deltas is not None and result.indices is not None:
+    output_deltas = [deltas[i] for i in result.indices]
+
   meta = metadata.build(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+    prompt_deltas=output_deltas, mode=mode, diverse=diverse,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -263,7 +328,7 @@ def _run(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-      grid_path=written_grid,
+      grid_path=written_grid, prompt_deltas=output_deltas, mode=mode, diverse=diverse,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
@@ -835,17 +900,18 @@ def _print_planned_paths(paths: list[Path]) -> None:
     console.print(f"  [dim]{row_label:<7}[/dim]  {_short_path(path)}")
 
 
-def _progress_label(n: int, grid: bool) -> str:
+def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
   if n == 1:
     return "generating 1 image..."
+  how = "in one batched request" if mode == "batch" else "in parallel"
   if grid:
-    return f"generating {n} images for grid in parallel..."
-  return f"generating {n} images in parallel..."
+    return f"generating {n} images for grid {how}..."
+  return f"generating {n} images {how}..."
 
 
 def _validate_provider_flags(
   provider: str, *, quality, region, project, auth, resolution, aspect_ratio, refs, input,
-  model_id: str | None = None,
+  model_id: str | None = None, mode: str | None = None, diverse: bool = False,
 ) -> None:
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
@@ -855,6 +921,20 @@ def _validate_provider_flags(
   for p in ([input] if input else []) + refs:
     if not p.exists():
       _die(f"input not found: {p}")
+
+  if mode == "batch" and provider == "openai":
+    _die(
+      "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
+      "samples of one prompt (verified live). Use the default parallel mode — add -d or "
+      '--deltas "..." for variety — or switch to a Gemini model (-m gdm:nb2) for batch.'
+    )
+
+  if mode == "batch" and diverse and model_id and model_id.startswith("imagen-"):
+    _die(
+      "--diverse with --mode batch needs a model that sees all n takes in one request — "
+      "Gemini image models only (-m gdm:nb2 / gdm:nbp). Imagen draws independent samples "
+      "of one prompt. Use --mode parallel (the default) for per-request prompt deltas instead."
+    )
 
   if quality is not None:
     if quality not in _QUALITY_VALUES:

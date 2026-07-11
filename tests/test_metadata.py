@@ -31,6 +31,33 @@ class EmbedIntoImagesTest(unittest.TestCase):
       self.assertEqual(text["prompt"], "a cat")            # genimg key added
       self.assertEqual(text["genimg.provider"], "openai")
 
+  def test_diverse_outputs_embed_their_own_effective_prompt(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      base = Path(d) / "img_1.png"
+      varied = Path(d) / "img_2.png"
+      for p in (base, varied):
+        Image.new("RGB", (4, 4), "white").save(p)
+
+      metadata.embed_into_images({
+        "prompt": "a cat",
+        "model_id": "gpt-image-2",
+        "provider": "openai",
+        "outputs": [
+          {"path": str(base), "prompt_delta": None, "prompt_effective": "a cat"},
+          {"path": str(varied), "prompt_delta": "isometric 3D perspective",
+           "prompt_effective": "a cat — isometric 3D perspective"},
+        ],
+      })
+
+      base_text = getattr(Image.open(base), "text", {})
+      self.assertEqual(base_text["prompt"], "a cat")
+      self.assertNotIn("genimg.prompt_delta", base_text)
+
+      varied_text = getattr(Image.open(varied), "text", {})
+      self.assertEqual(varied_text["prompt"], "a cat — isometric 3D perspective")
+      self.assertEqual(varied_text["parameters"], "a cat — isometric 3D perspective")
+      self.assertEqual(varied_text["genimg.prompt_delta"], "isometric 3D perspective")
+
 
 if __name__ == "__main__":
   unittest.main()

@@ -29,6 +29,7 @@ class GenerationMetadataTests(unittest.TestCase):
         return GenerateResult(paths=paths, model_used="gpt-image-2")
 
       with (
+        patch.object(cli.config, "load", return_value={}),  # isolate from the dev's real saved defaults
         patch.object(metadata, "META_DIR", meta_dir),
         patch.object(metadata, "GRID_DIR", grid_dir),
         patch.object(metadata, "make_id", return_value="test-gen"),
