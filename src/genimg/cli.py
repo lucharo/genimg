@@ -12,7 +12,16 @@ from rich.markup import escape as _rich_escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
-from . import __version__, config, cost, discovery, diversify, history, metadata, registry
+from . import (
+  __version__,
+  config,
+  cost,
+  discovery,
+  diversify,
+  history,
+  metadata,
+  registry,
+)
 from . import grid as grid_module
 from . import setup as setup_module
 from .auth import google as auth_google
