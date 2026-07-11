@@ -65,6 +65,13 @@ def embed_into_images(meta: dict[str, Any]) -> None:
     path = Path(out["path"]) if isinstance(out, dict) else Path(out)
     if path.suffix.lower() != ".png" or not path.exists():
       continue
+    out_fields = dict(fields)
+    if isinstance(out, dict) and out.get("prompt_effective"):
+      # Diverse mode: this image was generated from its own perturbed prompt.
+      out_fields["prompt"] = out["prompt_effective"]
+      out_fields["parameters"] = out["prompt_effective"]
+      if out.get("prompt_delta"):
+        out_fields["genimg.prompt_delta"] = out["prompt_delta"]
     try:
       with Image.open(path) as img:
         img.load()
@@ -72,9 +79,9 @@ def embed_into_images(meta: dict[str, Any]) -> None:
         # Preserve any pre-existing text chunks (provider metadata, ICC text,
         # timestamps); genimg keys take precedence on collision.
         for key, value in getattr(img, "text", {}).items():
-          if key not in fields:
+          if key not in out_fields:
             info.add_text(key, value)
-        for key, value in fields.items():
+        for key, value in out_fields.items():
           info.add_text(key, str(value))
         img.save(path, pnginfo=info)
     except Exception:
@@ -91,7 +98,18 @@ def save(meta: dict[str, Any], gen_id: str) -> Path:
 def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
-          quality: str | None = None, grid_path: Path | None = None) -> dict[str, Any]:
+          quality: str | None = None, grid_path: Path | None = None,
+          prompt_deltas: list[str | None] | None = None,
+          mode: str | None = None, diverse: bool = False) -> dict[str, Any]:
+  from . import diversify
+
+  def _output_entry(i: int, p: Path) -> dict[str, Any]:
+    entry: dict[str, Any] = {"path": str(p), "format": p.suffix.lstrip("."), "bytes": p.stat().st_size}
+    if prompt_deltas is not None:
+      entry["prompt_delta"] = prompt_deltas[i]
+      entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])
+    return entry
+
   meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -106,7 +124,9 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "quality": quality,
     "input": str(input) if input else None,
     "refs": [str(r) for r in (refs or [])],
-    "outputs": [{"path": str(p), "format": p.suffix.lstrip("."), "bytes": p.stat().st_size} for p in paths],
+    "mode": mode or "auto",
+    "diverse": diverse or prompt_deltas is not None,
+    "outputs": [_output_entry(i, p) for i, p in enumerate(paths)],
     "cost_usd_estimated": round(cost_usd, 4),
     "workdir": str(Path.cwd()),
   }

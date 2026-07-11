@@ -29,8 +29,10 @@ class GeminiImageGen(IImageGen):
     return get_client(region=region or self.region, project=self.project)
 
   def generate(self, req: GenerateRequest) -> GenerateResult:
-    """Imagen short-circuits to a single batched call; Gemini falls back to template parallelism."""
-    if _is_imagen(req.model):
+    """Imagen's natural mode is one batched call — kept unless --mode parallel or
+    diverse per-variant prompts force a fan-out. Gemini uses template parallelism,
+    or _generate_batch on explicit --mode batch."""
+    if _is_imagen(req.model) and req.mode != "parallel" and not req.prompt_variants:
       return self._generate_imagen_batched(req)
     try:
       return super().generate(req)
@@ -38,6 +40,8 @@ class GeminiImageGen(IImageGen):
       raise self._friendly(e, req) from e
 
   def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
+    if _is_imagen(req.model):
+      return self._generate_imagen_single(req, i)
     client = self._client(req.region)
     contents: list = [req.prompt]
     for ref in req.refs:
@@ -65,6 +69,64 @@ class GeminiImageGen(IImageGen):
       if part.text:
         print(f"[genimg/google] model said: {part.text}")
     raise RuntimeError("No image returned. Likely a safety filter — rephrase the prompt.")
+
+  def _generate_batch(self, req: GenerateRequest) -> list[Path]:
+    """--mode batch on Gemini: ONE generate_content call asked to emit all n images.
+    Unlike OpenAI/Imagen n>1 (independent samples of one prompt), the model sees the
+    whole batch, so with req.diverse it can deliberately differentiate the takes.
+    Multi-image output is prompt-instructed, i.e. best-effort: partial results are
+    kept with a warning rather than discarded."""
+    client = self._client(req.region)
+    header = f"Generate exactly {req.n} separate images"
+    if req.diverse:
+      header += (", each a deliberately different interpretation — vary style, "
+                 "composition, palette, and mood; no two alike")
+    contents: list = [f"{header}: {req.prompt}"]
+    for ref in req.refs:
+      contents.append(Image.open(ref))
+    if req.input:
+      contents.append(Image.open(req.input))
+
+    image_kwargs = {}
+    if req.aspect_ratio:
+      image_kwargs["aspect_ratio"] = req.aspect_ratio
+    if req.resolution:
+      image_kwargs["image_size"] = req.resolution
+    config = types.GenerateContentConfig(
+      response_modalities=["TEXT", "IMAGE"],
+      image_config=types.ImageConfig(**image_kwargs) if image_kwargs else None,
+    )
+
+    resp = self._call_with_retry(client, req.model, contents, config)
+    paths: list[Path] = []
+    for part in resp.parts:
+      if part.inline_data is not None and len(paths) < req.n:
+        out = self.numbered_path(req.output, len(paths), req.n)
+        part.as_image().save(out)
+        paths.append(out)
+    if not paths:
+      raise RuntimeError("No image returned. Likely a safety filter — rephrase the prompt.")
+    if len(paths) < req.n:
+      print(f"[genimg/google] batch returned {len(paths)}/{req.n} images "
+            f"(multi-image output is model-discretionary; --mode parallel guarantees n)")
+    return paths
+
+  def _generate_imagen_single(self, req: GenerateRequest, i: int) -> Path:
+    """One Imagen image for one prompt variant (diverse mode can't use the batched call)."""
+    client = self._client(req.region)
+    cfg_kwargs = {
+      "number_of_images": 1,
+      "aspect_ratio": req.aspect_ratio or "1:1",
+      "output_mime_type": "image/png",
+    }
+    if req.resolution:
+      cfg_kwargs["image_size"] = req.resolution
+    resp = client.models.generate_images(
+      model=req.model, prompt=req.prompt, config=types.GenerateImagesConfig(**cfg_kwargs),
+    )
+    out = self.numbered_path(req.output, i, req.n)
+    resp.generated_images[0].image.save(str(out))
+    return out
 
   def _generate_imagen_batched(self, req: GenerateRequest) -> GenerateResult:
     client = self._client(req.region)
