@@ -45,32 +45,32 @@ Structured diagrams — flowcharts, layered/systems diagrams, anything with **ar
 
 ```bash
 # Explore options for a human to pick (4 takes + grid + open).
-genimg "a SINGLE centered editorial illustration of a sprint board, flat vector, off-white bg, NOT a grid" -n 4 -g --open -a 16:9
+genimg "a SINGLE centered editorial illustration of a sprint board, flat vector, off-white bg, NOT a grid" -m gdm:nb2 -n 4 -g --open -a 16:9
 
 # Simple subject → engineer the spread with -d (per-generation prompt deltas, shown in the grid).
-genimg "a SINGLE minimal fox logo, NOT a grid" -n 4 -d -g --open
+genimg "a SINGLE minimal fox logo, NOT a grid" -m oai:gi2 -n 4 -d -g --open
 
 # Let the MODEL diversify instead: one Gemini request, model differentiates its own 4 takes.
 genimg "a SINGLE minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
 
 # A logo / app icon — one mark, flat, exact colors, square.
-genimg "A SINGLE minimal flat-vector app icon, one mark centered, NOT a grid/montage: <subject>. Black line-art + one emerald-green accent on warm off-white. NO gradient, NO 3D, NO text." -n 4 -g --open -a 1:1 -q high -o logo.png
+genimg "A SINGLE minimal flat-vector app icon, one mark centered, NOT a grid/montage: <subject>. Black line-art + one emerald-green accent on warm off-white. NO gradient, NO 3D, NO text." -m oai:gi2 -n 4 -g --open -a 1:1 -q high -o logo.png
 
 # Favicon from a chosen logo (downscale; browsers render one PNG fine).
 sips -z 128 128 logo_2.png --out public/favicon.png   # then <link rel="icon" href="/favicon.png">
 
 # Edit/iterate on a chosen result (stays close to it).
-genimg "same icon, slightly thicker strokes, larger marks" -i logo_2.png -o logo-v2.png
+genimg "same icon, slightly thicker strokes, larger marks" -m oai:gi2 -i logo_2.png -o logo-v2.png
 
 # Match an existing style with a new layout (reference, not edit).
-genimg "same palette and line weight, new composition" ref1.png ref2.png -o styled.png
+genimg "same palette and line weight, new composition" ref1.png ref2.png -m gdm:nbp -o styled.png
 
 # Pick a model explicitly.
 genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.png
 ```
 
 ## Defaults
-- `genimg setup` if auth is missing; omit `-m` unless the user wants a specific provider.
+- `genimg setup` if auth is missing. **Always pass `-m <alias>`** — there is no built-in default; omit it only when the user has saved one (`genimg models get-default`).
 - Exploring → **`-n 4 -d -g --open`** (better: `--deltas` with subject-appropriate styles you compose; on Gemini also try `-d --mode batch` for a model-curated set). Plain `-n` without `-d` converges on near-duplicates. Never run parallel shell jobs as a substitute for `-n N`.
 - Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — the CLI rejects it on gdm models, so omit it there.
 - When a human must review, generate to a real `-o` path and `--open` the grid; don't describe images you can't show — open or read them.
