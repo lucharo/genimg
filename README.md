@@ -18,7 +18,7 @@ genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
 genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
 genimg "X" -m oai:gi2 -n 4 -d -g --open          # diversified batch (curated per-gen prompt deltas)
 genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --deltas @file, one per line)
-genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Google-only; rejected on OpenAI)
+genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Gemini image models only)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
 genimg draw diagrams/                            # draw studio: annotate/sketch on a canvas → generate
