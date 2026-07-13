@@ -52,8 +52,10 @@ subjects (logos, icons, single objects). Two ways to force real variety — pick
   ```bash
   genimg "a minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
   ```
-  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. Rejected on OpenAI
-  (gpt-image n>1 returns near-duplicates) and Imagen (independent samples of one prompt).
+  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. Only Gemini image models
+  diversify a batch: OpenAI rejects `--mode batch` outright (gpt-image n>1 returns
+  near-duplicates), and on Imagen plain `--mode batch` works but can't diversify (independent
+  samples), so `-d --mode batch` is rejected there too.
 
 Either needs `-n >= 2`. `-d`/`--deltas` work everywhere; `--mode batch` variety is Gemini-only.
 The two don't combine: `--deltas` is parallel-mode only — under `--mode batch` the model does
