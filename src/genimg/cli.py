@@ -124,7 +124,7 @@ def _run(
   prompt: Annotated[str, typer.Argument(help="Text prompt.")],
   refs: Annotated[list[Path] | None, typer.Argument(help="Reference image paths (space-separated, after PROMPT).")] = None,
   model: Annotated[str | None, typer.Option("-m", "--model", rich_help_panel=_PANEL_CORE,
-    help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to user-set default → built-in.")] = None,
+    help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to the user-set default; if none, pass -m or run `genimg setup`.")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
     help="Input image to edit (image-to-image).")] = None,
   diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
@@ -463,7 +463,7 @@ def models_get_default():
     console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")
 
 
-@models_app.command("clear-default", help="Remove the user-set default (revert to built-in).")
+@models_app.command("clear-default", help="Remove the user-set default (after this, -m is required).")
 def models_clear_default():
   config.clear_default_model()
   console.print("[green]cleared.[/green] No default set — pass -m each run, or `genimg models set-default <alias>`.")
