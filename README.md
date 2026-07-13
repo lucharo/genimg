@@ -38,9 +38,10 @@ subjects (logos, icons, single objects). Two ways to force real variety — pick
 **intent**, they're different tools, not better/worse:
 
 - **Controlled spread — any provider.** You name the axes with `--deltas` (implies `-d`);
-  each take is your prompt plus one delta (`#1` stays the un-perturbed anchor):
+  takes `#2..#N` each get one of your deltas in order while `#1` stays the un-perturbed
+  anchor, so supply `N-1` of them (three deltas for `-n 4`):
   ```bash
-  genimg "a minimal fox logo, NOT a grid" -n 4 --deltas "line art, block print, brush stroke, isometric" -m oai:gi2 -g --open
+  genimg "a minimal fox logo, NOT a grid" -n 4 --deltas "line art, block print, brush stroke" -m oai:gi2 -g --open
   ```
   Best when you know *how* the takes should differ. Bare `-d` uses a generic built-in
   pool — handy for logos/icons, weaker for diagrams/photos, so prefer your own deltas there.
@@ -55,6 +56,8 @@ subjects (logos, icons, single objects). Two ways to force real variety — pick
   (gpt-image n>1 returns near-duplicates) and Imagen (independent samples of one prompt).
 
 Either needs `-n >= 2`. `-d`/`--deltas` work everywhere; `--mode batch` variety is Gemini-only.
+The two don't combine: `--deltas` is parallel-mode only — under `--mode batch` the model does
+its own differentiation, so pick one path or the other.
 
 ## Skills
 
