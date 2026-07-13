@@ -31,6 +31,31 @@ genimg config show                               # inspect saved config (config 
 There is **no built-in default model** — pass `-m <alias>`, or run `genimg setup`
 (or `genimg models set-default <alias>`) to save one so you can omit `-m`.
 
+## Getting the most variety
+
+Plain `-n` samples one prompt N times and converges on near-duplicates for simple
+subjects (logos, icons, single objects). Two ways to force real variety — pick by
+**intent**, they're different tools, not better/worse:
+
+- **Controlled spread — any provider.** You name the axes with `--deltas` (implies `-d`);
+  each take is your prompt plus one delta (`#1` stays the un-perturbed anchor):
+  ```bash
+  genimg "a minimal fox logo, NOT a grid" -n 4 --deltas "line art, block print, brush stroke, isometric" -m oai:gi2 -g --open
+  ```
+  Best when you know *how* the takes should differ. Bare `-d` uses a generic built-in
+  pool — handy for logos/icons, weaker for diagrams/photos, so prefer your own deltas there.
+
+- **Model-curated set — Gemini only.** `-d --mode batch` on `gdm:nb2`/`gdm:nbp` sends **one**
+  request and lets the model differentiate all N takes itself (distinct palettes *and*
+  techniques):
+  ```bash
+  genimg "a minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
+  ```
+  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. Rejected on OpenAI
+  (gpt-image n>1 returns near-duplicates) and Imagen (independent samples of one prompt).
+
+Either needs `-n >= 2`. `-d`/`--deltas` work everywhere; `--mode batch` variety is Gemini-only.
+
 ## Skills
 
 ```bash
