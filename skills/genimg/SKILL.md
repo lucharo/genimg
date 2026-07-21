@@ -29,13 +29,15 @@ When the user asks for a diverse set of serious options, diversity means more th
 sampling one model. Unless cost/time constraints say otherwise:
 
 1. Preflight providers with `genimg auth --check` and the planned calls with `--dry-run`.
-2. Run a Gemini/Nano Banana batch with `-n 4..6 -d` or tailored `--deltas` for broad
-   composition and style exploration.
+2. Run a Gemini/Nano Banana batch with a chosen count from four through six (for example
+   `-n 5 -d`) or tailored `--deltas` for broad composition and style exploration.
 3. Run 1–3 targeted `oai:gi2` variants—especially when typography, UI, or crisp editorial
    rendering matters. Use explicit deltas; plain repeated OpenAI samples converge.
 4. Compare every candidate together with the native arbitrary-file grid:
    `genimg grid <all paths...> -o finalists.html --open`.
-5. Label the actual provider/model, quality, resolution, references, and original index.
+5. Label the actual provider/model, quality, resolution, references, and original index
+   in stable filenames and a selection manifest. The standalone grid does not reconstruct
+   cross-run provenance from the input PNGs.
    If a provider/model changes after a failure, disclose it before presenting results.
 
 Keep stable candidate IDs across every shortlist and grid (for example `gemini-01`,
@@ -46,7 +48,9 @@ filename, and liked/rejected state; never renumber previously reviewed images.
 - **Show before you ask.** When the user has to choose, OPEN/READ the candidates first and let them look — don't lead with a "which do you want?" prompt before anything is on screen (a premature pick-one question just gets rejected). Build a quick contact-sheet or per-section carousel HTML when there are many variants/families to wade through.
 - **Prefer the native grid.** Use `genimg grid a.png b.png … -o comparison.html --open` for
   candidates from multiple runs or providers. Do not build throwaway HTML when the native
-  grid can represent the set; preserve its metadata, carousel, and selection affordances.
+  grid can represent the set. It preserves the carousel and selection affordances, but an
+  arbitrary-file grid currently shows filenames rather than full per-run metadata—keep the
+  manifest as the source of truth.
 - **Hand back a clickable link.** Any local HTML you open, also give as a markdown `file://` hyperlink — `[grid.html](file:///abs/path/grid.html)` — the user routinely wants to reopen it themselves.
 - **For the Claude Code preview panel, embed images as base64.** The Launch preview sandboxes the page, so `<img src="sibling.png">` (relative path) renders blank. Inline PNGs as `data:image/png;base64,…` to make it self-contained. A normally-opened browser tab loads relative paths fine — this only bites in the preview panel.
 - **Crop/clean a chosen PNG with Pillow.** To trim negative space or drop a baked-in title, scan rows for the first/last with dark pixels (`r/g/b < ~210`) and crop to that ± a margin — don't trust `getbbox()`, anti-aliased near-white edges defeat it.
@@ -111,7 +115,8 @@ genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.p
 
 ## Defaults
 - `genimg setup` if auth is missing. **Always pass `-m <alias>`** — there is no built-in default; omit it only when the user has saved one (`genimg models get-default`).
-- Exploring → a Gemini **`-n 4..6 -d`** spread plus targeted GPT Image 2 variants, then
+- Exploring → choose a Gemini spread of four through six images (for example **`-n 5 -d`**)
+  plus targeted GPT Image 2 variants, then
   one native `genimg grid` containing all outputs. Use subject-specific `--deltas` where
   possible; on Gemini, `-d --mode batch` gives a coherent model-curated set. Plain `-n`
   without `-d` converges on near-duplicates. Never run parallel shell jobs instead of `-n N`.
