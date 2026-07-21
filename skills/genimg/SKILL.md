@@ -23,11 +23,46 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 - **Cost:** `genimg cost` / `genimg history`. `-q high` + big `-n` adds up (~$0.05–0.21/image). Preflight any pricey batch with `--dry-run` — prints model, params, per-path plan, and the cost estimate without calling the API.
 - **Agent-friendly plumbing:** `--json` on `models`, `auth`, `history`, and `cost` emits machine-readable output; `history -n 50` widens the window; `models --refresh` re-probes availability (`--aliases` shows alias mappings); `auth --check` does a tiny live probe per provider; `genimg config show|path|edit` inspects the saved config.
 
+## Diverse exploration across providers
+
+When the user asks for a diverse set of serious options, diversity means more than
+sampling one model. Unless cost/time constraints say otherwise:
+
+1. Preflight providers with `genimg auth --check` and the planned calls with `--dry-run`.
+2. Run a Gemini/Nano Banana batch with `-n 4..6 -d` or tailored `--deltas` for broad
+   composition and style exploration.
+3. Run 1–3 targeted `oai:gi2` variants—especially when typography, UI, or crisp editorial
+   rendering matters. Use explicit deltas; plain repeated OpenAI samples converge.
+4. Compare every candidate together with the native arbitrary-file grid:
+   `genimg grid <all paths...> -o finalists.html --open`.
+5. Label the actual provider/model, quality, resolution, references, and original index.
+   If a provider/model changes after a failure, disclose it before presenting results.
+
+Keep stable candidate IDs across every shortlist and grid (for example `gemini-01`,
+`gpt-02`). A small selection manifest should preserve run, model, original index,
+filename, and liked/rejected state; never renumber previously reviewed images.
+
 ## Reviewing & sharing results with a human
 - **Show before you ask.** When the user has to choose, OPEN/READ the candidates first and let them look — don't lead with a "which do you want?" prompt before anything is on screen (a premature pick-one question just gets rejected). Build a quick contact-sheet or per-section carousel HTML when there are many variants/families to wade through.
+- **Prefer the native grid.** Use `genimg grid a.png b.png … -o comparison.html --open` for
+  candidates from multiple runs or providers. Do not build throwaway HTML when the native
+  grid can represent the set; preserve its metadata, carousel, and selection affordances.
 - **Hand back a clickable link.** Any local HTML you open, also give as a markdown `file://` hyperlink — `[grid.html](file:///abs/path/grid.html)` — the user routinely wants to reopen it themselves.
 - **For the Claude Code preview panel, embed images as base64.** The Launch preview sandboxes the page, so `<img src="sibling.png">` (relative path) renders blank. Inline PNGs as `data:image/png;base64,…` to make it self-contained. A normally-opened browser tab loads relative paths fine — this only bites in the preview panel.
 - **Crop/clean a chosen PNG with Pillow.** To trim negative space or drop a baked-in title, scan rows for the first/last with dark pixels (`r/g/b < ~210`) and crop to that ± a margin — don't trust `getbbox()`, anti-aliased near-white edges defeat it.
+- **Default to light assets.** Use light-mode screenshots and light visual themes unless the
+  user explicitly requests dark mode or paired themes. After a finalist is chosen, make a
+  requested dark variant from that finalist rather than regenerating the whole portfolio.
+
+## Product screenshots and publication copy
+
+- For product updates, prefer an authentic screenshot/logo as the evidence layer and let
+  generation add diagrams, illustration, or editorial framing around it. Pass screenshots
+  as references for loose integration; use deterministic compositing when pixels must remain exact.
+- Treat user-supplied copy as authoritative. Do a full-resolution defect pass for invented
+  dates, misspellings, leaked instructions, wrong commands, and garbled labels. If publication-
+  critical text is not reliable in the raster, add it deterministically after generation.
+- Verify commands and factual labels against current project/package metadata before delivery.
 
 ## Diagrams & infographics (multi-cell, arrows, layered figures)
 
@@ -46,6 +81,11 @@ Structured diagrams — flowcharts, layered/systems diagrams, anything with **ar
 ```bash
 # Explore options for a human to pick (4 takes + grid + open).
 genimg "a SINGLE centered editorial illustration of a sprint board, flat vector, off-white bg, NOT a grid" -m gdm:nb2 -n 4 -g --open -a 16:9
+
+# Cross-provider portfolio, then one native comparison grid.
+genimg "a SINGLE light-mode editorial product-update poster, NOT a grid" app-light.png -m gdm:nb2 -n 5 -d -a 16:9 -o gemini.png
+genimg "a SINGLE crisp light-mode editorial product-update poster, NOT a grid" app-light.png -m oai:gi2 -n 2 --deltas "screen-led split layout" -a 16:9 -q high -o gpt.png
+genimg grid gemini_*.png gpt_*.png -o finalists.html --open
 
 # Simple subject → engineer the spread with -d (per-generation prompt deltas, shown in the grid).
 genimg "a SINGLE minimal fox logo, NOT a grid" -m oai:gi2 -n 4 -d -g --open
@@ -71,6 +111,10 @@ genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.p
 
 ## Defaults
 - `genimg setup` if auth is missing. **Always pass `-m <alias>`** — there is no built-in default; omit it only when the user has saved one (`genimg models get-default`).
-- Exploring → **`-n 4 -d -g --open`** (better: `--deltas` with subject-appropriate styles you compose; on Gemini also try `-d --mode batch` for a model-curated set). Plain `-n` without `-d` converges on near-duplicates. Never run parallel shell jobs as a substitute for `-n N`.
+- Exploring → a Gemini **`-n 4..6 -d`** spread plus targeted GPT Image 2 variants, then
+  one native `genimg grid` containing all outputs. Use subject-specific `--deltas` where
+  possible; on Gemini, `-d --mode batch` gives a coherent model-curated set. Plain `-n`
+  without `-d` converges on near-duplicates. Never run parallel shell jobs instead of `-n N`.
 - Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — the CLI rejects it on gdm models, so omit it there.
-- When a human must review, generate to a real `-o` path and `--open` the grid; don't describe images you can't show — open or read them.
+- When a human must review, generate to a real `-o` path, retain stable IDs, and open one
+  native grid containing the full candidate set; don't describe images you can't show.
