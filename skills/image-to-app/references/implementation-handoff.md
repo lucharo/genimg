@@ -22,4 +22,3 @@ Reject these vague handoffs:
 - “Use the screenshot as the spec.”
 
 Replace them with named component, layout, behavior, and evidence responsibilities.
-
