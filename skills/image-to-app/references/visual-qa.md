@@ -34,4 +34,3 @@ Compare the rendered app with the accepted references in matched states.
 - Capture screenshots after a cold load.
 - Record exact viewport sizes and commands.
 - Name remaining differences as contract gaps, acceptable render variation, or deferred integration work.
-

@@ -76,4 +76,3 @@ Finish only when:
 - Persisted state survives a cold reload.
 - Tests and checks have positive, read evidence.
 - The integration boundary and any fixture-backed portion are stated honestly.
-

@@ -36,4 +36,3 @@ Use one record per load-bearing decision. Keep it short enough to scan cold.
 ```
 
 Prefer the user's canonical vocabulary. Do not turn settled product direction back into an open questionnaire.
-
