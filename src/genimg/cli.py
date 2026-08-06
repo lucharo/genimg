@@ -788,7 +788,7 @@ def skills_path(
 @skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
 def skills_install(
   agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "claude",
-  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
   force: Annotated[bool, typer.Option("--force", help="Replace existing symlinks.")] = False,
 ):
   sources = _skill_sources()
@@ -813,7 +813,7 @@ def skills_install(
 @skills_app.command("update", help="Re-link bundled skills in one or more agent dirs.")
 def skills_update(
   agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
-  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
 ):
   sources = _skill_sources()
   for name in _resolve_agents(agent):
@@ -835,7 +835,7 @@ def skills_update(
 @skills_app.command("uninstall", help="Remove bundled skill symlinks from one or more agent dirs.")
 def skills_uninstall(
   agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
-  skill: Annotated[str, typer.Argument(help="genimg | genimg-agent-refinement | all")] = "all",
+  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
 ):
   sources = _skill_sources()
   for name in _resolve_agents(agent):

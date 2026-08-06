@@ -73,6 +73,7 @@ genimg skills install codex genimg              # targeted install
 Bundled skills:
 - `genimg`: lean CLI usage patterns.
 - `genimg-agent-refinement`: agent loop for inspecting outputs and removing obvious artifacts.
+- `image-to-app`: staged workflow from visual directions through implementation and browser QA.
 
 Skills install as symlinks into each agent's skills dir. If you reinstall/upgrade genimg
 (e.g. via `uv tool`), re-run `genimg skills update` to refresh the links.

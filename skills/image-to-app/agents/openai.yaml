@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image to App"
+  short_description: "Turn visual directions into verified apps"
+  default_prompt: "Use $image-to-app to turn selected image references into a working, visually verified app."
