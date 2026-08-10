@@ -14,15 +14,22 @@ Treat images as design evidence, not as an executable specification. Preserve th
 Before generating or coding, record:
 
 - The user outcome and non-goals.
+- The canonical repository, branch or worktree, and which process owns the running app.
 - Required views, states, actions, data, keyboard behavior, and persistence.
+- The delivery surfaces and shortcut owner: browser, native shell, mobile wrapper, or installed app.
+- For every important field, whether it is authoritative source data, derived presentation, or human-owned state.
+- Entity lifecycle, workflow stage, attention state, parent/child hierarchy, and grouping as separate concepts when the product has them.
 - The exact reference-image paths and what each reference contributes.
 - Constraints that must survive visual exploration, such as tab count, density, theme, or platform feel.
+- The current evidence tier and the next required tier: visual direction, fixture-backed prototype, live-source integration, or installed runtime.
 
 Keep product behavior constant across visual variants. Do not compare design systems that quietly change the information architecture.
 
 ### 2. Generate coherent directions
 
 Load the `genimg` skill before using the CLI. Verify the live CLI and model catalog rather than relying on remembered aliases. For text-heavy UI, start with the current GPT Image model intended for reliable typography; use a structurally stronger model when spatial layout matters more.
+
+Preflight the whole delivery path before spending: canonical checkout, installed CLI source and version, available model, target viewport, endpoint and origin policy, signing identity when native, and the ports or processes that will own the app. A catalog entry proves only that a model is advertised; run the smallest positive control that proves it serves.
 
 Generate one coherent design system at a time. If the app has several important views, produce the same fixed view set for every direction. Use stable IDs and filenames, for example `quiet-ledger-01-kanban.png` and `quiet-ledger-02-ideas.png`.
 
@@ -31,6 +38,8 @@ Use `--diverse` or tailored `--deltas` to explore genuinely different systems. D
 ### 3. Review and choose
 
 Inspect every candidate at full resolution. Build one `genimg grid` containing the comparable set and use its carousel for human review. Evaluate hierarchy, density, navigation, state clarity, interaction discoverability, and cross-view consistency, not only atmosphere.
+
+Before ranking aesthetics, audit each candidate against the frozen contract. Label every material departure **Preserve**, **Reinterpret**, or **Reject**. A beautiful image that adds tabs, removes a required state, or changes ownership is a contract defect, not a stronger direction.
 
 When the strongest answer combines directions, write the synthesis explicitly: base shell, component language, typography, spacing, and interaction model. Never tell an implementation agent to “mix A and B” without naming which parts come from each.
 
@@ -54,11 +63,24 @@ Use an isolated branch or worktree for substantial builds. Give the implementer 
 
 Ask for a working app, not a static screenshot recreation. Require realistic states and interactions. Make fixture-backed boundaries explicit when the real integration is intentionally deferred.
 
+For fixtures, name the real interface they substitute for, how production avoids loading them, and the retirement or migration step that moves the app to live data. Do not let fixture content, observer-window counts, or demo persistence leak into the installed product.
+
 ### 6. Verify the real app
 
 Run functional checks, then browser QA at the main desktop viewport and at least one narrow viewport. Capture the implemented app in the same states as the references and compare them side by side. Use [visual-qa.md](references/visual-qa.md).
 
+Use this evidence ladder; no rung can prove the one above it:
+
+1. **Visual direction** — generated images establish design intent only.
+2. **Fixture-backed prototype** — proves local interaction and layout with declared substitute data.
+3. **Live-source integration** — proves discovery, identity, refresh, empty/error state, and real data flow.
+4. **Installed runtime** — proves the packaged executable, daemon or native shell, cold start, persistence, and OS-owned shortcuts.
+
+Label every screenshot, test, and claim with its rung. A green fixture test cannot close a live-integration ask; a healthy process cannot prove the visible installed UI.
+
 Verify cold reload after changing persisted state. Exercise keyboard navigation, focus visibility, overflow, empty/loading/error states, theme switching, and reduced motion where relevant. A passing build does not prove the visual or interaction contract.
+
+For live dashboards, validate fresh and stale protocol states, renamed entities, external and owned entities, parent/child containment, and lifecycle/event precedence separately. Identify every listener and server before restarting or stopping anything; age and port alone do not establish process ownership.
 
 ### 7. Iterate with bounded loops
 
@@ -76,3 +98,4 @@ Finish only when:
 - Persisted state survives a cold reload.
 - Tests and checks have positive, read evidence.
 - The integration boundary and any fixture-backed portion are stated honestly.
+- Evidence reaches the tier claimed in the handoff, including the installed path when OS behavior or persistence is part of the ask.
