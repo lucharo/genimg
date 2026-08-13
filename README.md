@@ -95,4 +95,4 @@ The Vertex project is resolved from `--project` → `config.gcp_project` → `GO
 
 ## Models (`-m`)
 
-Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` shows what providers advertise, while only an exact-model generation proves that it serves.
+Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.

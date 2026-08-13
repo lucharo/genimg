@@ -6,9 +6,9 @@ Verified: 2026-08-13
 
 ## Why can a listed model still fail to generate?
 
-Configured, advertised and serving are different states. `genimg models --refresh`
-discovers what a provider reports, but only a small generation with the exact model proves
-that the current account, endpoint and region can serve it.
+Configured, listed and serving are different states. `genimg models --refresh` refreshes
+provider-listing status for genimg's curated models, but only a small generation with the
+exact model proves that the current account, endpoint and region can serve it.
 
 ## Why can Draw Studio show `Failed to fetch` when authentication is valid?
 
