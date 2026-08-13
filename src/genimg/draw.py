@@ -543,11 +543,12 @@ PAGE = r"""<!doctype html>
   .icon:hover{background:var(--btn)}
   .topctl{display:flex;flex-direction:column;gap:3px;min-width:0}
   .toplbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
-  .rangebox{width:170px;display:flex;flex-direction:column;gap:2px}
-  .rangehead{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--sub)}
-  .rangehead strong{color:var(--text);font-size:11px}
-  .rangebox input[type=range]{width:100%;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
-  .rangeticks{display:flex;justify-content:space-between;font-size:9px;color:var(--faint);line-height:1}
+  .segbox{width:212px;display:flex;flex-direction:column;gap:5px}
+  .segctl{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--btn);border:1px solid var(--btnb);border-radius:10px;min-height:36px}
+  .segopt{min-width:0;height:28px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--sub);font:inherit;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .segopt:hover:not(.on){color:var(--text);background:color-mix(in srgb,var(--btnb) 55%,transparent)}
+  .segopt.on{color:var(--text);background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px color-mix(in srgb,var(--btnb) 72%,transparent)}
+  .segopt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .promptchip.on{border-color:var(--accent)!important;background:color-mix(in srgb,var(--accent) 16%,var(--btn))!important}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   .job img{width:100%;border-radius:6px;display:block;cursor:zoom-in;background:#fff}
@@ -645,10 +646,9 @@ const BOOT = /*__BOOT__*/;
   const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
-  function rangeControl(key,label,options,value){
-    const idx=Math.max(0,options.indexOf(value));
+  function segmentedControl(key,label,options,value){
     const pretty=v=>v==="auto"?"Auto":v.charAt(0).toUpperCase()+v.slice(1);
-    return `<div class="rangebox" title="${esc(label)}"><div class="rangehead"><span>${esc(label)}</span><strong data-range-value="${key}">${esc(pretty(options[idx]))}</strong></div><input type="range" min="0" max="${options.length-1}" step="1" value="${idx}" data-param="${key}" aria-label="${esc(label)}"><div class="rangeticks">${options.map(v=>`<span>${esc(pretty(v))}</span>`).join("")}</div></div>`;
+    return `<div class="segbox"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(pretty(v))}</button>`;}).join("")}</div></div>`;
   }
   function renderTopbar(){
     $("modelSel").value = S.model;
@@ -671,16 +671,31 @@ const BOOT = /*__BOOT__*/;
     if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
     const aspects=[["auto","Auto"],["1:1","1:1"],["4:3","4:3"],["3:4","3:4"],["16:9","16:9"],["9:16","9:16"]];
     $("paramControls").innerHTML =
-      (qualities.length?rangeControl("quality","Quality",qualities,S.quality):"")+
-      (resolutions.length?rangeControl("resolution","Image size",resolutions,S.resolution):"")+
+      (qualities.length?segmentedControl("quality","Quality",qualities,S.quality):"")+
+      (resolutions.length?segmentedControl("resolution","Image size",resolutions,S.resolution):"")+
       `<div class="topctl" style="width:105px"><span class="toplbl">Aspect</span><select id="aspectSel" aria-label="Aspect ratio">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`;
-    for(const input of document.querySelectorAll("[data-param]"))input.addEventListener("input",e=>{
-      const key=e.target.dataset.param, options=key==="quality"?qualities:resolutions;
-      S[key]=options[parseInt(e.target.value,10)];
-      const value=document.querySelector('[data-range-value="'+key+'"]');
-      if(value)value.textContent=S[key]==="auto"?"Auto":S[key].charAt(0).toUpperCase()+S[key].slice(1);
+    const selectSegment=(key,value,focus=false)=>{
+      S[key]=value;
+      for(const button of document.querySelectorAll(`[data-seg-key="${key}"]`)){
+        const on=button.dataset.segValue===value;
+        button.classList.toggle("on",on); button.setAttribute("aria-checked",String(on)); button.tabIndex=on?0:-1;
+      }
       renderCost();
-    });
+      if(focus)document.querySelector(`[data-seg-key="${key}"][data-seg-value="${value}"]`)?.focus();
+    };
+    for(const button of document.querySelectorAll("[data-seg-key]")){
+      button.addEventListener("click",()=>selectSegment(button.dataset.segKey,button.dataset.segValue));
+      button.addEventListener("keydown",e=>{
+        const key=button.dataset.segKey, options=key==="quality"?qualities:resolutions;
+        let idx=options.indexOf(S[key]);
+        if(e.key==="ArrowRight"||e.key==="ArrowDown")idx=(idx+1)%options.length;
+        else if(e.key==="ArrowLeft"||e.key==="ArrowUp")idx=(idx-1+options.length)%options.length;
+        else if(e.key==="Home")idx=0;
+        else if(e.key==="End")idx=options.length-1;
+        else return;
+        e.preventDefault(); selectSegment(key,options[idx],true);
+      });
+    }
     $("aspectSel").addEventListener("change",e=>{S.aspect=e.target.value;renderTopbar();renderCost();});
     const gen=$("generateBtn");
     if(gen){gen.disabled=!meta.enabled;gen.style.opacity=meta.enabled?"1":".45";gen.style.cursor=meta.enabled?"pointer":"not-allowed";gen.title=meta.enabled?"":meta.reason;}

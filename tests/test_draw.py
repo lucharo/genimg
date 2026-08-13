@@ -276,6 +276,11 @@ class BootJsonTests(unittest.TestCase):
       starters = draw.Studio([], "gdm:nb2").boot_data()["promptStarters"]
     self.assertEqual([item["label"] for item in starters], ["Create", "Diagram", "Polish"])
 
+  def test_discrete_model_parameters_use_segmented_controls_not_native_sliders(self) -> None:
+    self.assertIn('class="segctl" role="radiogroup"', draw.PAGE)
+    self.assertIn('role="radio"', draw.PAGE)
+    self.assertNotIn('type="range"', draw.PAGE)
+
 
 class StudioModelsTests(unittest.TestCase):
   def test_excludes_imagen_and_includes_editable_models(self) -> None:
