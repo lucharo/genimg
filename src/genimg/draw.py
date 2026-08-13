@@ -28,9 +28,19 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from . import cost, discovery, metadata, registry
+from .auth import google as auth_google
+from .auth import openai as auth_openai
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+_OPENAI_RESOLUTIONS = {
+  "1:1": ["1K", "2K", "4K"],
+  "4:3": ["1K", "2K"],
+  "3:4": ["1K", "2K"],
+  "16:9": ["2K", "4K"],
+  "9:16": ["2K", "4K"],
+}
 
 
 def _studio_models() -> list[dict]:
@@ -47,6 +57,13 @@ def _studio_models() -> list[dict]:
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
+      "qualityOptions": ["auto", "low", "medium", "high"] if spec.provider == "openai" else [],
+      "resolutionOptions": (
+        ["1K", "2K", "4K"]
+        if spec.provider == "openai" or spec.model_id.startswith("gemini-3")
+        else []
+      ),
+      "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
     })
   order = {"google": 0, "openai": 1}
   out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
@@ -60,28 +77,49 @@ STUDIO_MODELS = _studio_models()
 _UNREACHABLE = {"auth", "403", "404", "error"}
 
 
-def available_models(cache: dict | None) -> list[dict]:
-  """Filter STUDIO_MODELS by a `genimg models` probe cache.
+def available_models(cache: dict | None, provider_auth: dict | None = None) -> list[dict]:
+  """Annotate every Studio model with auth/probe availability; never hide an option.
 
-  - OpenAI: keep only listed/working — its list endpoint is authoritative, so "missing" == absent.
-  - Google/Vertex: keep unless the provider/region call itself failed; "missing" stays, because
-    models.list() under-reports Model Garden models that still generate (discovery.py caveat).
-  - No cache, unknown status, or everything filtered out → show all (never an empty dropdown).
+  Provider auth is conclusive enough to disable a whole cohort. OpenAI's model list is
+  authoritative, so a missing deployment is disabled individually. Vertex model listing is
+  known to under-report Model Garden models, so "missing" is shown as unconfirmed but remains
+  selectable. Provider/region request failures disable only the affected cached entries.
   """
   probes = (cache or {}).get("probes") or {}
-  if not probes:
-    return list(STUDIO_MODELS)
+  provider_auth = provider_auth or {
+    "google": auth_google.auth_info(),
+    "openai": auth_openai.auth_info(),
+  }
   out: list[dict] = []
   for m in STUDIO_MODELS:
-    status = (probes.get(m["alias"]) or {}).get("status")
-    if status is None:
-      out.append(m)  # not probed → don't hide
-    elif m["provider"] == "openai":
-      if status in ("listed", "working"):
-        out.append(m)
-    elif status not in _UNREACHABLE:  # google/vertex: keep listed + missing (unconfirmed)
-      out.append(m)
-  return out or list(STUDIO_MODELS)
+    probe = probes.get(m["alias"]) or {}
+    status = probe.get("status")
+    auth = provider_auth.get(m["provider"]) or {}
+    enabled = bool(auth.get("ok"))
+    availability = "available" if status == "working" else "unknown"
+    reason = "generation verified" if status == "working" else ""
+    if status == "listed":
+      availability = "listed"
+      reason = "listed by provider; generation not verified"
+    if not enabled:
+      availability = "unavailable"
+      reason = str(auth.get("hint") or f"{m['provider']} auth is not configured")
+    elif m["provider"] == "openai" and status == "missing":
+      enabled = False
+      availability = "unavailable"
+      reason = "not available on this OpenAI endpoint"
+    elif status in _UNREACHABLE:
+      enabled = False
+      availability = "unavailable"
+      reason = str(probe.get("detail") or f"provider probe failed ({status})")
+    elif m["provider"] == "google" and status == "missing":
+      availability = "unconfirmed"
+      reason = "not listed by Vertex; Model Garden models may still work"
+    elif status is None:
+      reason = "not probed yet"
+    out.append({**m, "enabled": enabled, "availability": availability,
+                "probeStatus": status, "reason": reason})
+  return out
 DEFAULT_PROMPT = (
   "- handwritten marks = edit instructions, don't copy them literally\n"
   "- keep un-annotated parts unchanged\n"
@@ -140,20 +178,22 @@ def _provider_of(model: str) -> str:
     return "openai" if ("oai" in model or "gpt-image" in model) else "google"
 
 
-def pick_size(provider: str, w: int, h: int, param: str | None) -> tuple[str, str | None]:
+def pick_size(provider: str, w: int, h: int, resolution: str | None,
+              aspect: str | None = None) -> tuple[str, str | None]:
   """Choose a valid (aspect, resolution) for the flattened composite.
 
-  - Gemini honors any aspect at any image_size → aspect from ratio, resolution = the
-    selected image_size (param).
-  - OpenAI has a constrained size table: 16:9/9:16 need 2K (1K is below the pixel min);
-    everything else fits at 1K. Quality is passed separately, so param is ignored here.
+  - Google uses the selected image_size when that model exposes one; older models pass none.
+  - OpenAI has a constrained size table, so unsupported aspect/resolution combinations snap
+    to 2K. Quality is passed separately.
   """
-  aspect = _nearest_aspect(w, h)
+  aspect = aspect if aspect in _ASPECTS else _nearest_aspect(w, h)
   if provider == "openai":
-    resolution = "2K" if aspect in ("16:9", "9:16") else "1K"
-  else:
-    resolution = param or None
-  return aspect, resolution
+    valid = _OPENAI_RESOLUTIONS[aspect]
+    requested = resolution or "1K"
+    if requested not in valid:
+      requested = "2K"
+    return aspect, requested
+  return aspect, resolution or None
 
 
 def _genimg_cmd() -> list[str]:
@@ -190,14 +230,19 @@ class Studio:
   def boot_data(self) -> dict:
     drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
     # load_fresh_cache() returns None once the probe cache is older than the refresh interval
-    # (5 days) → available_models() then shows ALL models. We never filter on stale data; the
-    # user re-enables filtering by running `genimg models`.
-    visible = available_models(discovery.load_fresh_cache())
-    default = self.default_model if any(m["alias"] == self.default_model for m in visible) else visible[0]["alias"]
+    # (5 days). Stale/missing probe data is shown as unknown rather than hiding models.
+    provider_auth = {"google": auth_google.auth_info(), "openai": auth_openai.auth_info()}
+    models = available_models(discovery.load_fresh_cache(), provider_auth)
+    enabled = [m for m in models if m["enabled"]]
+    default = self.default_model if any(
+      m["alias"] == self.default_model and m["enabled"] for m in models
+    ) else (enabled[0]["alias"] if enabled else models[0]["alias"])
     return {
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
-      "models": [{"alias": m["alias"], "label": m["label"], "modelId": m["modelId"],
-                  "provider": m["provider"]} for m in visible],
+      "models": models,
+      "providers": {name: {"mode": info.get("mode"), "ok": info.get("ok"),
+                           "hint": info.get("hint", "")}
+                    for name, info in provider_auth.items()},
       "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
       "promptStarters": PROMPT_STARTERS,
@@ -250,7 +295,8 @@ class Studio:
 
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str | None, prompt: str, model: str,
-                quality: str | None, resolution: str | None, w: int, h: int) -> str:
+                quality: str | None, resolution: str | None, w: int, h: int,
+                aspect: str | None = None) -> str:
     jid = "draw" + secrets.token_hex(6)  # collision-resistant across processes/restarts
     draft = None
     if image_b64:
@@ -261,7 +307,7 @@ class Studio:
     logp = self.workdir / f"{jid}.log"
 
     provider = _provider_of(model)
-    aspect, res = pick_size(provider, w, h, resolution)
+    aspect, res = pick_size(provider, w, h, resolution, aspect)
     # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
     # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
     # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
@@ -334,14 +380,17 @@ def _origin_allowed(origin: str | None, host: str | None) -> bool:
   return urlparse(origin).netloc == host
 
 
-def _boot_json(studio: Studio) -> str:
+def _boot_json(studio: Studio, boot_data: dict | None = None) -> str:
   """Serialize boot data for inline injection, escaping '<' so a source filename containing
   '<' (or '</script>') can't break out of the inline <script> element."""
-  return json.dumps(studio.boot_data()).replace("<", "\\u003c")
+  data = studio.boot_data() if boot_data is None else boot_data
+  return json.dumps(data).replace("<", "\\u003c")
 
 
 def _make_handler(studio: Studio):
-  page = PAGE.replace("/*__BOOT__*/", _boot_json(studio))
+  boot_data = studio.boot_data()
+  models_by_alias = {model["alias"]: model for model in boot_data["models"]}
+  page = PAGE.replace("/*__BOOT__*/", _boot_json(studio, boot_data))
   page_bytes = page.encode("utf-8")
 
   class Handler(_http_server.BaseHTTPRequestHandler):
@@ -406,13 +455,21 @@ def _make_handler(studio: Studio):
       prompt = (data.get("prompt") or (DEFAULT_PROMPT if image else "")).strip()
       if not image and not prompt:
         return self._send(400, "application/json", json.dumps({"error": "no image or prompt"}))
+      model = data.get("model") or studio.default_model
+      model_info = models_by_alias.get(model)
+      if model_info is None:
+        return self._send(400, "application/json", json.dumps({"error": "unknown model"}))
+      if not model_info["enabled"]:
+        reason = model_info.get("reason") or "model is unavailable"
+        return self._send(400, "application/json", json.dumps({"error": reason}))
       try:
         jid = studio.start_job(
           image_b64=image,
           prompt=prompt,
-          model=data.get("model") or studio.default_model,
+          model=model,
           quality=data.get("quality"),
           resolution=data.get("resolution"),
+          aspect=data.get("aspect"),
           w=int(data.get("w") or 1024),
           h=int(data.get("h") or 1024),
         )
@@ -484,6 +541,14 @@ PAGE = r"""<!doctype html>
   .grp{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px}
   .icon{background:none;border:none;color:var(--text);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .icon:hover{background:var(--btn)}
+  .topctl{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .toplbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
+  .rangebox{width:170px;display:flex;flex-direction:column;gap:2px}
+  .rangehead{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--sub)}
+  .rangehead strong{color:var(--text);font-size:11px}
+  .rangebox input[type=range]{width:100%;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
+  .rangeticks{display:flex;justify-content:space-between;font-size:9px;color:var(--faint);line-height:1}
+  .promptchip.on{border-color:var(--accent)!important;background:color-mix(in srgb,var(--accent) 16%,var(--btn))!important}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   .job img{width:100%;border-radius:6px;display:block;cursor:zoom-in;background:#fff}
   .job img.g{aspect-ratio:1/1;object-fit:contain}
@@ -495,12 +560,12 @@ PAGE = r"""<!doctype html>
 const BOOT = /*__BOOT__*/;
 (function(){
   "use strict";
-  const MM={}; BOOT.models.forEach(m=>{MM[m.alias]={modelId:m.modelId,provider:m.provider};});
+  const MM={}; BOOT.models.forEach(m=>{MM[m.alias]=m;});
   const BRUSH_PX = [2,4,6,10,14], BRUSH_DOT=[6,9,12,15,18], PAD=12;
   const SWATCHES = ["#FF3B30","#2979FF","#FF9100","#111111"];
   const S = {
     prompt: BOOT.defaultPrompt, promptExpanded:false,
-    model: BOOT.defaultModel, quality:"medium", resolution:"1K",
+    model: BOOT.defaultModel, quality:"medium", resolution:"1K", aspect:"auto",
     tool:"pen", color:"#FF3B30", customColor:"#8E24AA", brushLevel:2,
     strokes:[], items:[], selectedId:null,
     view:{x:0,y:0,s:1},
@@ -515,16 +580,23 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- static shell ----------
   function shell(){
-    const modelOpts = BOOT.models.map(m=>`<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}>${esc(m.label)}</option>`).join("");
+    const providerNames={google:"Google · Gemini",openai:"OpenAI"};
+    const modelOpts = ["google","openai"].map(provider=>{
+      const opts=BOOT.models.filter(m=>m.provider===provider).map(m=>{
+        const suffix=!m.enabled?" — unavailable":m.availability==="unconfirmed"?" — unconfirmed":"";
+        return `<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}${m.enabled?"":" disabled"}>${esc(m.label+suffix)}</option>`;
+      }).join("");
+      return opts?`<optgroup label="${esc(providerNames[provider])}">${opts}</optgroup>`:"";
+    }).join("");
     $("app").innerHTML = `
-      <div style="background:var(--bg);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;gap:16px;align-items:center">
+      <div style="background:var(--bg);border-bottom:1px solid var(--border);padding:9px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
           <div style="font-size:16px;font-weight:600;letter-spacing:-.2px">genimg</div>
           <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
         </div>
         <span style="flex:1"></span>
-        <select id="modelSel" style="width:250px">${modelOpts}</select>
-        <select id="paramSel" style="width:250px"></select>
+        <div class="topctl" style="width:270px"><span class="toplbl">Model</span><select id="modelSel" style="width:100%">${modelOpts}</select><span id="modelStatus" style="font-size:9px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span></div>
+        <div id="paramControls" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap"></div>
       </div>
       <div id="main" style="flex:1;display:flex;min-height:0;padding:16px 20px;gap:10px">
         <div id="srccol" style="display:flex"></div>
@@ -546,7 +618,7 @@ const BOOT = /*__BOOT__*/;
               </div>
             </div>
             <div id="promptbox" style="display:flex;flex-direction:column;gap:4px"></div>
-            <button data-act="generate" style="background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(76,175,80,.25)">⚡ Generate <span id="costtext" style="font-weight:400;opacity:.85;font-size:13px"></span></button>
+            <button id="generateBtn" data-act="generate" style="background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(76,175,80,.25)">⚡ Generate <span id="costtext" style="font-weight:400;opacity:.85;font-size:13px"></span></button>
           </div>
           <div id="splith" data-act="split" style="cursor:col-resize;width:14px;margin:0 -4px;display:flex;align-items:center;justify-content:center;touch-action:none"><div style="width:3px;height:56px;background:var(--btnb);border-radius:2px"></div></div>
           <div id="traycol" style="display:flex;flex-direction:column;min-width:0;min-height:0"></div>
@@ -565,7 +637,6 @@ const BOOT = /*__BOOT__*/;
     wrap.addEventListener("dragleave", ()=>{S.dragActive=false; wrap.style.borderColor="var(--border)"; wrap.style.borderStyle="solid";});
     wrap.addEventListener("drop", onDrop);
     $("modelSel").addEventListener("change", e=>{ S.model=e.target.value; renderTopbar(); renderCost(); });
-    $("paramSel").addEventListener("change", e=>{ if(isOai()) S.quality=e.target.value; else S.resolution=e.target.value; renderCost(); });
     ro = new ResizeObserver(sizeCanvas); ro.observe(cv);
     renderTopbar(); renderToolbar(); renderPrompt(); renderCost(); renderTray(); renderSrc(); renderGrid();
     sizeCanvas();
@@ -574,15 +645,45 @@ const BOOT = /*__BOOT__*/;
   const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
+  function rangeControl(key,label,options,value){
+    const idx=Math.max(0,options.indexOf(value));
+    const pretty=v=>v==="auto"?"Auto":v.charAt(0).toUpperCase()+v.slice(1);
+    return `<div class="rangebox" title="${esc(label)}"><div class="rangehead"><span>${esc(label)}</span><strong data-range-value="${key}">${esc(pretty(options[idx]))}</strong></div><input type="range" min="0" max="${options.length-1}" step="1" value="${idx}" data-param="${key}" aria-label="${esc(label)}"><div class="rangeticks">${options.map(v=>`<span>${esc(pretty(v))}</span>`).join("")}</div></div>`;
+  }
   function renderTopbar(){
     $("modelSel").value = S.model;
-    const sel = $("paramSel");
-    const opts = isOai()
-      ? [["medium","quality: medium (default)"],["low","quality: low — fastest"],["high","quality: high — 30–90s/image"]]
-      : [["1K","image_size: 1K (default)"],["2K","image_size: 2K"],["4K","image_size: 4K"]];
-    sel.title = isOai() ? "quality — gpt-image request parameter" : "image_size — Gemini image_config parameter";
-    sel.innerHTML = opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("");
-    sel.value = isOai()? S.quality : S.resolution;
+    const meta=MM[S.model]||{};
+    const status=$("modelStatus");
+    if(status){
+      const provider=(BOOT.providers||{})[meta.provider]||{};
+      const pieces=[provider.mode||meta.provider,provider.ok?"auth configured":"auth unavailable"];
+      if(meta.availability==="available")pieces.push("generation verified");
+      else if(meta.availability==="listed")pieces.push("listed, generation unverified");
+      else if(meta.availability==="unconfirmed")pieces.push("availability unconfirmed");
+      else if(meta.availability==="unknown")pieces.push("not probed");
+      if(!meta.enabled&&meta.reason)pieces.push(meta.reason);
+      status.textContent=pieces.filter(Boolean).join(" · ");
+      status.title=meta.reason||status.textContent;
+      status.style.color=meta.enabled?"var(--sub)":"#d05b52";
+    }
+    const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta);
+    if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
+    if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
+    const aspects=[["auto","Auto"],["1:1","1:1"],["4:3","4:3"],["3:4","3:4"],["16:9","16:9"],["9:16","9:16"]];
+    $("paramControls").innerHTML =
+      (qualities.length?rangeControl("quality","Quality",qualities,S.quality):"")+
+      (resolutions.length?rangeControl("resolution","Image size",resolutions,S.resolution):"")+
+      `<div class="topctl" style="width:105px"><span class="toplbl">Aspect</span><select id="aspectSel" aria-label="Aspect ratio">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`;
+    for(const input of document.querySelectorAll("[data-param]"))input.addEventListener("input",e=>{
+      const key=e.target.dataset.param, options=key==="quality"?qualities:resolutions;
+      S[key]=options[parseInt(e.target.value,10)];
+      const value=document.querySelector('[data-range-value="'+key+'"]');
+      if(value)value.textContent=S[key]==="auto"?"Auto":S[key].charAt(0).toUpperCase()+S[key].slice(1);
+      renderCost();
+    });
+    $("aspectSel").addEventListener("change",e=>{S.aspect=e.target.value;renderTopbar();renderCost();});
+    const gen=$("generateBtn");
+    if(gen){gen.disabled=!meta.enabled;gen.style.opacity=meta.enabled?"1":".45";gen.style.cursor=meta.enabled?"pointer":"not-allowed";gen.title=meta.enabled?"":meta.reason;}
   }
   function renderToolbar(){
     const tool=(t,svg,title)=>`<button class="tbtn ${S.tool===t?'on':''}" data-act="tool" data-tool="${t}" title="${title}">${svg}</button>`;
@@ -616,9 +717,13 @@ const BOOT = /*__BOOT__*/;
     cv.style.cursor = S.tool==="move" ? "default" : "crosshair";
   }
   function renderPrompt(){
-    const starters=(BOOT.promptStarters||[]).map((p,i)=>`<button data-act="promptStarter" data-idx="${i}" title="${esc(p.prompt)}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">${esc(p.label)}</button>`).join("");
+    const starters=(BOOT.promptStarters||[]).map((p,i)=>{
+      const active=S.prompt.startsWith(p.prompt);
+      return `<button class="promptchip ${active?'on':''}" data-act="promptStarter" data-idx="${i}" title="Use this prompt starter" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">${esc(p.label)}</button>`;
+    }).join("");
+    const defaultActive=S.prompt===BOOT.defaultPrompt;
     $("promptbox").innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button>${starters}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button><span style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Start with</span>${starters}<button class="promptchip ${defaultActive?'on':''}" data-act="promptDefault" title="Restore the default annotation instructions" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">Default</button></div>
       ${S.promptExpanded?`<textarea id="promptta" rows="5" spellcheck="false" placeholder="Describe the image you want…" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.6;padding:9px 14px;font-family:inherit;width:100%;resize:vertical">${esc(S.prompt)}</textarea>`:""}`;
     const ta = $("promptta");
     if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; });
@@ -732,18 +837,36 @@ const BOOT = /*__BOOT__*/;
   function toast(m){ S.toast=m; renderOverlays(); clearTimeout(toast._t); toast._t=setTimeout(()=>{S.toast="";renderOverlays();},2800); }
 
   // ---------- cost (mirrors genimg cost.py) ----------
+  function selectedAspect(){
+    if(S.aspect!=="auto")return S.aspect;
+    const b=contentBounds();
+    return b?nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2):"1:1";
+  }
+  function resolutionOptions(meta=MM[S.model]||{}){
+    const all=meta.resolutionOptions||[], byAspect=meta.resolutionOptionsByAspect||{};
+    return byAspect[selectedAspect()]||all;
+  }
+  function selectedResolution(){
+    const options=resolutionOptions();
+    if(!options.length)return null;
+    if(options.includes(S.resolution))return S.resolution;
+    return options.includes("2K")?"2K":options[0];
+  }
+  function effectiveResolution(){
+    if(!isOai())return selectedResolution()||"1K";
+    const valid={"1:1":["1K","2K","4K"],"4:3":["1K","2K"],"3:4":["1K","2K"],"16:9":["2K","4K"],"9:16":["2K","4K"]}[selectedAspect()];
+    return valid.includes(S.resolution)?S.resolution:"2K";
+  }
   function costEstimate(){
     const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
     let usd;
     if (isOai()){
       usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
-      // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → mirror cost.py's mult
-      const b=contentBounds();
-      if(b){const a=nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2); if(a==="16:9"||a==="9:16") usd*=((C.openaiResMult||{})["2K"]||2.5);}  // match flatten()'s padded dims
+      usd*=((C.openaiResMult||{})[effectiveResolution()]||1);
     } else {
       const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id
       const t=(C.googlePerImage||{})[key]||{};
-      usd=t[S.resolution]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
+      usd=t[selectedResolution()||"1K"]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
     }
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
@@ -827,7 +950,9 @@ const BOOT = /*__BOOT__*/;
     ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(off,0,0);
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
-    renderCost();  // aspect can change the OpenAI estimate as content changes
+    const resolution=selectedResolution();
+    if(resolution&&resolution!==S.resolution){S.resolution=resolution;renderTopbar();}
+    renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
 
@@ -885,6 +1010,8 @@ const BOOT = /*__BOOT__*/;
     return {url:c.toDataURL("image/png"), w:c.width, h:c.height};
   }
   async function generate(){
+    const meta=MM[S.model]||{};
+    if(!meta.enabled){toast(meta.reason||"This model is unavailable");return;}
     let flat=null;
     try{ flat=flatten(); }
     catch(e){ toast("can't export the canvas (a cross-origin image tainted it)"); return; }
@@ -895,7 +1022,7 @@ const BOOT = /*__BOOT__*/;
     }
     try{
       const d=await apiJson("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:S.resolution,w:flat?flat.w:1024,h:flat?flat.h:1024})});
+        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,w:flat?flat.w:1024,h:flat?flat.h:1024})});
       S.jobs.push({id:d.job_id,model:S.model,status:"queued",createdAt:Date.now()});
       if(S.trayCollapsed){S.trayCollapsed=false;renderGrid();}
       renderTray();
@@ -945,6 +1072,7 @@ const BOOT = /*__BOOT__*/;
       const p=(BOOT.promptStarters||[])[parseInt(t.dataset.idx,10)];
       if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
     }
+    else if(a==="promptDefault"){S.prompt=BOOT.defaultPrompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>$("promptta")?.focus());}
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
     else if(a==="toggleSrc"){S.srcCollapsed=!S.srcCollapsed;renderSrc();}
