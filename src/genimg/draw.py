@@ -1,9 +1,10 @@
 """genimg draw — a local "draw studio" web app.
 
 `genimg draw [PATHS...]` starts a stdlib HTTP server that serves a single-page,
-Excalidraw-style canvas: drop/annotate images with vector strokes, then hit
-Generate. Each Generate flattens the canvas to a PNG and spawns its OWN `genimg`
-subprocess in the background (concurrent); the page polls /status until done.
+Excalidraw-style canvas: prompt-generate a first image or drop/annotate images
+with vector strokes, then hit Generate. Canvas jobs flatten to a PNG; every job
+spawns its OWN `genimg` subprocess in the background (concurrent), and the page
+polls /status until done.
 Results land in ~/.genimg/generations/ (so `genimg history` still sees them) and
 can be dragged back onto the canvas to iterate.
 
@@ -87,6 +88,14 @@ DEFAULT_PROMPT = (
   "- fresh sketch = render it faithfully\n"
   "- output: clean flat-vector diagram, white background, sans-serif labels"
 )
+PROMPT_STARTERS = [
+  {"label": "Create", "prompt": "Create a single clean image of "},
+  {"label": "Diagram", "prompt": "Create a clean flat-vector diagram of "},
+  {"label": "Polish", "prompt": (
+    "Polish this image while keeping its composition and content unchanged. "
+    "Improve spacing, alignment, line consistency, and legibility."
+  )},
+]
 
 # Aspect ratio → numeric ratio, for snapping the flattened canvas to a supported aspect.
 _ASPECTS = {"1:1": 1.0, "4:3": 4 / 3, "3:4": 3 / 4, "16:9": 16 / 9, "9:16": 9 / 16}
@@ -191,6 +200,7 @@ class Studio:
                   "provider": m["provider"]} for m in visible],
       "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
+      "promptStarters": PROMPT_STARTERS,
       "genDir": str(self.gen_dir).replace(str(Path.home()), "~"),
       # Real cost tables from cost.py so the client estimate is per-model accurate + stays in sync.
       "costs": {
@@ -239,12 +249,14 @@ class Studio:
     return out
 
   # ---- job lifecycle ----
-  def start_job(self, *, image_b64: str, prompt: str, model: str,
+  def start_job(self, *, image_b64: str | None, prompt: str, model: str,
                 quality: str | None, resolution: str | None, w: int, h: int) -> str:
-    png = base64.b64decode(image_b64.split(",", 1)[-1])
     jid = "draw" + secrets.token_hex(6)  # collision-resistant across processes/restarts
-    draft = self.workdir / f"{jid}_in.png"
-    draft.write_bytes(png)
+    draft = None
+    if image_b64:
+      png = base64.b64decode(image_b64.split(",", 1)[-1])
+      draft = self.workdir / f"{jid}_in.png"
+      draft.write_bytes(png)
     out = self.gen_dir / f"draw_{jid}.png"
     logp = self.workdir / f"{jid}.log"
 
@@ -253,7 +265,10 @@ class Studio:
     # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
     # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
     # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
-    cmd = _genimg_cmd() + ["_run", "-m", model, "-i", str(draft), "-a", aspect, "-o", str(out)]
+    cmd = _genimg_cmd() + ["_run", "-m", model]
+    if draft:
+      cmd += ["-i", str(draft)]
+    cmd += ["-a", aspect, "-o", str(out)]
     if res:
       cmd += ["-r", res]
     if provider == "openai" and quality:
@@ -387,13 +402,14 @@ def _make_handler(studio: Studio):
         data = json.loads(self.rfile.read(length) or b"{}")
       except json.JSONDecodeError:
         return self._send(400, "application/json", json.dumps({"error": "bad json"}))
-      image = data.get("image") or ""
-      if not image:
-        return self._send(400, "application/json", json.dumps({"error": "no image"}))
+      image = data.get("image") or None
+      prompt = (data.get("prompt") or (DEFAULT_PROMPT if image else "")).strip()
+      if not image and not prompt:
+        return self._send(400, "application/json", json.dumps({"error": "no image or prompt"}))
       try:
         jid = studio.start_job(
           image_b64=image,
-          prompt=(data.get("prompt") or DEFAULT_PROMPT).strip(),
+          prompt=prompt,
           model=data.get("model") or studio.default_model,
           quality=data.get("quality"),
           resolution=data.get("resolution"),
@@ -489,7 +505,7 @@ const BOOT = /*__BOOT__*/;
     strokes:[], items:[], selectedId:null,
     view:{x:0,y:0,s:1},
     jobs:[], splitPct:50, trayCollapsed:false, srcCollapsed:false,
-    trayScope:"session", trayView:"list", historyItems:[],
+    trayScope:"session", trayView:"list", historyItems:[], historyError:"",
     lightbox:null, shortcutsOpen:false, dragActive:false
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
@@ -600,9 +616,10 @@ const BOOT = /*__BOOT__*/;
     cv.style.cursor = S.tool==="move" ? "default" : "crosshair";
   }
   function renderPrompt(){
+    const starters=(BOOT.promptStarters||[]).map((p,i)=>`<button data-act="promptStarter" data-idx="${i}" title="${esc(p.prompt)}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">${esc(p.label)}</button>`).join("");
     $("promptbox").innerHTML = `
-      <button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button>
-      ${S.promptExpanded?`<textarea id="promptta" rows="5" spellcheck="false" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.6;padding:9px 14px;font-family:inherit;width:100%;resize:vertical">${esc(S.prompt)}</textarea>`:""}`;
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button>${starters}</div>
+      ${S.promptExpanded?`<textarea id="promptta" rows="5" spellcheck="false" placeholder="Describe the image you want…" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.6;padding:9px 14px;font-family:inherit;width:100%;resize:vertical">${esc(S.prompt)}</textarea>`:""}`;
     const ta = $("promptta");
     if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; });
   }
@@ -632,7 +649,8 @@ const BOOT = /*__BOOT__*/;
     </div>`;
   }
   async function loadHistory(){
-    try{ const d=await (await fetch("/history")).json(); S.historyItems=d.items||[]; }catch(e){ S.historyItems=[]; }
+    try{ const d=await apiJson("/history"); S.historyItems=d.items||[]; S.historyError=""; }
+    catch(e){ S.historyItems=[]; S.historyError=e.message||String(e); }
     renderTray();
   }
   // Items for the Generated panel: session jobs, or (scope=all) in-flight jobs + the whole on-disk
@@ -682,8 +700,8 @@ const BOOT = /*__BOOT__*/;
     }
     const empty = !statusHtml && !done.length;
     const emptyMsg = S.trayScope==="all"
-      ? "No generations yet.<br>Results save to ~/.genimg/generations/."
-      : "Draw, then hit ⚡ Generate.<br>Results appear here and save automatically.";
+      ? (S.historyError?esc(S.historyError):"No generations yet.<br>Results save to ~/.genimg/generations/.")
+      : "Describe or draw, then hit ⚡ Generate.<br>Results appear here and save automatically.";
     const body = empty
       ? `<div style="flex:1;border:1px dashed var(--btnb);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:24px;font-size:13px;color:var(--faint);text-align:center;line-height:1.6">${emptyMsg}</div>`
       : statusHtml + doneHtml;
@@ -837,6 +855,18 @@ const BOOT = /*__BOOT__*/;
   }
   function loadSource(idx){ S.strokes=[]; S.items=[]; S.selectedId=null; renderToolbar(); addImage("/src/"+idx,null,true); }
 
+  const SERVER_UNREACHABLE = "Draw Studio server is no longer reachable. Relaunch `genimg draw`, then Retry.";
+  async function apiJson(url,options){
+    let r;
+    try{r=await fetch(url,options);}
+    catch(e){throw new Error(SERVER_UNREACHABLE);}
+    let d;
+    try{d=await r.json();}
+    catch(e){throw new Error("Draw Studio server returned an invalid response (HTTP "+r.status+").");}
+    if(!r.ok)throw new Error(d.error||("Draw Studio request failed (HTTP "+r.status+")."));
+    return d;
+  }
+
   // ---------- flatten + generate ----------
   function flatten(){
     const b=contentBounds(); if(!b)return null;
@@ -858,16 +888,18 @@ const BOOT = /*__BOOT__*/;
     let flat=null;
     try{ flat=flatten(); }
     catch(e){ toast("can't export the canvas (a cross-origin image tainted it)"); return; }
-    if(!flat){toast("nothing to generate — draw or drop an image");return;}
+    if(!flat&&(!S.prompt.trim()||S.prompt===BOOT.defaultPrompt)){
+      S.prompt=""; S.promptExpanded=true; renderPrompt();
+      requestAnimationFrame(()=>$("promptta")?.focus());
+      toast("Describe the first image to generate"); return;
+    }
     try{
-      const r=await fetch("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({image:flat.url,prompt:S.prompt,model:S.model,quality:S.quality,resolution:S.resolution,w:flat.w,h:flat.h})});
-      const d=await r.json();
-      if(d.error){ S.jobs.push({id:"e"+(++_jid),model:S.model,status:"error",error:d.error,createdAt:Date.now()}); renderTray(); return; }
+      const d=await apiJson("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:S.resolution,w:flat?flat.w:1024,h:flat?flat.h:1024})});
       S.jobs.push({id:d.job_id,model:S.model,status:"queued",createdAt:Date.now()});
       if(S.trayCollapsed){S.trayCollapsed=false;renderGrid();}
       renderTray();
-    }catch(err){ S.jobs.push({id:"e"+(++_jid),model:S.model,status:"error",error:String(err),createdAt:Date.now()}); renderTray(); }
+    }catch(err){ S.jobs.push({id:"e"+(++_jid),model:S.model,status:"error",error:err.message||String(err),createdAt:Date.now()}); renderTray(); }
   }
   function retry(jid){ const j=S.jobs.find(x=>x.id===jid); const m=j?j.model:S.model; S.model=m; generate(); }
 
@@ -878,12 +910,15 @@ const BOOT = /*__BOOT__*/;
     let dirty=false;
     await Promise.all(live.map(async j=>{
       try{
-        const s=await (await fetch("/status/"+j.id)).json();
+        const s=await apiJson("/status/"+j.id); j.pollFailures=0;
         if(s.status==="running"){ if(j.status!=="running")dirty=true; j.status="running"; j.elapsed=s.elapsed; }
         else if(s.status==="done"){ j.status="done"; j.elapsed=s.elapsed; j.resultUrl=s.resultUrl; j.fileName=s.fileName; dirty=true; toast("Saved → ~/.genimg/generations/"+s.fileName); }
         else if(s.status==="error"){ j.status="error"; j.error=s.error; dirty=true; }
         else if(s.status==="unknown"){ j.status="error"; j.error="job lost"; dirty=true; }
-      }catch(e){}
+      }catch(e){
+        j.pollFailures=(j.pollFailures||0)+1;
+        if(j.pollFailures>=2){j.status="error";j.error=e.message||String(e);dirty=true;}
+      }
     }));
     if(dirty){ if(S.trayScope==="all")loadHistory(); else renderTray(); }
     else for(const j of live){const el=document.querySelector('[data-elapsed="'+j.id+'"]'); if(el)el.textContent=Math.round(j.elapsed||0)+"s";}
@@ -906,6 +941,10 @@ const BOOT = /*__BOOT__*/;
     else if(a==="closeShortcuts"){S.shortcutsOpen=false;renderOverlays();}
     else if(a==="closeLightbox"){S.lightbox=null;renderOverlays();}
     else if(a==="togglePrompt"){S.promptExpanded=!S.promptExpanded;renderPrompt();}
+    else if(a==="promptStarter"){
+      const p=(BOOT.promptStarters||[])[parseInt(t.dataset.idx,10)];
+      if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
+    }
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
     else if(a==="toggleSrc"){S.srcCollapsed=!S.srcCollapsed;renderSrc();}

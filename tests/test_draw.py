@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -78,6 +80,22 @@ class StartJobArgvTests(unittest.TestCase):
     self.assertIn("-q", argv)
     self.assertEqual(argv[argv.index("-q") + 1], "high")
 
+  def test_prompt_only_generation_omits_edit_input(self) -> None:
+    with patch.object(draw.subprocess, "Popen", return_value=MagicMock()) as popen:
+      self.studio.start_job(
+        image_b64=None,
+        prompt="a clean diagram of a feedback loop",
+        model="gdm:nb2",
+        quality="medium",
+        resolution="1K",
+        w=1024,
+        h=1024,
+      )
+    argv = popen.call_args.args[0]
+    self.assertNotIn("-i", argv)
+    self.assertEqual(argv[-1], "a clean diagram of a feedback loop")
+    self.assertEqual(list(self.studio.workdir.glob("*_in.png")), [])
+
   def test_leading_dash_prompt_passed_after_double_dash(self) -> None:
     # The default prompt starts with "-"; it must be routed through `_run … -- <prompt>` so
     # click parses it as a positional, not an unknown option.
@@ -145,6 +163,45 @@ class OriginGuardTests(unittest.TestCase):
     self.assertFalse(draw._origin_allowed("https://evil.example", "localhost:8788"))
 
 
+class GenerateHttpTests(unittest.TestCase):
+  def setUp(self) -> None:
+    self.tmp = Path(tempfile.mkdtemp())
+    self._patches = [
+      patch.object(metadata, "GENIMG_HOME", self.tmp),
+      patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
+    ]
+    for p in self._patches:
+      p.start()
+      self.addCleanup(p.stop)
+    self.studio = draw.Studio([], "gdm:nb2")
+    self.httpd = draw._Server(("127.0.0.1", 0), draw._make_handler(self.studio))
+    self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+    self.thread.start()
+    self.addCleanup(self.httpd.server_close)
+    self.addCleanup(self.httpd.shutdown)
+
+  def test_prompt_only_request_starts_generation_without_image(self) -> None:
+    self.studio.start_job = MagicMock(return_value="draw123")
+    body = json.dumps({"prompt": "a clean diagram", "model": "gdm:nb2"})
+    conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port, timeout=2)
+    self.addCleanup(conn.close)
+    conn.request("POST", "/generate", body=body, headers={"Content-Type": "application/json"})
+    response = conn.getresponse()
+    payload = json.loads(response.read())
+
+    self.assertEqual(response.status, 200)
+    self.assertEqual(payload, {"job_id": "draw123"})
+    self.studio.start_job.assert_called_once_with(
+      image_b64=None,
+      prompt="a clean diagram",
+      model="gdm:nb2",
+      quality=None,
+      resolution=None,
+      w=1024,
+      h=1024,
+    )
+
+
 class HostGuardTests(unittest.TestCase):
   def test_loopback_hosts_allowed(self) -> None:
     for h in ("localhost:8788", "127.0.0.1:8788", "[::1]:8788", "localhost"):
@@ -165,12 +222,18 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("a\\u003cb.png", js)
     self.assertNotIn("<", js)
 
+  def test_boot_data_includes_first_image_prompt_starters(self) -> None:
+    tmp = Path(tempfile.mkdtemp())
+    with patch.object(metadata, "GENIMG_HOME", tmp), patch.object(metadata, "GEN_DIR", tmp / "gen"):
+      starters = draw.Studio([], "gdm:nb2").boot_data()["promptStarters"]
+    self.assertEqual([item["label"] for item in starters], ["Create", "Diagram", "Polish"])
+
 
 class StudioModelsTests(unittest.TestCase):
   def test_excludes_imagen_and_includes_editable_models(self) -> None:
     models = draw._studio_models()
     aliases = [m["alias"] for m in models]
-    # Imagen is text-to-image only → must not appear (the studio always sends -i).
+    # Imagen is text-to-image only → it cannot support canvas iterations after the first image.
     self.assertNotIn("gdm:imagen4", aliases)
     self.assertTrue(all(not m["modelId"].startswith("imagen-") for m in models))
     # The image-editable models (incl. the ones previously missing from the hardcoded 3) are present.
@@ -282,7 +345,7 @@ class BootDataModelFilterTests(unittest.TestCase):
 
 
 class DrawCommandModelTests(unittest.TestCase):
-  """The studio always sends -i, so the initial model must be an image-capable studio model."""
+  """The studio model must support image input for iterations after the first image."""
 
   def _serve_model(self, args: list[str], default_cfg: str | None) -> str:
     captured: dict[str, str] = {}
