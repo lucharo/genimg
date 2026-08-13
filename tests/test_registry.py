@@ -50,10 +50,9 @@ class SignatureInferenceTests(unittest.TestCase):
     self.assertEqual(spec.region, "global")
     self.assertEqual(spec.model_id, "gemini-9.9-flash-image")
 
-  def test_ga_id_infers_when_registry_pins_preview(self) -> None:
-    # registry pins gemini-3.1-flash-image-preview; the GA id (no -preview) still resolves
-    _, spec = registry.resolve("gemini-3.1-flash-image")
-    self.assertEqual(spec.provider, "google")
+  def test_current_gemini_aliases_use_serving_stable_ids(self) -> None:
+    self.assertEqual(registry.resolve("gdm:nb2")[1].model_id, "gemini-3.1-flash-image")
+    self.assertEqual(registry.resolve("gdm:nbp")[1].model_id, "gemini-3-pro-image")
 
   def test_unregistered_gpt_image_infers_openai(self) -> None:
     _, spec = registry.resolve("gpt-image-9")

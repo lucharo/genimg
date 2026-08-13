@@ -47,6 +47,23 @@ class PickSizeTests(unittest.TestCase):
   def test_gemini_passes_image_size_through(self) -> None:
     self.assertEqual(draw.pick_size("google", 1000, 1400, "2K"), ("3:4", "2K"))
 
+  def test_gemini_auto_aspect_uses_selected_models_full_ratio_set(self) -> None:
+    self.assertEqual(
+      draw.pick_size("google", 1000, 1500, "1K", aspect_options=["1:1", "2:3", "3:2"]),
+      ("2:3", "1K"),
+    )
+
+  def test_manual_aspect_overrides_canvas_ratio(self) -> None:
+    self.assertEqual(draw.pick_size("google", 1024, 1024, "4K", "16:9"), ("16:9", "4K"))
+
+  def test_manual_gemini_extreme_aspects_are_preserved(self) -> None:
+    for aspect in ("1:4", "1:8", "4:1", "8:1", "21:9"):
+      self.assertEqual(draw.pick_size("google", 1024, 1024, "1K", aspect), (aspect, "1K"))
+
+  def test_openai_snaps_resolution_to_valid_aspect_pair(self) -> None:
+    self.assertEqual(draw.pick_size("openai", 1920, 1080, "1K"), ("16:9", "2K"))
+    self.assertEqual(draw.pick_size("openai", 1200, 900, "4K"), ("4:3", "2K"))
+
 
 class StartJobArgvTests(unittest.TestCase):
   def setUp(self) -> None:
@@ -67,18 +84,38 @@ class StartJobArgvTests(unittest.TestCase):
     return popen.call_args.args[0]
 
   def test_gemini_uses_resolution_not_quality(self) -> None:
-    argv = self._argv(prompt="p", model="gdm:nb2", quality="medium", resolution="2K", w=1000, h=1000)
+    argv = self._argv(
+      prompt="p", model="gdm:nb2", quality="medium", resolution="2K",
+      aspect="1:8", thinking="high", w=1000, h=1000,
+    )
     self.assertIn("-r", argv)
     self.assertEqual(argv[argv.index("-r") + 1], "2K")
     self.assertNotIn("-q", argv)
+    self.assertEqual(argv[argv.index("-a") + 1], "1:8")
+    self.assertEqual(argv[argv.index("--thinking") + 1], "high")
     self.assertEqual(argv[argv.index("-m") + 1], "gdm:nb2")
     self.assertIn("-i", argv)
     self.assertIn("-a", argv)
+
+  def test_gemini_auto_aspect_uses_model_specific_ratios(self) -> None:
+    argv = self._argv(
+      prompt="p", model="gdm:nb2", quality=None, resolution="1K",
+      w=1000, h=1500,
+    )
+    self.assertEqual(argv[argv.index("-a") + 1], "2:3")
 
   def test_openai_uses_quality(self) -> None:
     argv = self._argv(prompt="p", model="oai:gpt-image-2", quality="high", resolution="1K", w=1024, h=1024)
     self.assertIn("-q", argv)
     self.assertEqual(argv[argv.index("-q") + 1], "high")
+
+  def test_openai_honors_manual_aspect_and_compatible_resolution(self) -> None:
+    argv = self._argv(
+      prompt="p", model="oai:gpt-image-2", quality="high", resolution="4K",
+      aspect="16:9", w=1024, h=1024,
+    )
+    self.assertEqual(argv[argv.index("-a") + 1], "16:9")
+    self.assertEqual(argv[argv.index("-r") + 1], "4K")
 
   def test_prompt_only_generation_omits_edit_input(self) -> None:
     with patch.object(draw.subprocess, "Popen", return_value=MagicMock()) as popen:
@@ -88,12 +125,14 @@ class StartJobArgvTests(unittest.TestCase):
         model="gdm:nb2",
         quality="medium",
         resolution="1K",
+        aspect="16:9",
         w=1024,
         h=1024,
       )
     argv = popen.call_args.args[0]
     self.assertNotIn("-i", argv)
     self.assertEqual(argv[-1], "a clean diagram of a feedback loop")
+    self.assertEqual(argv[argv.index("-a") + 1], "16:9")
     self.assertEqual(list(self.studio.workdir.glob("*_in.png")), [])
 
   def test_leading_dash_prompt_passed_after_double_dash(self) -> None:
@@ -169,6 +208,9 @@ class GenerateHttpTests(unittest.TestCase):
     self._patches = [
       patch.object(metadata, "GENIMG_HOME", self.tmp),
       patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
+      patch.object(draw.discovery, "load_fresh_cache", return_value=None),
+      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
+      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
     ]
     for p in self._patches:
       p.start()
@@ -197,9 +239,38 @@ class GenerateHttpTests(unittest.TestCase):
       model="gdm:nb2",
       quality=None,
       resolution=None,
+      aspect=None,
+      thinking=None,
       w=1024,
       h=1024,
     )
+
+  def test_disabled_model_is_rejected_server_side(self) -> None:
+    boot = self.studio.boot_data()
+    disabled = next(model for model in boot["models"] if model["alias"] == "oai:gpt-image-2")
+    disabled.update(enabled=False, availability="unavailable", reason="not on this endpoint")
+    studio = draw.Studio([], "gdm:nb2")
+    studio.boot_data = MagicMock(return_value=boot)
+    studio.start_job = MagicMock(return_value="must-not-run")
+    httpd = draw._Server(("127.0.0.1", 0), draw._make_handler(studio))
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    self.addCleanup(thread.join, 2)
+    self.addCleanup(httpd.server_close)
+    self.addCleanup(httpd.shutdown)
+
+    conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port, timeout=2)
+    self.addCleanup(conn.close)
+    conn.request(
+      "POST", "/generate",
+      body=json.dumps({"prompt": "a clean diagram", "model": "oai:gpt-image-2"}),
+      headers={"Content-Type": "application/json"},
+    )
+    response = conn.getresponse()
+
+    self.assertEqual(response.status, 400)
+    self.assertEqual(json.loads(response.read()), {"error": "not on this endpoint"})
+    studio.start_job.assert_not_called()
 
 
 class HostGuardTests(unittest.TestCase):
@@ -228,6 +299,58 @@ class BootJsonTests(unittest.TestCase):
       starters = draw.Studio([], "gdm:nb2").boot_data()["promptStarters"]
     self.assertEqual([item["label"] for item in starters], ["Create", "Diagram", "Polish"])
 
+  def test_discrete_model_parameters_use_segmented_controls_not_native_sliders(self) -> None:
+    self.assertIn('class="segctl"', draw.PAGE)
+    self.assertIn('role="radiogroup"', draw.PAGE)
+    self.assertIn('role="radio"', draw.PAGE)
+    self.assertNotIn('type="range"', draw.PAGE)
+    self.assertIn('grid-template-columns:repeat(var(--segments),64px)', draw.PAGE)
+    self.assertIn('grid-template-rows:12px 36px', draw.PAGE)
+
+  def test_header_keeps_model_separate_from_collapsible_generation_controls(self) -> None:
+    self.assertIn('class="headmain"', draw.PAGE)
+    self.assertIn('class="modelslot controlfield"', draw.PAGE)
+    self.assertIn('id="generationControls"', draw.PAGE)
+    self.assertIn('data-act="toggleControls"', draw.PAGE)
+    self.assertIn('class="controltoggleinner"', draw.PAGE)
+    self.assertIn('function panelTopIcon', draw.PAGE)
+    self.assertNotIn('id="modelStatus"', draw.PAGE)
+    self.assertNotIn('generation unverified', draw.PAGE)
+    self.assertNotIn('availability unconfirmed', draw.PAGE)
+    self.assertIn('>Aspect ratio</label>', draw.PAGE)
+
+  def test_generation_controls_only_render_supported_choices(self) -> None:
+    self.assertNotIn('Model default', draw.PAGE)
+    self.assertNotIn('function fixedControl', draw.PAGE)
+    self.assertIn('(qualities.length?segmentedControl', draw.PAGE)
+    self.assertIn('(resolutions.length>1?segmentedControl', draw.PAGE)
+    self.assertIn('(thinking.length?segmentedControl', draw.PAGE)
+    self.assertIn('.qualityfield,.sizefield{width:max-content}', draw.PAGE)
+    self.assertNotIn('.qualityfield{width:202px}', draw.PAGE)
+    self.assertNotIn('.sizefield{width:270px}', draw.PAGE)
+
+  def test_control_rerenders_restore_focus_and_hide_probe_details(self) -> None:
+    self.assertIn('restoreControlFocus', draw.PAGE)
+    self.assertIn('Selected model is unavailable', draw.PAGE)
+    self.assertNotIn('gen.title=meta.enabled?"":meta.reason', draw.PAGE)
+
+  def test_prompt_chip_selection_tracks_manual_prompt_edits(self) -> None:
+    self.assertIn("function updatePromptChipState", draw.PAGE)
+    self.assertIn("updatePromptChipState();", draw.PAGE)
+
+  def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
+    self.assertIn("function sizeControlKey", draw.PAGE)
+    self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
+
+  def test_generated_panel_uses_one_persistent_right_rail(self) -> None:
+    self.assertIn('class="trayframe"', draw.PAGE)
+    self.assertIn('class="trayframe expanded"', draw.PAGE)
+    self.assertIn('class="trayrail"', draw.PAGE)
+    self.assertIn('function panelRightIcon', draw.PAGE)
+    self.assertIn('#traycol{grid-column:3}', draw.PAGE)
+    self.assertIn('title="Show generated images"', draw.PAGE)
+    self.assertIn('title="Hide generated images"', draw.PAGE)
+
 
 class StudioModelsTests(unittest.TestCase):
   def test_excludes_imagen_and_includes_editable_models(self) -> None:
@@ -240,32 +363,63 @@ class StudioModelsTests(unittest.TestCase):
     for a in ("gdm:nb2", "gdm:nbp", "gdm:nb2-lite", "oai:gpt-image-2", "oai:gpt-image-1.5"):
       self.assertIn(a, aliases)
 
+  def test_resolution_controls_only_appear_for_models_that_support_them(self) -> None:
+    models = {model["alias"]: model for model in draw._studio_models()}
+    self.assertEqual(models["gdm:nb"]["resolutionOptions"], [])
+    self.assertEqual(models["gdm:nb2"]["resolutionOptions"], ["512", "1K", "2K", "4K"])
+    self.assertEqual(models["gdm:nb2-lite"]["resolutionOptions"], ["1K"])
+    self.assertEqual(models["oai:gpt-image-2"]["resolutionOptions"], ["1K", "2K", "4K"])
+    self.assertEqual(
+      models["oai:gpt-image-2"]["resolutionOptionsByAspect"]["16:9"], ["2K", "4K"])
+
+  def test_gemini_models_expose_their_distinct_aspect_and_thinking_controls(self) -> None:
+    models = {model["alias"]: model for model in draw._studio_models()}
+    self.assertIn("1:8", models["gdm:nb2"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nb2"]["aspectOptions"]), 14)
+    self.assertNotIn("1:8", models["gdm:nbp"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nbp"]["aspectOptions"]), 10)
+    self.assertEqual(models["gdm:nb2"]["thinkingOptions"], ["minimal", "high"])
+    self.assertEqual(models["gdm:nbp"]["thinkingOptions"], [])
+    self.assertIn("1:8", models["gdm:nb2-lite"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nb2-lite"]["aspectOptions"]), 14)
+
 
 class AvailableModelsTests(unittest.TestCase):
-  def test_no_cache_or_empty_probes_shows_all(self) -> None:
-    self.assertEqual(draw.available_models(None), list(draw.STUDIO_MODELS))
-    self.assertEqual(draw.available_models({"probes": {}}), list(draw.STUDIO_MODELS))
+  AUTH_OK = {"google": {"ok": True, "mode": "vertex", "hint": ""},
+             "openai": {"ok": True, "mode": "azure", "hint": ""}}
 
-  def test_openai_missing_hidden_but_google_missing_kept(self) -> None:
+  def test_no_cache_shows_all_grouped_models_enabled_when_auth_is_ready(self) -> None:
+    models = draw.available_models(None, self.AUTH_OK)
+    self.assertEqual([m["alias"] for m in models], [m["alias"] for m in draw.STUDIO_MODELS])
+    self.assertTrue(all(m["enabled"] for m in models))
+
+  def test_provider_without_auth_is_kept_but_disabled_with_reason(self) -> None:
+    auth = {**self.AUTH_OK, "openai": {"ok": False, "mode": "unset", "hint": "Run genimg setup"}}
+    models = draw.available_models(None, auth)
+    openai = [m for m in models if m["provider"] == "openai"]
+    self.assertTrue(openai)
+    self.assertTrue(all(not m["enabled"] for m in openai))
+    self.assertTrue(all(m["reason"] == "Run genimg setup" for m in openai))
+
+  def test_openai_missing_disabled_but_google_missing_remains_selectable(self) -> None:
     cache = {"probes": {
       "gdm:nb2": {"status": "missing"},            # Vertex under-reports → keep
       "oai:gpt-image-2": {"status": "listed"},     # keep
-      "oai:gpt-image-1.5": {"status": "missing"},  # OpenAI list is authoritative → hide
+      "oai:gpt-image-1.5": {"status": "missing"},  # absent from this endpoint's catalog → disable
     }}
-    aliases = [m["alias"] for m in draw.available_models(cache)]
-    self.assertIn("gdm:nb2", aliases)
-    self.assertIn("oai:gpt-image-2", aliases)
-    self.assertNotIn("oai:gpt-image-1.5", aliases)
+    models = {m["alias"]: m for m in draw.available_models(cache, self.AUTH_OK)}
+    self.assertTrue(models["gdm:nb2"]["enabled"])
+    self.assertEqual(models["gdm:nb2"]["availability"], "unconfirmed")
+    self.assertTrue(models["oai:gpt-image-2"]["enabled"])
+    self.assertEqual(models["oai:gpt-image-2"]["availability"], "listed")
+    self.assertFalse(models["oai:gpt-image-1.5"]["enabled"])
 
-  def test_provider_region_failure_hidden_unknown_kept(self) -> None:
-    cache = {"probes": {"gdm:nb": {"status": "403"}}}  # gdm:nb unreachable; the rest unprobed
-    aliases = [m["alias"] for m in draw.available_models(cache)]
-    self.assertNotIn("gdm:nb", aliases)
-    self.assertIn("gdm:nb2", aliases)  # unknown status → not hidden
-
-  def test_everything_filtered_falls_back_to_all(self) -> None:
-    cache = {"probes": {m["alias"]: {"status": "auth"} for m in draw.STUDIO_MODELS}}
-    self.assertEqual(draw.available_models(cache), list(draw.STUDIO_MODELS))
+  def test_provider_region_failure_disables_only_affected_google_models(self) -> None:
+    cache = {"probes": {"gdm:nb": {"status": "403", "detail": "permission denied"}}}
+    models = {m["alias"]: m for m in draw.available_models(cache, self.AUTH_OK)}
+    self.assertFalse(models["gdm:nb"]["enabled"])
+    self.assertIn("permission denied", models["gdm:nb"]["reason"])
+    self.assertTrue(models["gdm:nb2"]["enabled"])
 
 
 class HistoryItemsTests(unittest.TestCase):
@@ -325,23 +479,26 @@ class HistoryItemsTests(unittest.TestCase):
 
 
 class BootDataModelFilterTests(unittest.TestCase):
-  def _models(self, fresh_cache) -> list[str]:
+  def _models(self, fresh_cache) -> list[dict]:
     tmp = Path(tempfile.mkdtemp())
     with (
       patch.object(metadata, "GENIMG_HOME", tmp),
       patch.object(metadata, "GEN_DIR", tmp / "generations"),
       patch.object(draw.discovery, "load_fresh_cache", return_value=fresh_cache),
+      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
+      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
     ):
-      return [m["alias"] for m in draw.Studio([], "gdm:nb2").boot_data()["models"]]
+      return draw.Studio([], "gdm:nb2").boot_data()["models"]
 
   def test_stale_or_absent_cache_shows_all(self) -> None:
-    # load_fresh_cache() returns None when stale/absent → no filtering.
+    # load_fresh_cache() returns None when stale/absent → all remain visible as unknown.
     self.assertEqual(len(self._models(None)), len(draw.STUDIO_MODELS))
 
-  def test_fresh_cache_filters_unreachable(self) -> None:
-    aliases = self._models({"probes": {"oai:gpt-image-1.5": {"status": "missing"}}})
-    self.assertNotIn("oai:gpt-image-1.5", aliases)
-    self.assertIn("gdm:nb2", aliases)
+  def test_fresh_cache_marks_unreachable_without_hiding_it(self) -> None:
+    models = {m["alias"]: m for m in self._models(
+      {"probes": {"oai:gpt-image-1.5": {"status": "missing"}}})}
+    self.assertFalse(models["oai:gpt-image-1.5"]["enabled"])
+    self.assertTrue(models["gdm:nb2"]["enabled"])
 
 
 class DrawCommandModelTests(unittest.TestCase):

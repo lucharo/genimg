@@ -10,7 +10,8 @@ dependencies = [
   # directly because cli.py imports it (not transitively via typer).
   "typer>=0.12,<0.26",
   "click>=8.1",
-  "google-genai>=0.8",
+  # 1.51 added GenerateContentConfig.thinking_level, used by Gemini 3.1 Flash Image.
+  "google-genai>=1.51",
   "openai>=1.50",
   "rich>=13",
   "pillow>=10",
