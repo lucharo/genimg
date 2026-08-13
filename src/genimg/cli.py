@@ -895,6 +895,8 @@ _ASPECT_VALUES = {
 }
 _GEMINI_ASPECT_VALUES = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
 _GEMINI_31_FLASH_ASPECT_VALUES = _ASPECT_VALUES
+_IMAGEN_ASPECT_VALUES = {"1:1", "3:4", "4:3", "9:16", "16:9"}
+_IMAGEN_RESOLUTION_VALUES = {"1K", "2K"}
 _OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _OPENAI_MAX_INPUT_MB = 50
 _OPENAI_MAX_INPUTS = 16
@@ -914,6 +916,11 @@ def _size_params_supported(
   if provider == "openai":
     from .providers.openai import _SIZE_MAP
     return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
+  if model_id.startswith("imagen-"):
+    return (
+      (resolution is None or resolution in _IMAGEN_RESOLUTION_VALUES)
+      and (aspect_ratio is None or aspect_ratio in _IMAGEN_ASPECT_VALUES)
+    )
   if provider == "google" and model_id.startswith("gemini-"):
     if model_id.startswith("gemini-3.1-flash-image"):
       allowed_resolutions = {"512", "1K", "2K", "4K"}
@@ -1043,6 +1050,12 @@ def _validate_provider_flags(
       "Imagen does not support --input or reference images (text-to-image only). "
       "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
     )
+
+  if model_id and model_id.startswith("imagen-"):
+    if resolution is not None and resolution not in _IMAGEN_RESOLUTION_VALUES:
+      _die(f"{model_id} supports image sizes: {', '.join(sorted(_IMAGEN_RESOLUTION_VALUES))}.")
+    if aspect_ratio is not None and aspect_ratio not in _IMAGEN_ASPECT_VALUES:
+      _die(f"{model_id} does not support aspect ratio {aspect_ratio}.")
 
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
