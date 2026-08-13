@@ -61,9 +61,6 @@ class StartJobArgvTests(unittest.TestCase):
     self._patches = [
       patch.object(metadata, "GENIMG_HOME", self.tmp),
       patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
-      patch.object(draw.discovery, "load_fresh_cache", return_value=None),
-      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
-      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
       patch.object(draw, "_genimg_cmd", return_value=["genimg"]),
     ]
     for p in self._patches:
@@ -189,6 +186,9 @@ class GenerateHttpTests(unittest.TestCase):
     self._patches = [
       patch.object(metadata, "GENIMG_HOME", self.tmp),
       patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
+      patch.object(draw.discovery, "load_fresh_cache", return_value=None),
+      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
+      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
     ]
     for p in self._patches:
       p.start()
