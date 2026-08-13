@@ -202,8 +202,14 @@ def _run(
   resolution_was_explicit = resolution is not None
   aspect_was_explicit = aspect_ratio is not None
   quality_was_explicit = quality is not None
-  resolution = resolution or user_cfg.get("default_resolution")
-  aspect_ratio = aspect_ratio or user_cfg.get("default_aspect_ratio")
+  resolution, aspect_ratio = _compatible_size_defaults(
+    spec.provider,
+    spec.model_id,
+    resolution,
+    aspect_ratio,
+    user_cfg.get("default_resolution"),
+    user_cfg.get("default_aspect_ratio"),
+  )
   if spec.provider == "openai":
     quality = quality or user_cfg.get("default_quality")
 
@@ -329,7 +335,7 @@ def _run(
     gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-    prompt_deltas=output_deltas, mode=mode, diverse=diverse,
+    thinking_level=thinking_level, prompt_deltas=output_deltas, mode=mode, diverse=diverse,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -342,7 +348,8 @@ def _run(
       gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=result.paths,
       n=n, cost_usd=est_cost, input=input, refs=refs,
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
-      grid_path=written_grid, prompt_deltas=output_deltas, mode=mode, diverse=diverse,
+      thinking_level=thinking_level, grid_path=written_grid,
+      prompt_deltas=output_deltas, mode=mode, diverse=diverse,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
@@ -891,6 +898,69 @@ _GEMINI_31_FLASH_ASPECT_VALUES = _ASPECT_VALUES
 _OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _OPENAI_MAX_INPUT_MB = 50
 _OPENAI_MAX_INPUTS = 16
+
+
+def _size_params_supported(
+  provider: str,
+  model_id: str,
+  resolution: str | None,
+  aspect_ratio: str | None,
+) -> bool:
+  """Return whether a resolution/aspect pair is valid without printing or exiting."""
+  if resolution is not None and resolution not in _RESOLUTION_VALUES:
+    return False
+  if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
+    return False
+  if provider == "openai":
+    from .providers.openai import _SIZE_MAP
+    return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
+  if provider == "google" and model_id.startswith("gemini-"):
+    if model_id.startswith("gemini-3.1-flash-image"):
+      allowed_resolutions = {"512", "1K", "2K", "4K"}
+    elif model_id.startswith("gemini-3.1-flash-lite-image"):
+      allowed_resolutions = {"1K"}
+    elif model_id.startswith("gemini-3-pro-image"):
+      allowed_resolutions = {"1K", "2K", "4K"}
+    else:
+      allowed_resolutions = set()
+    if resolution is not None and resolution not in allowed_resolutions:
+      return False
+    allowed_aspects = (
+      _GEMINI_31_FLASH_ASPECT_VALUES
+      if model_id.startswith(("gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"))
+      else _GEMINI_ASPECT_VALUES
+    )
+    return aspect_ratio is None or aspect_ratio in allowed_aspects
+  return True
+
+
+def _compatible_size_defaults(
+  provider: str,
+  model_id: str,
+  resolution: str | None,
+  aspect_ratio: str | None,
+  configured_resolution: str | None,
+  configured_aspect: str | None,
+) -> tuple[str | None, str | None]:
+  """Apply global size defaults only when the selected model supports the resulting pair.
+
+  Explicit flags are never discarded; incompatible config-only values fall back to provider
+  defaults so a default chosen for one model cannot make another model unusable.
+  """
+  resolution_defaults = [configured_resolution, None] if resolution is None else [None]
+  aspect_defaults = [configured_aspect, None] if aspect_ratio is None else [None]
+  candidates = [
+    (r, a)
+    for r in resolution_defaults
+    for a in aspect_defaults
+  ]
+  candidates.sort(key=lambda pair: (pair[0] is None) + (pair[1] is None))
+  for default_resolution, default_aspect in candidates:
+    candidate_resolution = resolution if resolution is not None else default_resolution
+    candidate_aspect = aspect_ratio if aspect_ratio is not None else default_aspect
+    if _size_params_supported(provider, model_id, candidate_resolution, candidate_aspect):
+      return candidate_resolution, candidate_aspect
+  return resolution, aspect_ratio
 
 
 def _resolved_openai_size(provider: str, resolution: str | None, aspect_ratio: str | None) -> str | None:

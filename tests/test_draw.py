@@ -47,6 +47,12 @@ class PickSizeTests(unittest.TestCase):
   def test_gemini_passes_image_size_through(self) -> None:
     self.assertEqual(draw.pick_size("google", 1000, 1400, "2K"), ("3:4", "2K"))
 
+  def test_gemini_auto_aspect_uses_selected_models_full_ratio_set(self) -> None:
+    self.assertEqual(
+      draw.pick_size("google", 1000, 1500, "1K", aspect_options=["1:1", "2:3", "3:2"]),
+      ("2:3", "1K"),
+    )
+
   def test_manual_aspect_overrides_canvas_ratio(self) -> None:
     self.assertEqual(draw.pick_size("google", 1024, 1024, "4K", "16:9"), ("16:9", "4K"))
 
@@ -90,6 +96,13 @@ class StartJobArgvTests(unittest.TestCase):
     self.assertEqual(argv[argv.index("-m") + 1], "gdm:nb2")
     self.assertIn("-i", argv)
     self.assertIn("-a", argv)
+
+  def test_gemini_auto_aspect_uses_model_specific_ratios(self) -> None:
+    argv = self._argv(
+      prompt="p", model="gdm:nb2", quality=None, resolution="1K",
+      w=1000, h=1500,
+    )
+    self.assertEqual(argv[argv.index("-a") + 1], "2:3")
 
   def test_openai_uses_quality(self) -> None:
     argv = self._argv(prompt="p", model="oai:gpt-image-2", quality="high", resolution="1K", w=1024, h=1024)
@@ -320,6 +333,10 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn('restoreControlFocus', draw.PAGE)
     self.assertIn('Selected model is unavailable', draw.PAGE)
     self.assertNotIn('gen.title=meta.enabled?"":meta.reason', draw.PAGE)
+
+  def test_prompt_chip_selection_tracks_manual_prompt_edits(self) -> None:
+    self.assertIn("function updatePromptChipState", draw.PAGE)
+    self.assertIn("updatePromptChipState();", draw.PAGE)
 
   def test_generated_panel_uses_one_persistent_right_rail(self) -> None:
     self.assertIn('class="trayframe"', draw.PAGE)

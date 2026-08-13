@@ -186,9 +186,14 @@ def discover_images(paths: list[Path]) -> list[Path]:
   return found
 
 
-def _nearest_aspect(w: int, h: int) -> str:
+def _nearest_aspect(w: int, h: int, aspect_options: list[str] | None = None) -> str:
   ratio = (w / h) if h else 1.0
-  return min(_ASPECTS, key=lambda a: abs(_ASPECTS[a] - ratio))
+  options = aspect_options or list(_ASPECTS)
+  ratios = {
+    aspect: int(aspect.split(":", 1)[0]) / int(aspect.split(":", 1)[1])
+    for aspect in options
+  }
+  return min(ratios, key=lambda aspect: abs(ratios[aspect] - ratio))
 
 
 def _provider_of(model: str) -> str:
@@ -201,7 +206,8 @@ def _provider_of(model: str) -> str:
 
 
 def pick_size(provider: str, w: int, h: int, resolution: str | None,
-              aspect: str | None = None) -> tuple[str, str | None]:
+              aspect: str | None = None,
+              aspect_options: list[str] | None = None) -> tuple[str, str | None]:
   """Choose a valid (aspect, resolution) for the flattened composite.
 
   - Google uses the selected image_size when that model exposes one; older models pass none.
@@ -215,8 +221,8 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
     if requested not in valid:
       requested = "2K"
     return aspect, requested
-  google_aspects = set(_GEMINI_31_FLASH_ASPECTS)
-  aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h)
+  google_aspects = aspect_options or _GEMINI_31_FLASH_ASPECTS
+  aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h, google_aspects)
   return aspect, resolution or None
 
 
@@ -331,7 +337,9 @@ class Studio:
     logp = self.workdir / f"{jid}.log"
 
     provider = _provider_of(model)
-    aspect, res = pick_size(provider, w, h, resolution, aspect)
+    model_info = next((item for item in STUDIO_MODELS if item["alias"] == model), None)
+    aspect_options = model_info.get("aspectOptions") if model_info else None
+    aspect, res = pick_size(provider, w, h, resolution, aspect, aspect_options)
     # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
     # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
     # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
@@ -819,10 +827,17 @@ const BOOT = /*__BOOT__*/;
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button><span style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Start with</span>${starters}<button class="promptchip ${defaultActive?'on':''}" data-act="promptDefault" title="Restore the default annotation instructions" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">Default</button></div>
       ${S.promptExpanded?`<textarea id="promptta" rows="5" spellcheck="false" placeholder="Describe the image you want…" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.6;padding:9px 14px;font-family:inherit;width:100%;resize:vertical">${esc(S.prompt)}</textarea>`:""}`;
     const ta = $("promptta");
-    if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; });
+    if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; updatePromptChipState(); });
+  }
+  function updatePromptChipState(){
+    for(const button of document.querySelectorAll('[data-act="promptStarter"]')){
+      const starter=(BOOT.promptStarters||[])[parseInt(button.dataset.idx,10)];
+      button.classList.toggle("on",Boolean(starter&&S.prompt.startsWith(starter.prompt)));
+    }
+    document.querySelector('[data-act="promptDefault"]')?.classList.toggle("on",S.prompt===BOOT.defaultPrompt);
   }
   function renderCost(){ const el=$("costtext"); if(el) el.textContent = "· " + costEstimate(); }
-  function nearestAspect(w,h){const A={"1:1":1,"4:3":4/3,"3:4":3/4,"16:9":16/9,"9:16":9/16};const r=h?w/h:1;let best="1:1",bd=1e9;for(const a in A){const d=Math.abs(A[a]-r);if(d<bd){bd=d;best=a;}}return best;}
+  function nearestAspect(w,h,aspects){const options=aspects&&aspects.length?aspects:["1:1"];const r=h?w/h:1;let best=options[0],bd=1e9;for(const a of options){const parts=a.split(":").map(Number),ar=parts[0]/parts[1],d=Math.abs(ar-r);if(d<bd){bd=d;best=a;}}return best;}
   function renderGrid(){
     const g = $("studiogrid");
     if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 36px";
@@ -936,7 +951,8 @@ const BOOT = /*__BOOT__*/;
   function selectedAspect(){
     if(S.aspect!=="auto")return S.aspect;
     const b=contentBounds();
-    return b?nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2):"1:1";
+    const aspects=(MM[S.model]||{}).aspectOptions||["1:1"];
+    return b?nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2,aspects):"1:1";
   }
   function resolutionOptions(meta=MM[S.model]||{}){
     const all=meta.resolutionOptions||[], byAspect=meta.resolutionOptionsByAspect||{};

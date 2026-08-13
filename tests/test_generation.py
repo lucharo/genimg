@@ -19,6 +19,23 @@ class NoDefaultModelTests(unittest.TestCase):
     self.assertEqual(result.exit_code, 1)
     self.assertIn("no model specified", " ".join(result.output.split()))
 
+  def test_incompatible_global_size_defaults_are_ignored_for_selected_model(self) -> None:
+    runner = CliRunner()
+    config = {
+      "default_resolution": "4K",
+      "default_aspect_ratio": "1:8",
+    }
+    with (
+      patch.object(cli.config, "load", return_value=config),
+      patch.object(cli.auth_google, "auth_info", return_value={"mode": "vertex"}),
+    ):
+      result = runner.invoke(cli._app, ["a prompt", "-m", "gdm:nb", "--dry-run"])
+
+    self.assertEqual(result.exit_code, 0, result.output)
+    params_line = next(line for line in result.output.splitlines() if "params" in line)
+    self.assertNotIn("r=4K", params_line)
+    self.assertNotIn("a=1:8", params_line)
+
 
 class _FakeGen(IImageGen):
   """Succeeds for every index except those in `fail`."""
