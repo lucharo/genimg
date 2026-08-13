@@ -145,7 +145,7 @@ def _run(
          "may return fewer than n) or Imagen number_of_images. Rejected on OpenAI — gpt-image n>1 "
          "returns near-duplicate independent samples (verified live), i.e. wasted spend.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
-    help="1:1 | 3:4 | 4:3 | 9:16 | 16:9.")] = None,
+    help="Output aspect ratio. Options depend on the selected model.")] = None,
   output: Annotated[Path | None, typer.Option("-o", "--output", rich_help_panel=_PANEL_OUTPUT,
     help="Output PNG path. Default: ~/.genimg/generations/<id>.png")] = None,
   grid: Annotated[bool, typer.Option("-g", "--grid", rich_help_panel=_PANEL_OUTPUT,
@@ -153,9 +153,11 @@ def _run(
   open_after: Annotated[bool, typer.Option("--open", rich_help_panel=_PANEL_OUTPUT,
     help="Open the grid (n>1) or first image (n=1) in browser.")] = False,
   resolution: Annotated[str | None, typer.Option("-r", "--resolution", rich_help_panel=_PANEL_CORE,
-    help="1K | 2K | 4K. Honored on OpenAI, Imagen, and Gemini 3 image models (image_size).")] = None,
+    help="512 | 1K | 2K | 4K. Options depend on the selected model.")] = None,
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
     help="low | medium (default) | high | auto. high = 30-90s/image.")] = None,
+  thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
+    help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
     help="azure | direct (default: auto-detect from OPENAI_BASE_URL).")] = None,
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
@@ -208,7 +210,7 @@ def _run(
   _validate_provider_flags(
     spec.provider, quality=quality, region=region, project=project, auth=auth,
     resolution=resolution, aspect_ratio=aspect_ratio, refs=refs, input=input,
-    model_id=spec.model_id, mode=mode, diverse=diverse,
+    model_id=spec.model_id, mode=mode, diverse=diverse, thinking_level=thinking_level,
   )
 
   gen_id = metadata.make_id(prompt, spec.model_id)
@@ -240,6 +242,8 @@ def _run(
     params.append(f"r={resolution}{'' if resolution_was_explicit else ' (default)'}")
   if aspect_ratio:
     params.append(f"a={aspect_ratio}{'' if aspect_was_explicit else ' (default)'}")
+  if thinking_level:
+    params.append(f"thinking={thinking_level}")
 
   resolved_size = _resolved_openai_size(spec.provider, resolution, aspect_ratio)
   est_cost = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
@@ -287,6 +291,7 @@ def _run(
     prompt=prompt, output=out_path, model=resolved,
     refs=refs or [], input=input, n=n,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
+    thinking_level=thinking_level,
     region=region, project=project, prompt_variants=variants,
     mode=mode, diverse=diverse,
   )
@@ -876,8 +881,13 @@ def skills_list():
 # ────────────────────── helpers ──────────────────────
 
 _QUALITY_VALUES = {"low", "medium", "high", "auto"}
-_RESOLUTION_VALUES = {"1K", "2K", "4K"}
-_ASPECT_VALUES = {"1:1", "3:4", "4:3", "9:16", "16:9"}
+_RESOLUTION_VALUES = {"512", "1K", "2K", "4K"}
+_ASPECT_VALUES = {
+  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
+  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
+}
+_GEMINI_ASPECT_VALUES = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
+_GEMINI_31_FLASH_ASPECT_VALUES = _ASPECT_VALUES
 _OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _OPENAI_MAX_INPUT_MB = 50
 _OPENAI_MAX_INPUTS = 16
@@ -921,6 +931,7 @@ def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
 def _validate_provider_flags(
   provider: str, *, quality, region, project, auth, resolution, aspect_ratio, refs, input,
   model_id: str | None = None, mode: str | None = None, diverse: bool = False,
+  thinking_level: str | None = None,
 ) -> None:
   """Reject incompatible provider/flag combinations early with clear errors."""
   refs = refs or []
@@ -951,6 +962,12 @@ def _validate_provider_flags(
     if provider != "openai":
       _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
 
+  if thinking_level is not None:
+    if thinking_level not in {"minimal", "high"}:
+      _die(f"--thinking must be minimal or high, got {thinking_level!r}")
+    if provider != "google" or not (model_id or "").startswith("gemini-3.1-flash-image"):
+      _die("--thinking is supported only by Gemini 3.1 Flash Image (-m gdm:nb2).")
+
   if model_id and model_id.startswith("imagen-") and (input or refs):
     _die(
       "Imagen does not support --input or reference images (text-to-image only). "
@@ -961,6 +978,30 @@ def _validate_provider_flags(
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
     _die(f"--aspect-ratio must be one of {sorted(_ASPECT_VALUES)}, got {aspect_ratio!r}")
+
+  if provider == "google" and model_id and model_id.startswith("gemini-"):
+    is_flash_31 = model_id.startswith("gemini-3.1-flash-image")
+    is_flash_lite_31 = model_id.startswith("gemini-3.1-flash-lite-image")
+    is_pro_3 = model_id.startswith("gemini-3-pro-image")
+    if resolution is not None:
+      if is_flash_31:
+        allowed_resolutions = {"512", "1K", "2K", "4K"}
+      elif is_flash_lite_31:
+        allowed_resolutions = {"1K"}
+      elif is_pro_3:
+        allowed_resolutions = {"1K", "2K", "4K"}
+      else:
+        allowed_resolutions = set()
+      if resolution not in allowed_resolutions:
+        shown = ", ".join(sorted(allowed_resolutions)) or "provider default only"
+        _die(f"{model_id} supports image sizes: {shown}.")
+    allowed_aspects = (
+      _GEMINI_31_FLASH_ASPECT_VALUES
+      if is_flash_31 or is_flash_lite_31
+      else _GEMINI_ASPECT_VALUES
+    )
+    if aspect_ratio is not None and aspect_ratio not in allowed_aspects:
+      _die(f"{model_id} does not support aspect ratio {aspect_ratio}.")
 
   if provider == "openai":
     # Validate the (resolution, aspect) pair against the provider's real size table so this

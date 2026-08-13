@@ -39,7 +39,28 @@ class ValidationMatrixTests(unittest.TestCase):
   def test_resolution_on_gemini_allowed(self) -> None:
     # Gemini 3 image models honor image_size (providers/google.py sets image_config.image_size;
     # cost.py prices per 1K/2K/4K), so -r must pass validation for them.
-    _validate(provider="google", resolution="2K", model_id="gemini-3.1-flash-image-preview")
+    _validate(provider="google", resolution="2K", model_id="gemini-3.1-flash-image")
+
+  def test_flash_image_supports_512_and_extreme_aspect(self) -> None:
+    _validate(
+      provider="google", resolution="512", aspect_ratio="1:8",
+      model_id="gemini-3.1-flash-image",
+    )
+
+  def test_other_gemini_models_reject_flash_only_sizes_and_aspects(self) -> None:
+    with self.assertRaises(typer.Exit):
+      _validate(provider="google", resolution="512", model_id="gemini-3-pro-image")
+    with self.assertRaises(typer.Exit):
+      _validate(provider="google", aspect_ratio="1:8", model_id="gemini-3-pro-image")
+    with self.assertRaises(typer.Exit):
+      _validate(provider="google", resolution="2K", model_id="gemini-3.1-flash-lite-image")
+    _validate(provider="google", resolution="1K", aspect_ratio="1:8",
+              model_id="gemini-3.1-flash-lite-image")
+
+  def test_thinking_level_is_flash_image_only(self) -> None:
+    _validate(provider="google", thinking_level="high", model_id="gemini-3.1-flash-image")
+    with self.assertRaises(typer.Exit):
+      _validate(provider="google", thinking_level="high", model_id="gemini-3-pro-image")
 
   def test_resolution_on_imagen_ok(self) -> None:
     _validate(provider="google", resolution="2K", model_id="imagen-4.0-generate-001")

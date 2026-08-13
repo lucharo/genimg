@@ -91,5 +91,45 @@ class GoogleMkdirTests(unittest.TestCase):
     self.assertTrue(out.exists())
 
 
+class GoogleImageConfigTests(unittest.TestCase):
+  def test_flash_image_high_thinking_reaches_provider_request(self) -> None:
+    import genimg.providers.google as gp
+
+    class FakeImg:
+      def save(self, out) -> None:
+        Path(out).write_bytes(b"PNG")
+
+    class FakePart:
+      inline_data = object()
+      text = None
+
+      def as_image(self) -> "FakeImg":
+        return FakeImg()
+
+    class FakeResp:
+      parts = [FakePart()]
+
+    captured = {}
+
+    class FakeModels:
+      def generate_content(self, **kwargs) -> "FakeResp":
+        captured.update(kwargs)
+        return FakeResp()
+
+    class FakeClient:
+      models = FakeModels()
+
+    out = Path(tempfile.mkdtemp()) / "x.png"
+    req = GenerateRequest(
+      prompt="x", output=out, model="gemini-3.1-flash-image", n=1,
+      thinking_level="high",
+    )
+    with patch.object(gp, "get_client", return_value=FakeClient()):
+      gp.GeminiImageGen().generate(req)
+
+    config = captured["config"].model_dump(exclude_none=True, mode="json")
+    self.assertEqual(config["thinking_config"], {"thinking_level": "HIGH"})
+
+
 if __name__ == "__main__":
   unittest.main()

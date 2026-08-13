@@ -41,6 +41,12 @@ _OPENAI_RESOLUTIONS = {
   "16:9": ["2K", "4K"],
   "9:16": ["2K", "4K"],
 }
+_OPENAI_ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16"]
+_GEMINI_ASPECTS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
+_GEMINI_31_FLASH_ASPECTS = [
+  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
+  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
+]
 
 
 def _studio_models() -> list[dict]:
@@ -51,19 +57,35 @@ def _studio_models() -> list[dict]:
   for alias, spec in registry.all_canonical().items():
     if spec.model_id.startswith("imagen-"):
       continue
+    is_flash_31 = spec.model_id.startswith("gemini-3.1-flash-image")
+    is_flash_lite_31 = spec.model_id.startswith("gemini-3.1-flash-lite-image")
+    is_gemini_3_pro = spec.model_id.startswith("gemini-3-pro-image")
+    if spec.provider == "openai":
+      resolution_options = ["1K", "2K", "4K"]
+      aspect_options = _OPENAI_ASPECTS
+    elif is_flash_31:
+      resolution_options = ["512", "1K", "2K", "4K"]
+      aspect_options = _GEMINI_31_FLASH_ASPECTS
+    elif is_flash_lite_31:
+      resolution_options = ["1K"]
+      aspect_options = _GEMINI_31_FLASH_ASPECTS
+    elif is_gemini_3_pro:
+      resolution_options = ["1K", "2K", "4K"]
+      aspect_options = _GEMINI_ASPECTS
+    else:
+      resolution_options = []
+      aspect_options = _GEMINI_ASPECTS
     out.append({
       "alias": alias,
       "label": f"{alias} · {spec.model_id.replace('-preview', '')}",
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
-      "qualityOptions": ["auto", "low", "medium", "high"] if spec.provider == "openai" else [],
-      "resolutionOptions": (
-        ["1K", "2K", "4K"]
-        if spec.provider == "openai" or spec.model_id.startswith("gemini-3")
-        else []
-      ),
+      "qualityOptions": ["low", "medium", "high"] if spec.provider == "openai" else [],
+      "resolutionOptions": resolution_options,
       "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
+      "aspectOptions": aspect_options,
+      "thinkingOptions": ["minimal", "high"] if is_flash_31 else [],
     })
   order = {"google": 0, "openai": 1}
   out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
@@ -80,10 +102,10 @@ _UNREACHABLE = {"auth", "403", "404", "error"}
 def available_models(cache: dict | None, provider_auth: dict | None = None) -> list[dict]:
   """Annotate every Studio model with auth/probe availability; never hide an option.
 
-  Provider auth is conclusive enough to disable a whole cohort. OpenAI's model list is
-  authoritative, so a missing deployment is disabled individually. Vertex model listing is
-  known to under-report Model Garden models, so "missing" is shown as unconfirmed but remains
-  selectable. Provider/region request failures disable only the affected cached entries.
+  Provider auth is conclusive enough to disable a whole cohort. A missing OpenAI catalog entry
+  is disabled individually, but a listed Azure base model is only advertised capacity until a
+  generation succeeds. Vertex model listing is known to under-report Model Garden models, so
+  "missing" is kept selectable. Provider/region request failures disable only affected entries.
   """
   probes = (cache or {}).get("probes") or {}
   provider_auth = provider_auth or {
@@ -186,13 +208,15 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
   - OpenAI has a constrained size table, so unsupported aspect/resolution combinations snap
     to 2K. Quality is passed separately.
   """
-  aspect = aspect if aspect in _ASPECTS else _nearest_aspect(w, h)
   if provider == "openai":
+    aspect = aspect if aspect in _OPENAI_RESOLUTIONS else _nearest_aspect(w, h)
     valid = _OPENAI_RESOLUTIONS[aspect]
     requested = resolution or "1K"
     if requested not in valid:
       requested = "2K"
     return aspect, requested
+  google_aspects = set(_GEMINI_31_FLASH_ASPECTS)
+  aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h)
   return aspect, resolution or None
 
 
@@ -296,7 +320,7 @@ class Studio:
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str | None, prompt: str, model: str,
                 quality: str | None, resolution: str | None, w: int, h: int,
-                aspect: str | None = None) -> str:
+                aspect: str | None = None, thinking: str | None = None) -> str:
     jid = "draw" + secrets.token_hex(6)  # collision-resistant across processes/restarts
     draft = None
     if image_b64:
@@ -319,6 +343,8 @@ class Studio:
       cmd += ["-r", res]
     if provider == "openai" and quality:
       cmd += ["-q", quality]
+    if provider == "google" and thinking:
+      cmd += ["--thinking", thinking]
     cmd += ["--", prompt]
 
     with open(logp, "wb") as logf:  # child dups the fd; parent closes its copy
@@ -470,6 +496,7 @@ def _make_handler(studio: Studio):
           quality=data.get("quality"),
           resolution=data.get("resolution"),
           aspect=data.get("aspect"),
+          thinking=data.get("thinking"),
           w=int(data.get("w") or 1024),
           h=int(data.get("h") or 1024),
         )
@@ -535,21 +562,41 @@ PAGE = r"""<!doctype html>
   ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:var(--btnb);border-radius:4px}
   textarea:focus,select:focus{outline:1px solid var(--accent)}
   select{height:36px;background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:0 32px 0 12px;font-size:13px;cursor:pointer}
+  [hidden]{display:none!important}
   @media (max-width:520px){#hint .sub{display:none}}
   .tbtn{background:var(--btn);border:1px solid var(--btnb);color:var(--text);width:32px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .tbtn.on{border-color:var(--accent);background:var(--btnb)}
   .grp{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px}
   .icon{background:none;border:none;color:var(--text);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .icon:hover{background:var(--btn)}
-  .controlbar{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
-  .controlfield{display:grid;grid-template-rows:12px 36px 12px;gap:6px;align-items:center;min-width:0}
-  .controlmeta{height:12px;font-size:9px;line-height:12px;color:var(--control-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .studiohead{background:var(--bg);border-bottom:1px solid var(--border)}
+  .headmain{min-height:68px;padding:9px 20px;display:flex;gap:18px;align-items:center}
+  .modelslot{width:270px;margin-left:auto;flex:0 0 270px}
+  .controlpanel{border-top:1px solid var(--border)}
+  .controltoggle{width:100%;height:30px;padding:0 20px;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--control-sub);font:inherit;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:flex-end;text-align:left}
+  .controltoggleinner{width:270px;display:flex;align-items:center;justify-content:flex-end;gap:7px}
+  .controltoggle:hover{background:var(--btn);color:var(--text)}
+  .controltoggle:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .controlpanel.collapsed .controltoggle{border-bottom:0}
+  .paramgrid{min-height:62px;padding:8px 20px 10px;display:flex;gap:14px;align-items:flex-end;justify-content:flex-end;flex-wrap:wrap}
+  .railicon{width:16px;height:16px;display:block;flex:0 0 16px}
+  .trayframe{width:100%;height:100%;min-width:0;min-height:0;display:flex}
+  .traycontent{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+  .trayrail{width:36px;flex:0 0 36px;min-height:0;padding:9px 0;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--sub);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:var(--shadow)}
+  .trayframe.expanded .trayrail{margin-left:8px}
+  .trayrail:hover{border-color:var(--btnb);color:var(--text);background:var(--panel)}
+  .trayrail:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .trayraillabel{writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)}
+  #studiogrid>.card{grid-column:1}#splith{grid-column:2}#traycol{grid-column:3}
+  .controlfield{display:grid;grid-template-rows:12px 36px;gap:6px;align-items:center;min-width:0}
+  .qualityfield,.sizefield{width:max-content}.aspectfield{width:126px}.thinkingfield{width:138px}
   .toplbl{font-size:10px;line-height:12px;color:var(--control-sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
   .segctl{display:grid;grid-template-columns:repeat(var(--segments),64px);gap:2px;width:max-content;height:36px;padding:3px;background:var(--btn);border:1px solid var(--btnb);border-radius:8px}
   .segopt{width:64px;height:28px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--control-sub);font:inherit;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap}
   .segopt:hover:not(.on){color:var(--text);background:color-mix(in srgb,var(--btnb) 55%,transparent)}
   .segopt.on{color:var(--text);background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px color-mix(in srgb,var(--btnb) 72%,transparent)}
   .segopt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  @media (max-width:700px){.headmain{align-items:flex-start;flex-wrap:wrap}.modelslot{width:100%;margin-left:0;flex-basis:100%}.controltoggleinner{width:100%}.paramgrid{justify-content:flex-start}}
   .promptchip.on{border-color:var(--accent)!important;background:color-mix(in srgb,var(--accent) 16%,var(--btn))!important}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   .job img{width:100%;border-radius:6px;display:block;cursor:zoom-in;background:#fff}
@@ -567,13 +614,13 @@ const BOOT = /*__BOOT__*/;
   const SWATCHES = ["#FF3B30","#2979FF","#FF9100","#111111"];
   const S = {
     prompt: BOOT.defaultPrompt, promptExpanded:false,
-    model: BOOT.defaultModel, quality:"medium", resolution:"1K", aspect:"auto",
+    model: BOOT.defaultModel, quality:"medium", resolution:"1K", aspect:"auto", thinking:"minimal",
     tool:"pen", color:"#FF3B30", customColor:"#8E24AA", brushLevel:2,
     strokes:[], items:[], selectedId:null,
     view:{x:0,y:0,s:1},
     jobs:[], splitPct:50, trayCollapsed:false, srcCollapsed:false,
     trayScope:"session", trayView:"list", historyItems:[], historyError:"",
-    lightbox:null, shortcutsOpen:false, dragActive:false
+    lightbox:null, shortcutsOpen:false, dragActive:false, controlsCollapsed:false
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
   let drawing=false, deleting=false, panning=null, movingId=null, moveOff=null, ro=null;
@@ -585,23 +632,28 @@ const BOOT = /*__BOOT__*/;
     const providerNames={google:"Google · Gemini",openai:"OpenAI"};
     const modelOpts = ["google","openai"].map(provider=>{
       const opts=BOOT.models.filter(m=>m.provider===provider).map(m=>{
-        const suffix=!m.enabled?" — unavailable":m.availability==="unconfirmed"?" — unconfirmed":"";
+        const suffix=!m.enabled?" — unavailable":"";
         return `<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}${m.enabled?"":" disabled"}>${esc(m.label+suffix)}</option>`;
       }).join("");
       return opts?`<optgroup label="${esc(providerNames[provider])}">${opts}</optgroup>`:"";
     }).join("");
     $("app").innerHTML = `
-      <div style="background:var(--bg);border-bottom:1px solid var(--border);padding:9px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
-          <div style="font-size:16px;font-weight:600;letter-spacing:-.2px">genimg</div>
-          <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
+      <header class="studiohead">
+        <div class="headmain">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-.2px">genimg</div>
+            <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
+          </div>
+          <div class="modelslot controlfield">
+            <label class="toplbl" for="modelSel">Model</label>
+            <select id="modelSel" style="width:100%">${modelOpts}</select>
+          </div>
         </div>
-        <span style="flex:1"></span>
-        <div class="controlbar">
-          <div class="controlfield" style="width:270px"><label class="toplbl" for="modelSel">Model</label><select id="modelSel" style="width:100%">${modelOpts}</select><span id="modelStatus" class="controlmeta"></span></div>
-          <div id="paramControls" class="controlbar"></div>
+        <div id="generationControls" class="controlpanel">
+          <button id="controlsToggle" class="controltoggle" type="button" data-act="toggleControls" aria-expanded="true" aria-controls="paramControls"><span class="controltoggleinner"><span>Generation controls</span><span id="controlsIcon" aria-hidden="true"></span></span></button>
+          <div id="paramControls" class="paramgrid"></div>
         </div>
-      </div>
+      </header>
       <div id="main" style="flex:1;display:flex;min-height:0;padding:16px 20px;gap:10px">
         <div id="srccol" style="display:flex"></div>
         <div id="studiogrid" style="flex:1;display:grid;gap:10px;min-height:0;min-width:0">
@@ -649,34 +701,56 @@ const BOOT = /*__BOOT__*/;
   const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
-  function segmentedControl(key,label,options,value){
-    const pretty=v=>v==="auto"?"Auto":v.charAt(0).toUpperCase()+v.slice(1);
-    return `<div class="controlfield"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" style="--segments:${options.length}" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(pretty(v))}</button>`;}).join("")}</div><span class="controlmeta" aria-hidden="true"></span></div>`;
+  function panelTopIcon(expanded){
+    const chevron=expanded?'<path d="m9 15 3-3 3 3"/>':'<path d="m9 12 3 3 3-3"/>';
+    return `<svg class="railicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/>${chevron}</svg>`;
+  }
+  function panelRightIcon(expanded){
+    const chevron=expanded?'<path d="m9 9 3 3-3 3"/>':'<path d="m12 9-3 3 3 3"/>';
+    return `<svg class="railicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/>${chevron}</svg>`;
+  }
+  function prettyControlValue(v){return v.charAt(0).toUpperCase()+v.slice(1);}
+  function segmentedControl(key,label,options,value,fieldClass){
+    return `<div class="controlfield ${fieldClass}"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" style="--segments:${options.length}" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(prettyControlValue(v))}</button>`;}).join("")}</div></div>`;
+  }
+  function controlFocusSnapshot(){
+    const active=document.activeElement, controls=$("paramControls");
+    if(!active||!controls?.contains(active))return null;
+    if(active.id)return {id:active.id};
+    if(active.dataset?.segKey)return {key:active.dataset.segKey,value:active.dataset.segValue};
+    return null;
+  }
+  function restoreControlFocus(snapshot){
+    if(!snapshot)return;
+    const target=snapshot.id?$(snapshot.id):document.querySelector(`[data-seg-key="${snapshot.key}"][data-seg-value="${snapshot.value}"]`);
+    target?.focus({preventScroll:true});
+  }
+  function renderControlsVisibility(){
+    const panel=$("generationControls"), controls=$("paramControls"), toggle=$("controlsToggle");
+    panel.classList.toggle("collapsed",S.controlsCollapsed);
+    controls.hidden=S.controlsCollapsed;
+    toggle.setAttribute("aria-expanded",String(!S.controlsCollapsed));
+    toggle.title=S.controlsCollapsed?"Show generation controls":"Hide generation controls";
+    $("controlsIcon").innerHTML=panelTopIcon(!S.controlsCollapsed);
   }
   function renderTopbar(){
+    const focusSnapshot=controlFocusSnapshot();
     $("modelSel").value = S.model;
     const meta=MM[S.model]||{};
-    const status=$("modelStatus");
-    if(status){
-      const provider=(BOOT.providers||{})[meta.provider]||{};
-      const pieces=[provider.mode||meta.provider,provider.ok?"auth configured":"auth unavailable"];
-      if(meta.availability==="available")pieces.push("generation verified");
-      else if(meta.availability==="listed")pieces.push("listed, generation unverified");
-      else if(meta.availability==="unconfirmed")pieces.push("availability unconfirmed");
-      else if(meta.availability==="unknown")pieces.push("not probed");
-      if(!meta.enabled&&meta.reason)pieces.push(meta.reason);
-      status.textContent=pieces.filter(Boolean).join(" · ");
-      status.title=meta.reason||status.textContent;
-      status.style.color=meta.enabled?"var(--control-sub)":"#d05b52";
-    }
-    const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta);
+    const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta), thinking=meta.thinkingOptions||[];
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
     if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
-    const aspects=[["auto","Auto"],["1:1","1:1"],["4:3","4:3"],["3:4","3:4"],["16:9","16:9"],["9:16","9:16"]];
+    if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
+    const supportedAspects=meta.aspectOptions||["1:1","4:3","3:4","16:9","9:16"];
+    if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
+    const aspects=[["auto","Auto"]].concat(supportedAspects.map(a=>[a,a]));
     $("paramControls").innerHTML =
-      (qualities.length?segmentedControl("quality","Quality",qualities,S.quality):"")+
-      (resolutions.length?segmentedControl("resolution","Image size",resolutions,S.resolution):"")+
-      `<div class="controlfield" style="width:105px"><label class="toplbl" for="aspectSel">Aspect</label><select id="aspectSel" aria-label="Aspect ratio">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select><span class="controlmeta" aria-hidden="true"></span></div>`;
+      (qualities.length?segmentedControl("quality","Quality",qualities,S.quality,"qualityfield"):"")+
+      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,S.resolution,"sizefield"):"")+
+      `<div class="controlfield aspectfield"><label class="toplbl" for="aspectSel">Aspect ratio</label><select id="aspectSel" aria-label="Aspect ratio" style="width:100%">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`+
+      (thinking.length?segmentedControl("thinking","Thinking",thinking,S.thinking,"thinkingfield"):"");
+    renderControlsVisibility();
+    const optionSets={quality:qualities,resolution:resolutions,thinking};
     const selectSegment=(key,value,focus=false)=>{
       S[key]=value;
       for(const button of document.querySelectorAll(`[data-seg-key="${key}"]`)){
@@ -689,7 +763,7 @@ const BOOT = /*__BOOT__*/;
     for(const button of document.querySelectorAll("[data-seg-key]")){
       button.addEventListener("click",()=>selectSegment(button.dataset.segKey,button.dataset.segValue));
       button.addEventListener("keydown",e=>{
-        const key=button.dataset.segKey, options=key==="quality"?qualities:resolutions;
+        const key=button.dataset.segKey, options=optionSets[key]||[];
         let idx=options.indexOf(S[key]);
         if(e.key==="ArrowRight"||e.key==="ArrowDown")idx=(idx+1)%options.length;
         else if(e.key==="ArrowLeft"||e.key==="ArrowUp")idx=(idx-1+options.length)%options.length;
@@ -701,7 +775,8 @@ const BOOT = /*__BOOT__*/;
     }
     $("aspectSel").addEventListener("change",e=>{S.aspect=e.target.value;renderTopbar();renderCost();});
     const gen=$("generateBtn");
-    if(gen){gen.disabled=!meta.enabled;gen.style.opacity=meta.enabled?"1":".45";gen.style.cursor=meta.enabled?"pointer":"not-allowed";gen.title=meta.enabled?"":meta.reason;}
+    if(gen){gen.disabled=!meta.enabled;gen.style.opacity=meta.enabled?"1":".45";gen.style.cursor=meta.enabled?"pointer":"not-allowed";gen.title=meta.enabled?"":"Selected model is unavailable";}
+    restoreControlFocus(focusSnapshot);
   }
   function renderToolbar(){
     const tool=(t,svg,title)=>`<button class="tbtn ${S.tool===t?'on':''}" data-act="tool" data-tool="${t}" title="${title}">${svg}</button>`;
@@ -750,7 +825,7 @@ const BOOT = /*__BOOT__*/;
   function nearestAspect(w,h){const A={"1:1":1,"4:3":4/3,"3:4":3/4,"16:9":16/9,"9:16":9/16};const r=h?w/h:1;let best="1:1",bd=1e9;for(const a in A){const d=Math.abs(A[a]-r);if(d<bd){bd=d;best=a;}}return best;}
   function renderGrid(){
     const g = $("studiogrid");
-    if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 44px";
+    if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 36px";
     else g.style.gridTemplateColumns = `minmax(280px,${S.splitPct}%) 14px minmax(220px,1fr)`;
     $("splith").style.display = S.trayCollapsed ? "none" : "flex";
   }
@@ -809,7 +884,7 @@ const BOOT = /*__BOOT__*/;
   function renderTray(){
     const col = $("traycol");
     if (S.trayCollapsed){
-      col.innerHTML = `<button class="card" data-act="toggleTray" title="Show generated images" style="width:44px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;color:var(--sub);cursor:pointer;border:1px solid var(--border)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg><span style="writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button>`;
+      col.innerHTML = `<div class="trayframe"><button class="trayrail" data-act="toggleTray" title="Show generated images" aria-label="Show generated images">${panelRightIcon(false)}<span class="trayraillabel">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button></div>`;
       return;
     }
     const items=trayItems();
@@ -832,15 +907,18 @@ const BOOT = /*__BOOT__*/;
     const vbtn=(val,svg,title)=>`<button data-act="trayView" data-view="${val}" title="${title}" style="background:${S.trayView===val?'var(--btnb)':'transparent'};border:none;color:var(--text);width:26px;height:24px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">${svg}</button>`;
     const listIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
     const gridIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
-    col.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:13px;font-weight:600">Generated</span>
-        <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(BOOT.genDir||'')}">${esc(BOOT.genDir||"~/.genimg/generations/")}</span>
-        <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
-        <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
-        <button class="icon" data-act="toggleTray" title="Collapse" style="width:22px;height:22px;color:var(--sub)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
+    col.innerHTML = `<div class="trayframe expanded">
+      <div class="traycontent">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">Generated</span>
+          <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(BOOT.genDir||'')}">${esc(BOOT.genDir||"~/.genimg/generations/")}</span>
+          <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
+          <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
+        </div>
+        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0">${body}</div>
       </div>
-      <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0">${body}</div>`;
+      <button class="trayrail" data-act="toggleTray" title="Hide generated images" aria-label="Hide generated images">${panelRightIcon(true)}</button>
+    </div>`;
   }
   function renderOverlays(){
     const parts=[];
@@ -1029,7 +1107,7 @@ const BOOT = /*__BOOT__*/;
   }
   async function generate(){
     const meta=MM[S.model]||{};
-    if(!meta.enabled){toast(meta.reason||"This model is unavailable");return;}
+    if(!meta.enabled){toast("Selected model is unavailable");return;}
     let flat=null;
     try{ flat=flatten(); }
     catch(e){ toast("can't export the canvas (a cross-origin image tainted it)"); return; }
@@ -1040,7 +1118,7 @@ const BOOT = /*__BOOT__*/;
     }
     try{
       const d=await apiJson("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,w:flat?flat.w:1024,h:flat?flat.h:1024})});
+        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,thinking:(meta.thinkingOptions||[]).includes(S.thinking)?S.thinking:null,w:flat?flat.w:1024,h:flat?flat.h:1024})});
       S.jobs.push({id:d.job_id,model:S.model,status:"queued",createdAt:Date.now()});
       if(S.trayCollapsed){S.trayCollapsed=false;renderGrid();}
       renderTray();
@@ -1091,6 +1169,7 @@ const BOOT = /*__BOOT__*/;
       if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
     }
     else if(a==="promptDefault"){S.prompt=BOOT.defaultPrompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>$("promptta")?.focus());}
+    else if(a==="toggleControls"){S.controlsCollapsed=!S.controlsCollapsed;renderControlsVisibility();}
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
     else if(a==="toggleSrc"){S.srcCollapsed=!S.srcCollapsed;renderSrc();}

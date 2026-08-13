@@ -103,7 +103,7 @@ class GeminiBatchTests(unittest.TestCase):
     with tempfile.TemporaryDirectory() as td, \
          patch("genimg.providers.google.get_client", return_value=client):
       req = GenerateRequest(prompt="a fox", output=Path(td) / "img.png",
-                            model="gemini-3.1-flash-image-preview", n=3, mode="batch")
+                            model="gemini-3.1-flash-image", n=3, mode="batch")
       result = GeminiImageGen().generate(req)
       self.assertEqual(len(result.paths), 3)
     client.models.generate_content.assert_called_once()
@@ -117,7 +117,7 @@ class GeminiBatchTests(unittest.TestCase):
     with tempfile.TemporaryDirectory() as td, \
          patch("genimg.providers.google.get_client", return_value=client):
       req = GenerateRequest(prompt="a fox", output=Path(td) / "img.png",
-                            model="gemini-3.1-flash-image-preview", n=2, mode="batch", diverse=True)
+                            model="gemini-3.1-flash-image", n=2, mode="batch", diverse=True)
       GeminiImageGen().generate(req)
     sent_prompt = client.models.generate_content.call_args.kwargs["contents"][0]
     self.assertIn("no two alike", sent_prompt)
@@ -127,7 +127,7 @@ class GeminiBatchTests(unittest.TestCase):
     with tempfile.TemporaryDirectory() as td, \
          patch("genimg.providers.google.get_client", return_value=client):
       req = GenerateRequest(prompt="a fox", output=Path(td) / "img.png",
-                            model="gemini-3.1-flash-image-preview", n=4, mode="batch")
+                            model="gemini-3.1-flash-image", n=4, mode="batch")
       result = GeminiImageGen().generate(req)
       self.assertEqual(len(result.paths), 2)
 

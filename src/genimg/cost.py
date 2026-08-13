@@ -18,10 +18,10 @@ _OPENAI_RESOLUTION_MULT = {None: 1.0, "1K": 1.0, "2K": 2.5, "4K": 6.0}
 
 # Google flat per-image (Gemini Image / Imagen) keyed by max-edge resolution.
 # Rough public rates (Vertex pricing + cloudprice.net); refine as pricing changes.
-# Keyed by the GA model id (no "-preview"); estimate() normalizes the preview form to match.
+# Keyed by the stable model id; estimate() also normalizes legacy "-preview" callers.
 _GOOGLE_PER_IMAGE = {
   "gemini-3-pro-image":             {None: 0.134, "1K": 0.134, "2K": 0.134, "4K": 0.24},
-  "gemini-3.1-flash-image":         {None: 0.067, "1K": 0.067, "2K": 0.101, "4K": 0.151},
+  "gemini-3.1-flash-image":         {None: 0.067, "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151},
   "gemini-3.1-flash-lite-image":    {None: 0.034, "1K": 0.034, "2K": 0.05, "4K": 0.076},
   "gemini-2.5-flash-image":         {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
   "imagen-4.0-generate-001":        {None: 0.04, "1K": 0.04, "2K": 0.04, "4K": 0.04},
@@ -39,8 +39,7 @@ def estimate(*, provider: str, model_id: str, n: int = 1,
       return 0.0
     return n * base * _OPENAI_RESOLUTION_MULT.get(resolution, 1.0)
   if provider == "google":
-    # GA ids drop the "-preview" suffix while the registry pins the preview form. Normalize
-    # so a registered preview id and an inferred GA id price identically.
+    # Normalize legacy preview ids so saved metadata keeps pricing identically.
     key = model_id[: -len("-preview")] if model_id.endswith("-preview") else model_id
     table = _GOOGLE_PER_IMAGE.get(key)
     if not table:

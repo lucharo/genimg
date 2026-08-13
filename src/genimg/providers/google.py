@@ -57,6 +57,10 @@ class GeminiImageGen(IImageGen):
     config = types.GenerateContentConfig(
       response_modalities=["TEXT", "IMAGE"],
       image_config=types.ImageConfig(**image_kwargs) if image_kwargs else None,
+      thinking_config=(
+        types.ThinkingConfig(thinking_level=req.thinking_level)
+        if req.thinking_level else None
+      ),
     )
 
     resp = self._call_with_retry(client, req.model, contents, config)
@@ -95,6 +99,10 @@ class GeminiImageGen(IImageGen):
     config = types.GenerateContentConfig(
       response_modalities=["TEXT", "IMAGE"],
       image_config=types.ImageConfig(**image_kwargs) if image_kwargs else None,
+      thinking_config=(
+        types.ThinkingConfig(thinking_level=req.thinking_level)
+        if req.thinking_level else None
+      ),
     )
 
     resp = self._call_with_retry(client, req.model, contents, config)

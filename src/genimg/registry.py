@@ -18,9 +18,9 @@ class ModelSpec:
 _REGISTRY: dict[str, ModelSpec | str] = {
   # Google DeepMind / Gemini Image. Canonical alias is gdm:<short>; descriptive
   # nano-banana* names are kept for discoverability. Bare model ids also resolve.
-  "gdm:nbp":             ModelSpec("google", "gemini-3-pro-image-preview",     region="global", quality_rank=10),
+  "gdm:nbp":             ModelSpec("google", "gemini-3-pro-image",             region="global", quality_rank=10),
   "gdm:nano-banana-pro": "gdm:nbp",
-  "gdm:nb2":             ModelSpec("google", "gemini-3.1-flash-image-preview", region="global", quality_rank=8),
+  "gdm:nb2":             ModelSpec("google", "gemini-3.1-flash-image",         region="global", quality_rank=8),
   "gdm:nano-banana-2":   "gdm:nb2",
   "gdm:nb2-lite":        ModelSpec("google", "gemini-3.1-flash-lite-image",    region="global", quality_rank=6),
   "gdm:nano-banana-2-lite": "gdm:nb2-lite",

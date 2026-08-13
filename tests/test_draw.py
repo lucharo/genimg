@@ -50,6 +50,10 @@ class PickSizeTests(unittest.TestCase):
   def test_manual_aspect_overrides_canvas_ratio(self) -> None:
     self.assertEqual(draw.pick_size("google", 1024, 1024, "4K", "16:9"), ("16:9", "4K"))
 
+  def test_manual_gemini_extreme_aspects_are_preserved(self) -> None:
+    for aspect in ("1:4", "1:8", "4:1", "8:1", "21:9"):
+      self.assertEqual(draw.pick_size("google", 1024, 1024, "1K", aspect), (aspect, "1K"))
+
   def test_openai_snaps_resolution_to_valid_aspect_pair(self) -> None:
     self.assertEqual(draw.pick_size("openai", 1920, 1080, "1K"), ("16:9", "2K"))
     self.assertEqual(draw.pick_size("openai", 1200, 900, "4K"), ("4:3", "2K"))
@@ -74,10 +78,15 @@ class StartJobArgvTests(unittest.TestCase):
     return popen.call_args.args[0]
 
   def test_gemini_uses_resolution_not_quality(self) -> None:
-    argv = self._argv(prompt="p", model="gdm:nb2", quality="medium", resolution="2K", w=1000, h=1000)
+    argv = self._argv(
+      prompt="p", model="gdm:nb2", quality="medium", resolution="2K",
+      aspect="1:8", thinking="high", w=1000, h=1000,
+    )
     self.assertIn("-r", argv)
     self.assertEqual(argv[argv.index("-r") + 1], "2K")
     self.assertNotIn("-q", argv)
+    self.assertEqual(argv[argv.index("-a") + 1], "1:8")
+    self.assertEqual(argv[argv.index("--thinking") + 1], "high")
     self.assertEqual(argv[argv.index("-m") + 1], "gdm:nb2")
     self.assertIn("-i", argv)
     self.assertIn("-a", argv)
@@ -218,6 +227,7 @@ class GenerateHttpTests(unittest.TestCase):
       quality=None,
       resolution=None,
       aspect=None,
+      thinking=None,
       w=1024,
       h=1024,
     )
@@ -282,7 +292,43 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn('role="radio"', draw.PAGE)
     self.assertNotIn('type="range"', draw.PAGE)
     self.assertIn('grid-template-columns:repeat(var(--segments),64px)', draw.PAGE)
-    self.assertIn('grid-template-rows:12px 36px 12px', draw.PAGE)
+    self.assertIn('grid-template-rows:12px 36px', draw.PAGE)
+
+  def test_header_keeps_model_separate_from_collapsible_generation_controls(self) -> None:
+    self.assertIn('class="headmain"', draw.PAGE)
+    self.assertIn('class="modelslot controlfield"', draw.PAGE)
+    self.assertIn('id="generationControls"', draw.PAGE)
+    self.assertIn('data-act="toggleControls"', draw.PAGE)
+    self.assertIn('class="controltoggleinner"', draw.PAGE)
+    self.assertIn('function panelTopIcon', draw.PAGE)
+    self.assertNotIn('id="modelStatus"', draw.PAGE)
+    self.assertNotIn('generation unverified', draw.PAGE)
+    self.assertNotIn('availability unconfirmed', draw.PAGE)
+    self.assertIn('>Aspect ratio</label>', draw.PAGE)
+
+  def test_generation_controls_only_render_supported_choices(self) -> None:
+    self.assertNotIn('Model default', draw.PAGE)
+    self.assertNotIn('function fixedControl', draw.PAGE)
+    self.assertIn('(qualities.length?segmentedControl', draw.PAGE)
+    self.assertIn('(resolutions.length>1?segmentedControl', draw.PAGE)
+    self.assertIn('(thinking.length?segmentedControl', draw.PAGE)
+    self.assertIn('.qualityfield,.sizefield{width:max-content}', draw.PAGE)
+    self.assertNotIn('.qualityfield{width:202px}', draw.PAGE)
+    self.assertNotIn('.sizefield{width:270px}', draw.PAGE)
+
+  def test_control_rerenders_restore_focus_and_hide_probe_details(self) -> None:
+    self.assertIn('restoreControlFocus', draw.PAGE)
+    self.assertIn('Selected model is unavailable', draw.PAGE)
+    self.assertNotIn('gen.title=meta.enabled?"":meta.reason', draw.PAGE)
+
+  def test_generated_panel_uses_one_persistent_right_rail(self) -> None:
+    self.assertIn('class="trayframe"', draw.PAGE)
+    self.assertIn('class="trayframe expanded"', draw.PAGE)
+    self.assertIn('class="trayrail"', draw.PAGE)
+    self.assertIn('function panelRightIcon', draw.PAGE)
+    self.assertIn('#traycol{grid-column:3}', draw.PAGE)
+    self.assertIn('title="Show generated images"', draw.PAGE)
+    self.assertIn('title="Hide generated images"', draw.PAGE)
 
 
 class StudioModelsTests(unittest.TestCase):
@@ -299,10 +345,22 @@ class StudioModelsTests(unittest.TestCase):
   def test_resolution_controls_only_appear_for_models_that_support_them(self) -> None:
     models = {model["alias"]: model for model in draw._studio_models()}
     self.assertEqual(models["gdm:nb"]["resolutionOptions"], [])
-    self.assertEqual(models["gdm:nb2"]["resolutionOptions"], ["1K", "2K", "4K"])
+    self.assertEqual(models["gdm:nb2"]["resolutionOptions"], ["512", "1K", "2K", "4K"])
+    self.assertEqual(models["gdm:nb2-lite"]["resolutionOptions"], ["1K"])
     self.assertEqual(models["oai:gpt-image-2"]["resolutionOptions"], ["1K", "2K", "4K"])
     self.assertEqual(
       models["oai:gpt-image-2"]["resolutionOptionsByAspect"]["16:9"], ["2K", "4K"])
+
+  def test_gemini_models_expose_their_distinct_aspect_and_thinking_controls(self) -> None:
+    models = {model["alias"]: model for model in draw._studio_models()}
+    self.assertIn("1:8", models["gdm:nb2"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nb2"]["aspectOptions"]), 14)
+    self.assertNotIn("1:8", models["gdm:nbp"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nbp"]["aspectOptions"]), 10)
+    self.assertEqual(models["gdm:nb2"]["thinkingOptions"], ["minimal", "high"])
+    self.assertEqual(models["gdm:nbp"]["thinkingOptions"], [])
+    self.assertIn("1:8", models["gdm:nb2-lite"]["aspectOptions"])
+    self.assertEqual(len(models["gdm:nb2-lite"]["aspectOptions"]), 14)
 
 
 class AvailableModelsTests(unittest.TestCase):
@@ -322,11 +380,11 @@ class AvailableModelsTests(unittest.TestCase):
     self.assertTrue(all(not m["enabled"] for m in openai))
     self.assertTrue(all(m["reason"] == "Run genimg setup" for m in openai))
 
-  def test_openai_missing_disabled_but_google_missing_is_unconfirmed(self) -> None:
+  def test_openai_missing_disabled_but_google_missing_remains_selectable(self) -> None:
     cache = {"probes": {
       "gdm:nb2": {"status": "missing"},            # Vertex under-reports → keep
       "oai:gpt-image-2": {"status": "listed"},     # keep
-      "oai:gpt-image-1.5": {"status": "missing"},  # OpenAI list is authoritative → disable
+      "oai:gpt-image-1.5": {"status": "missing"},  # absent from this endpoint's catalog → disable
     }}
     models = {m["alias"]: m for m in draw.available_models(cache, self.AUTH_OK)}
     self.assertTrue(models["gdm:nb2"]["enabled"])

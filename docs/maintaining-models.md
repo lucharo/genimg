@@ -24,8 +24,9 @@ So **a brand-new same-signature model just works** via its full id:
 genimg "a robot" -m gemini-4.0-flash-image -o out.png   # no registry entry needed
 ```
 
-Inference also absorbs GA-vs-preview id drift: the registry may pin
-`gemini-3.1-flash-image-preview`, but `-m gemini-3.1-flash-image` resolves too.
+Inference also absorbs GA-vs-preview id drift: a legacy preview id still resolves by
+shape. Curated aliases should point at the serving stable id, confirmed with one direct
+generation — `models.list()` can continue advertising a preview id after generation returns 404.
 
 ## When to actually edit the registry
 
