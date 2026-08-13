@@ -21,7 +21,7 @@ genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --de
 genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Gemini image models only)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
-genimg draw diagrams/                            # draw studio: annotate/sketch on a canvas → generate
+genimg draw diagrams/                            # draw studio: annotate/sketch with image-editable models
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard (also sets a default)
 genimg auth                                      # show ✓/✗ readiness per provider
@@ -30,6 +30,9 @@ genimg config show                               # inspect saved config (config 
 
 There is **no built-in default model** — pass `-m <alias>`, or run `genimg setup`
 (or `genimg models set-default <alias>`) to save one so you can omit `-m`.
+
+See the [FAQ](docs/faq/README.md) for Draw Studio recovery, model availability and
+provider-specific controls.
 
 ## Getting the most variety
 
@@ -92,4 +95,4 @@ The Vertex project is resolved from `--project` → `config.gcp_project` → `GO
 
 ## Models (`-m`)
 
-Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account/deployment — run `genimg models` to see what your credentials can reach.
+Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` shows what providers advertise, while only an exact-model generation proves that it serves.

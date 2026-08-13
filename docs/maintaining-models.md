@@ -65,8 +65,9 @@ id independently, so you can price any id (registered or inferred) by adding a c
 
 ## Detecting drift programmatically (dev snippet)
 
-`models.list()` is free and already wired into `discovery.py`. To list model ids your
-credentials expose that are **not** in the registry (paste into `uv run python -`):
+`models.list()` is free and already wired into `discovery.py`. Its results are advertised,
+not serving proof; confirm a candidate with one exact-model generation. To list model ids
+your credentials advertise that are **not** in the registry (paste into `uv run python -`):
 
 ```python
 from genimg.auth import openai as ao, google as ag
@@ -85,9 +86,9 @@ so this can under-report there (direct APIs are reliable).
 
 ## Known caveats to reconcile
 
-- **GA vs `-preview` ids**: `gdm:nb2`/`gdm:nbp` pin `-preview` ids; the official docs now
-  list GA ids without the suffix. Both resolve (tier 3), but if you want the *short alias*
-  to point at the GA id, update the `ModelSpec` — verify the id is live on your account first.
+- **GA vs `-preview` ids**: provider catalogs can continue advertising a preview id after
+  generation has moved to the GA id. Keep curated aliases on the exact id that succeeds in a
+  direct generation; signature inference still accepts legacy same-shape ids.
 - **Cost rows are approximate and drift**: they track *standard* (non-batch) per-image
   pricing at a ~1K basis and are labelled estimates. Refresh from the pricing page when a
   provider changes prices.
