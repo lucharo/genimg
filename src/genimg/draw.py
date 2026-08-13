@@ -525,8 +525,8 @@ PAGE = r"""<!doctype html>
 <title>genimg draw studio</title>
 <style>
   html,body{margin:0;padding:0}
-  :root{--bg:#f2f2ef;--card:#fff;--panel:#f7f7f5;--border:#e0e0dc;--text:#1c1c1c;--sub:#6f6f6f;--faint:#9a9a9a;--btn:#f0f0ee;--btnb:#d0d0cb;--accent:#4CAF50;--shadow:0 6px 20px rgba(0,0,0,.08)}
-  @media (prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2a2a2a;--panel:#222;--border:#3a3a3a;--text:#fff;--sub:#888;--faint:#555;--btn:#333;--btnb:#555;--shadow:0 8px 24px rgba(0,0,0,.35)}}
+  :root{--bg:#f2f2ef;--card:#fff;--panel:#f7f7f5;--border:#e0e0dc;--text:#1c1c1c;--sub:#6f6f6f;--control-sub:#686868;--faint:#9a9a9a;--btn:#f0f0ee;--btnb:#d0d0cb;--accent:#4CAF50;--shadow:0 6px 20px rgba(0,0,0,.08)}
+  @media (prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2a2a2a;--panel:#222;--border:#3a3a3a;--text:#fff;--sub:#888;--control-sub:#aaa;--faint:#555;--btn:#333;--btnb:#555;--shadow:0 8px 24px rgba(0,0,0,.35)}}
   *{box-sizing:border-box}
   body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;height:100vh;overflow:hidden}
   #app{display:flex;flex-direction:column;height:100vh}
@@ -534,18 +534,19 @@ PAGE = r"""<!doctype html>
   @keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:var(--btnb);border-radius:4px}
   textarea:focus,select:focus{outline:1px solid var(--accent)}
-  select{background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:7px 32px 7px 12px;font-size:13px;cursor:pointer}
+  select{height:36px;background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:0 32px 0 12px;font-size:13px;cursor:pointer}
   @media (max-width:520px){#hint .sub{display:none}}
   .tbtn{background:var(--btn);border:1px solid var(--btnb);color:var(--text);width:32px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .tbtn.on{border-color:var(--accent);background:var(--btnb)}
   .grp{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px}
   .icon{background:none;border:none;color:var(--text);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .icon:hover{background:var(--btn)}
-  .topctl{display:flex;flex-direction:column;gap:3px;min-width:0}
-  .toplbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
-  .segbox{width:212px;display:flex;flex-direction:column;gap:5px}
-  .segctl{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--btn);border:1px solid var(--btnb);border-radius:10px;min-height:36px}
-  .segopt{min-width:0;height:28px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--sub);font:inherit;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .controlbar{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  .controlfield{display:grid;grid-template-rows:12px 36px 12px;gap:6px;align-items:center;min-width:0}
+  .controlmeta{height:12px;font-size:9px;line-height:12px;color:var(--control-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .toplbl{font-size:10px;line-height:12px;color:var(--control-sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
+  .segctl{display:grid;grid-template-columns:repeat(var(--segments),64px);gap:2px;width:max-content;height:36px;padding:3px;background:var(--btn);border:1px solid var(--btnb);border-radius:8px}
+  .segopt{width:64px;height:28px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--control-sub);font:inherit;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap}
   .segopt:hover:not(.on){color:var(--text);background:color-mix(in srgb,var(--btnb) 55%,transparent)}
   .segopt.on{color:var(--text);background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px color-mix(in srgb,var(--btnb) 72%,transparent)}
   .segopt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -596,8 +597,10 @@ const BOOT = /*__BOOT__*/;
           <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
         </div>
         <span style="flex:1"></span>
-        <div class="topctl" style="width:270px"><span class="toplbl">Model</span><select id="modelSel" style="width:100%">${modelOpts}</select><span id="modelStatus" style="font-size:9px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span></div>
-        <div id="paramControls" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap"></div>
+        <div class="controlbar">
+          <div class="controlfield" style="width:270px"><label class="toplbl" for="modelSel">Model</label><select id="modelSel" style="width:100%">${modelOpts}</select><span id="modelStatus" class="controlmeta"></span></div>
+          <div id="paramControls" class="controlbar"></div>
+        </div>
       </div>
       <div id="main" style="flex:1;display:flex;min-height:0;padding:16px 20px;gap:10px">
         <div id="srccol" style="display:flex"></div>
@@ -648,7 +651,7 @@ const BOOT = /*__BOOT__*/;
   // ---------- render pieces ----------
   function segmentedControl(key,label,options,value){
     const pretty=v=>v==="auto"?"Auto":v.charAt(0).toUpperCase()+v.slice(1);
-    return `<div class="segbox"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(pretty(v))}</button>`;}).join("")}</div></div>`;
+    return `<div class="controlfield"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" style="--segments:${options.length}" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(pretty(v))}</button>`;}).join("")}</div><span class="controlmeta" aria-hidden="true"></span></div>`;
   }
   function renderTopbar(){
     $("modelSel").value = S.model;
@@ -664,7 +667,7 @@ const BOOT = /*__BOOT__*/;
       if(!meta.enabled&&meta.reason)pieces.push(meta.reason);
       status.textContent=pieces.filter(Boolean).join(" · ");
       status.title=meta.reason||status.textContent;
-      status.style.color=meta.enabled?"var(--sub)":"#d05b52";
+      status.style.color=meta.enabled?"var(--control-sub)":"#d05b52";
     }
     const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta);
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
@@ -673,7 +676,7 @@ const BOOT = /*__BOOT__*/;
     $("paramControls").innerHTML =
       (qualities.length?segmentedControl("quality","Quality",qualities,S.quality):"")+
       (resolutions.length?segmentedControl("resolution","Image size",resolutions,S.resolution):"")+
-      `<div class="topctl" style="width:105px"><span class="toplbl">Aspect</span><select id="aspectSel" aria-label="Aspect ratio">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`;
+      `<div class="controlfield" style="width:105px"><label class="toplbl" for="aspectSel">Aspect</label><select id="aspectSel" aria-label="Aspect ratio">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select><span class="controlmeta" aria-hidden="true"></span></div>`;
     const selectSegment=(key,value,focus=false)=>{
       S[key]=value;
       for(const button of document.querySelectorAll(`[data-seg-key="${key}"]`)){

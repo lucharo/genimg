@@ -277,9 +277,12 @@ class BootJsonTests(unittest.TestCase):
     self.assertEqual([item["label"] for item in starters], ["Create", "Diagram", "Polish"])
 
   def test_discrete_model_parameters_use_segmented_controls_not_native_sliders(self) -> None:
-    self.assertIn('class="segctl" role="radiogroup"', draw.PAGE)
+    self.assertIn('class="segctl"', draw.PAGE)
+    self.assertIn('role="radiogroup"', draw.PAGE)
     self.assertIn('role="radio"', draw.PAGE)
     self.assertNotIn('type="range"', draw.PAGE)
+    self.assertIn('grid-template-columns:repeat(var(--segments),64px)', draw.PAGE)
+    self.assertIn('grid-template-rows:12px 36px 12px', draw.PAGE)
 
 
 class StudioModelsTests(unittest.TestCase):
