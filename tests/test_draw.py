@@ -338,6 +338,10 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("function updatePromptChipState", draw.PAGE)
     self.assertIn("updatePromptChipState();", draw.PAGE)
 
+  def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
+    self.assertIn("function sizeControlKey", draw.PAGE)
+    self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
+
   def test_generated_panel_uses_one_persistent_right_rail(self) -> None:
     self.assertIn('class="trayframe"', draw.PAGE)
     self.assertIn('class="trayframe expanded"', draw.PAGE)

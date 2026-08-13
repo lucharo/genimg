@@ -628,7 +628,8 @@ const BOOT = /*__BOOT__*/;
     view:{x:0,y:0,s:1},
     jobs:[], splitPct:50, trayCollapsed:false, srcCollapsed:false,
     trayScope:"session", trayView:"list", historyItems:[], historyError:"",
-    lightbox:null, shortcutsOpen:false, dragActive:false, controlsCollapsed:false
+    lightbox:null, shortcutsOpen:false, dragActive:false, controlsCollapsed:false,
+    sizeControlKey:""
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
   let drawing=false, deleting=false, panning=null, movingId=null, moveOff=null, ro=null;
@@ -752,6 +753,7 @@ const BOOT = /*__BOOT__*/;
     const supportedAspects=meta.aspectOptions||["1:1","4:3","3:4","16:9","9:16"];
     if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
     const aspects=[["auto","Auto"]].concat(supportedAspects.map(a=>[a,a]));
+    S.sizeControlKey=sizeControlKey(meta);
     $("paramControls").innerHTML =
       (qualities.length?segmentedControl("quality","Quality",qualities,S.quality,"qualityfield"):"")+
       (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,S.resolution,"sizefield"):"")+
@@ -958,6 +960,10 @@ const BOOT = /*__BOOT__*/;
     const all=meta.resolutionOptions||[], byAspect=meta.resolutionOptionsByAspect||{};
     return byAspect[selectedAspect()]||all;
   }
+  function sizeControlKey(meta=MM[S.model]||{}){
+    const byAspect=meta.resolutionOptionsByAspect||{}, options=resolutionOptions(meta);
+    return (Object.keys(byAspect).length?selectedAspect()+"|":"")+options.join(",");
+  }
   function selectedResolution(){
     const options=resolutionOptions();
     if(!options.length)return null;
@@ -1063,7 +1069,10 @@ const BOOT = /*__BOOT__*/;
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
     const resolution=selectedResolution();
-    if(resolution&&resolution!==S.resolution){S.resolution=resolution;renderTopbar();}
+    if(sizeControlKey()!==S.sizeControlKey||(resolution&&resolution!==S.resolution)){
+      if(resolution)S.resolution=resolution;
+      renderTopbar();
+    }
     renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
