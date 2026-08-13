@@ -8,9 +8,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Resolution = Literal["1K", "2K", "4K"]
-AspectRatio = Literal["1:1", "3:4", "4:3", "9:16", "16:9"]
+Resolution = Literal["512", "1K", "2K", "4K"]
+AspectRatio = Literal[
+  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
+  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
+]
 Quality = Literal["low", "medium", "high", "auto"]
+ThinkingLevel = Literal["minimal", "high"]
 # None = provider's natural mode (Imagen batches, everything else fans out in parallel).
 Mode = Literal["parallel", "batch"]
 
@@ -25,6 +29,7 @@ class GenerateRequest(BaseModel):
   aspect_ratio: AspectRatio | None = None
   n: int = 1
   quality: Quality | None = None
+  thinking_level: ThinkingLevel | None = None
   region: str | None = None
   project: str | None = None
   # Submission mode (--mode): "parallel" fans out n single-image requests, "batch" sends

@@ -28,9 +28,25 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from . import cost, discovery, metadata, registry
+from .auth import google as auth_google
+from .auth import openai as auth_openai
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+_OPENAI_RESOLUTIONS = {
+  "1:1": ["1K", "2K", "4K"],
+  "4:3": ["1K", "2K"],
+  "3:4": ["1K", "2K"],
+  "16:9": ["2K", "4K"],
+  "9:16": ["2K", "4K"],
+}
+_OPENAI_ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16"]
+_GEMINI_ASPECTS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
+_GEMINI_31_FLASH_ASPECTS = [
+  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
+  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
+]
 
 
 def _studio_models() -> list[dict]:
@@ -41,12 +57,35 @@ def _studio_models() -> list[dict]:
   for alias, spec in registry.all_canonical().items():
     if spec.model_id.startswith("imagen-"):
       continue
+    is_flash_31 = spec.model_id.startswith("gemini-3.1-flash-image")
+    is_flash_lite_31 = spec.model_id.startswith("gemini-3.1-flash-lite-image")
+    is_gemini_3_pro = spec.model_id.startswith("gemini-3-pro-image")
+    if spec.provider == "openai":
+      resolution_options = ["1K", "2K", "4K"]
+      aspect_options = _OPENAI_ASPECTS
+    elif is_flash_31:
+      resolution_options = ["512", "1K", "2K", "4K"]
+      aspect_options = _GEMINI_31_FLASH_ASPECTS
+    elif is_flash_lite_31:
+      resolution_options = ["1K"]
+      aspect_options = _GEMINI_31_FLASH_ASPECTS
+    elif is_gemini_3_pro:
+      resolution_options = ["1K", "2K", "4K"]
+      aspect_options = _GEMINI_ASPECTS
+    else:
+      resolution_options = []
+      aspect_options = _GEMINI_ASPECTS
     out.append({
       "alias": alias,
       "label": f"{alias} · {spec.model_id.replace('-preview', '')}",
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
+      "qualityOptions": ["low", "medium", "high"] if spec.provider == "openai" else [],
+      "resolutionOptions": resolution_options,
+      "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
+      "aspectOptions": aspect_options,
+      "thinkingOptions": ["minimal", "high"] if is_flash_31 else [],
     })
   order = {"google": 0, "openai": 1}
   out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
@@ -60,28 +99,49 @@ STUDIO_MODELS = _studio_models()
 _UNREACHABLE = {"auth", "403", "404", "error"}
 
 
-def available_models(cache: dict | None) -> list[dict]:
-  """Filter STUDIO_MODELS by a `genimg models` probe cache.
+def available_models(cache: dict | None, provider_auth: dict | None = None) -> list[dict]:
+  """Annotate every Studio model with auth/probe availability; never hide an option.
 
-  - OpenAI: keep only listed/working — its list endpoint is authoritative, so "missing" == absent.
-  - Google/Vertex: keep unless the provider/region call itself failed; "missing" stays, because
-    models.list() under-reports Model Garden models that still generate (discovery.py caveat).
-  - No cache, unknown status, or everything filtered out → show all (never an empty dropdown).
+  Provider auth is conclusive enough to disable a whole cohort. A missing OpenAI catalog entry
+  is disabled individually, but a listed Azure base model is only advertised capacity until a
+  generation succeeds. Vertex model listing is known to under-report Model Garden models, so
+  "missing" is kept selectable. Provider/region request failures disable only affected entries.
   """
   probes = (cache or {}).get("probes") or {}
-  if not probes:
-    return list(STUDIO_MODELS)
+  provider_auth = provider_auth or {
+    "google": auth_google.auth_info(),
+    "openai": auth_openai.auth_info(),
+  }
   out: list[dict] = []
   for m in STUDIO_MODELS:
-    status = (probes.get(m["alias"]) or {}).get("status")
-    if status is None:
-      out.append(m)  # not probed → don't hide
-    elif m["provider"] == "openai":
-      if status in ("listed", "working"):
-        out.append(m)
-    elif status not in _UNREACHABLE:  # google/vertex: keep listed + missing (unconfirmed)
-      out.append(m)
-  return out or list(STUDIO_MODELS)
+    probe = probes.get(m["alias"]) or {}
+    status = probe.get("status")
+    auth = provider_auth.get(m["provider"]) or {}
+    enabled = bool(auth.get("ok"))
+    availability = "available" if status == "working" else "unknown"
+    reason = "generation verified" if status == "working" else ""
+    if status == "listed":
+      availability = "listed"
+      reason = "listed by provider; generation not verified"
+    if not enabled:
+      availability = "unavailable"
+      reason = str(auth.get("hint") or f"{m['provider']} auth is not configured")
+    elif m["provider"] == "openai" and status == "missing":
+      enabled = False
+      availability = "unavailable"
+      reason = "not available on this OpenAI endpoint"
+    elif status in _UNREACHABLE:
+      enabled = False
+      availability = "unavailable"
+      reason = str(probe.get("detail") or f"provider probe failed ({status})")
+    elif m["provider"] == "google" and status == "missing":
+      availability = "unconfirmed"
+      reason = "not listed by Vertex; Model Garden models may still work"
+    elif status is None:
+      reason = "not probed yet"
+    out.append({**m, "enabled": enabled, "availability": availability,
+                "probeStatus": status, "reason": reason})
+  return out
 DEFAULT_PROMPT = (
   "- handwritten marks = edit instructions, don't copy them literally\n"
   "- keep un-annotated parts unchanged\n"
@@ -126,9 +186,14 @@ def discover_images(paths: list[Path]) -> list[Path]:
   return found
 
 
-def _nearest_aspect(w: int, h: int) -> str:
+def _nearest_aspect(w: int, h: int, aspect_options: list[str] | None = None) -> str:
   ratio = (w / h) if h else 1.0
-  return min(_ASPECTS, key=lambda a: abs(_ASPECTS[a] - ratio))
+  options = aspect_options or list(_ASPECTS)
+  ratios = {
+    aspect: int(aspect.split(":", 1)[0]) / int(aspect.split(":", 1)[1])
+    for aspect in options
+  }
+  return min(ratios, key=lambda aspect: abs(ratios[aspect] - ratio))
 
 
 def _provider_of(model: str) -> str:
@@ -140,20 +205,25 @@ def _provider_of(model: str) -> str:
     return "openai" if ("oai" in model or "gpt-image" in model) else "google"
 
 
-def pick_size(provider: str, w: int, h: int, param: str | None) -> tuple[str, str | None]:
+def pick_size(provider: str, w: int, h: int, resolution: str | None,
+              aspect: str | None = None,
+              aspect_options: list[str] | None = None) -> tuple[str, str | None]:
   """Choose a valid (aspect, resolution) for the flattened composite.
 
-  - Gemini honors any aspect at any image_size → aspect from ratio, resolution = the
-    selected image_size (param).
-  - OpenAI has a constrained size table: 16:9/9:16 need 2K (1K is below the pixel min);
-    everything else fits at 1K. Quality is passed separately, so param is ignored here.
+  - Google uses the selected image_size when that model exposes one; older models pass none.
+  - OpenAI has a constrained size table, so unsupported aspect/resolution combinations snap
+    to 2K. Quality is passed separately.
   """
-  aspect = _nearest_aspect(w, h)
   if provider == "openai":
-    resolution = "2K" if aspect in ("16:9", "9:16") else "1K"
-  else:
-    resolution = param or None
-  return aspect, resolution
+    aspect = aspect if aspect in _OPENAI_RESOLUTIONS else _nearest_aspect(w, h)
+    valid = _OPENAI_RESOLUTIONS[aspect]
+    requested = resolution or "1K"
+    if requested not in valid:
+      requested = "2K"
+    return aspect, requested
+  google_aspects = aspect_options or _GEMINI_31_FLASH_ASPECTS
+  aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h, google_aspects)
+  return aspect, resolution or None
 
 
 def _genimg_cmd() -> list[str]:
@@ -190,14 +260,19 @@ class Studio:
   def boot_data(self) -> dict:
     drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
     # load_fresh_cache() returns None once the probe cache is older than the refresh interval
-    # (5 days) → available_models() then shows ALL models. We never filter on stale data; the
-    # user re-enables filtering by running `genimg models`.
-    visible = available_models(discovery.load_fresh_cache())
-    default = self.default_model if any(m["alias"] == self.default_model for m in visible) else visible[0]["alias"]
+    # (5 days). Stale/missing probe data is shown as unknown rather than hiding models.
+    provider_auth = {"google": auth_google.auth_info(), "openai": auth_openai.auth_info()}
+    models = available_models(discovery.load_fresh_cache(), provider_auth)
+    enabled = [m for m in models if m["enabled"]]
+    default = self.default_model if any(
+      m["alias"] == self.default_model and m["enabled"] for m in models
+    ) else (enabled[0]["alias"] if enabled else models[0]["alias"])
     return {
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
-      "models": [{"alias": m["alias"], "label": m["label"], "modelId": m["modelId"],
-                  "provider": m["provider"]} for m in visible],
+      "models": models,
+      "providers": {name: {"mode": info.get("mode"), "ok": info.get("ok"),
+                           "hint": info.get("hint", "")}
+                    for name, info in provider_auth.items()},
       "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
       "promptStarters": PROMPT_STARTERS,
@@ -250,7 +325,8 @@ class Studio:
 
   # ---- job lifecycle ----
   def start_job(self, *, image_b64: str | None, prompt: str, model: str,
-                quality: str | None, resolution: str | None, w: int, h: int) -> str:
+                quality: str | None, resolution: str | None, w: int, h: int,
+                aspect: str | None = None, thinking: str | None = None) -> str:
     jid = "draw" + secrets.token_hex(6)  # collision-resistant across processes/restarts
     draft = None
     if image_b64:
@@ -261,7 +337,9 @@ class Studio:
     logp = self.workdir / f"{jid}.log"
 
     provider = _provider_of(model)
-    aspect, res = pick_size(provider, w, h, resolution)
+    model_info = next((item for item in STUDIO_MODELS if item["alias"] == model), None)
+    aspect_options = model_info.get("aspectOptions") if model_info else None
+    aspect, res = pick_size(provider, w, h, resolution, aspect, aspect_options)
     # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
     # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
     # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
@@ -273,6 +351,8 @@ class Studio:
       cmd += ["-r", res]
     if provider == "openai" and quality:
       cmd += ["-q", quality]
+    if provider == "google" and thinking:
+      cmd += ["--thinking", thinking]
     cmd += ["--", prompt]
 
     with open(logp, "wb") as logf:  # child dups the fd; parent closes its copy
@@ -334,14 +414,17 @@ def _origin_allowed(origin: str | None, host: str | None) -> bool:
   return urlparse(origin).netloc == host
 
 
-def _boot_json(studio: Studio) -> str:
+def _boot_json(studio: Studio, boot_data: dict | None = None) -> str:
   """Serialize boot data for inline injection, escaping '<' so a source filename containing
   '<' (or '</script>') can't break out of the inline <script> element."""
-  return json.dumps(studio.boot_data()).replace("<", "\\u003c")
+  data = studio.boot_data() if boot_data is None else boot_data
+  return json.dumps(data).replace("<", "\\u003c")
 
 
 def _make_handler(studio: Studio):
-  page = PAGE.replace("/*__BOOT__*/", _boot_json(studio))
+  boot_data = studio.boot_data()
+  models_by_alias = {model["alias"]: model for model in boot_data["models"]}
+  page = PAGE.replace("/*__BOOT__*/", _boot_json(studio, boot_data))
   page_bytes = page.encode("utf-8")
 
   class Handler(_http_server.BaseHTTPRequestHandler):
@@ -406,13 +489,22 @@ def _make_handler(studio: Studio):
       prompt = (data.get("prompt") or (DEFAULT_PROMPT if image else "")).strip()
       if not image and not prompt:
         return self._send(400, "application/json", json.dumps({"error": "no image or prompt"}))
+      model = data.get("model") or studio.default_model
+      model_info = models_by_alias.get(model)
+      if model_info is None:
+        return self._send(400, "application/json", json.dumps({"error": "unknown model"}))
+      if not model_info["enabled"]:
+        reason = model_info.get("reason") or "model is unavailable"
+        return self._send(400, "application/json", json.dumps({"error": reason}))
       try:
         jid = studio.start_job(
           image_b64=image,
           prompt=prompt,
-          model=data.get("model") or studio.default_model,
+          model=model,
           quality=data.get("quality"),
           resolution=data.get("resolution"),
+          aspect=data.get("aspect"),
+          thinking=data.get("thinking"),
           w=int(data.get("w") or 1024),
           h=int(data.get("h") or 1024),
         )
@@ -468,8 +560,8 @@ PAGE = r"""<!doctype html>
 <title>genimg draw studio</title>
 <style>
   html,body{margin:0;padding:0}
-  :root{--bg:#f2f2ef;--card:#fff;--panel:#f7f7f5;--border:#e0e0dc;--text:#1c1c1c;--sub:#6f6f6f;--faint:#9a9a9a;--btn:#f0f0ee;--btnb:#d0d0cb;--accent:#4CAF50;--shadow:0 6px 20px rgba(0,0,0,.08)}
-  @media (prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2a2a2a;--panel:#222;--border:#3a3a3a;--text:#fff;--sub:#888;--faint:#555;--btn:#333;--btnb:#555;--shadow:0 8px 24px rgba(0,0,0,.35)}}
+  :root{--bg:#f2f2ef;--card:#fff;--panel:#f7f7f5;--border:#e0e0dc;--text:#1c1c1c;--sub:#6f6f6f;--control-sub:#686868;--faint:#9a9a9a;--btn:#f0f0ee;--btnb:#d0d0cb;--accent:#4CAF50;--shadow:0 6px 20px rgba(0,0,0,.08)}
+  @media (prefers-color-scheme:dark){:root{--bg:#1a1a1a;--card:#2a2a2a;--panel:#222;--border:#3a3a3a;--text:#fff;--sub:#888;--control-sub:#aaa;--faint:#555;--btn:#333;--btnb:#555;--shadow:0 8px 24px rgba(0,0,0,.35)}}
   *{box-sizing:border-box}
   body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;height:100vh;overflow:hidden}
   #app{display:flex;flex-direction:column;height:100vh}
@@ -477,13 +569,43 @@ PAGE = r"""<!doctype html>
   @keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:var(--btnb);border-radius:4px}
   textarea:focus,select:focus{outline:1px solid var(--accent)}
-  select{background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:7px 32px 7px 12px;font-size:13px;cursor:pointer}
+  select{height:36px;background:var(--btn);border:1px solid var(--btnb);color:var(--text);border-radius:8px;padding:0 32px 0 12px;font-size:13px;cursor:pointer}
+  [hidden]{display:none!important}
   @media (max-width:520px){#hint .sub{display:none}}
   .tbtn{background:var(--btn);border:1px solid var(--btnb);color:var(--text);width:32px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .tbtn.on{border-color:var(--accent);background:var(--btnb)}
   .grp{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px}
   .icon{background:none;border:none;color:var(--text);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
   .icon:hover{background:var(--btn)}
+  .studiohead{background:var(--bg);border-bottom:1px solid var(--border)}
+  .headmain{min-height:68px;padding:9px 20px;display:flex;gap:18px;align-items:center}
+  .modelslot{width:270px;margin-left:auto;flex:0 0 270px}
+  .controlpanel{border-top:1px solid var(--border)}
+  .controltoggle{width:100%;height:30px;padding:0 20px;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--control-sub);font:inherit;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:flex-end;text-align:left}
+  .controltoggleinner{width:270px;display:flex;align-items:center;justify-content:flex-end;gap:7px}
+  .controltoggle:hover{background:var(--btn);color:var(--text)}
+  .controltoggle:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .controlpanel.collapsed .controltoggle{border-bottom:0}
+  .paramgrid{min-height:62px;padding:8px 20px 10px;display:flex;gap:14px;align-items:flex-end;justify-content:flex-end;flex-wrap:wrap}
+  .railicon{width:16px;height:16px;display:block;flex:0 0 16px}
+  .trayframe{width:100%;height:100%;min-width:0;min-height:0;display:flex}
+  .traycontent{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+  .trayrail{width:36px;flex:0 0 36px;min-height:0;padding:9px 0;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--sub);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:var(--shadow)}
+  .trayframe.expanded .trayrail{margin-left:8px}
+  .trayrail:hover{border-color:var(--btnb);color:var(--text);background:var(--panel)}
+  .trayrail:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .trayraillabel{writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)}
+  #studiogrid>.card{grid-column:1}#splith{grid-column:2}#traycol{grid-column:3}
+  .controlfield{display:grid;grid-template-rows:12px 36px;gap:6px;align-items:center;min-width:0}
+  .qualityfield,.sizefield{width:max-content}.aspectfield{width:126px}.thinkingfield{width:138px}
+  .toplbl{font-size:10px;line-height:12px;color:var(--control-sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}
+  .segctl{display:grid;grid-template-columns:repeat(var(--segments),64px);gap:2px;width:max-content;height:36px;padding:3px;background:var(--btn);border:1px solid var(--btnb);border-radius:8px}
+  .segopt{width:64px;height:28px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--control-sub);font:inherit;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap}
+  .segopt:hover:not(.on){color:var(--text);background:color-mix(in srgb,var(--btnb) 55%,transparent)}
+  .segopt.on{color:var(--text);background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 0 0 1px color-mix(in srgb,var(--btnb) 72%,transparent)}
+  .segopt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  @media (max-width:700px){.headmain{align-items:flex-start;flex-wrap:wrap}.modelslot{width:100%;margin-left:0;flex-basis:100%}.controltoggleinner{width:100%}.paramgrid{justify-content:flex-start}}
+  .promptchip.on{border-color:var(--accent)!important;background:color-mix(in srgb,var(--accent) 16%,var(--btn))!important}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
   .job img{width:100%;border-radius:6px;display:block;cursor:zoom-in;background:#fff}
   .job img.g{aspect-ratio:1/1;object-fit:contain}
@@ -495,18 +617,19 @@ PAGE = r"""<!doctype html>
 const BOOT = /*__BOOT__*/;
 (function(){
   "use strict";
-  const MM={}; BOOT.models.forEach(m=>{MM[m.alias]={modelId:m.modelId,provider:m.provider};});
+  const MM={}; BOOT.models.forEach(m=>{MM[m.alias]=m;});
   const BRUSH_PX = [2,4,6,10,14], BRUSH_DOT=[6,9,12,15,18], PAD=12;
   const SWATCHES = ["#FF3B30","#2979FF","#FF9100","#111111"];
   const S = {
     prompt: BOOT.defaultPrompt, promptExpanded:false,
-    model: BOOT.defaultModel, quality:"medium", resolution:"1K",
+    model: BOOT.defaultModel, quality:"medium", resolution:"1K", aspect:"auto", thinking:"minimal",
     tool:"pen", color:"#FF3B30", customColor:"#8E24AA", brushLevel:2,
     strokes:[], items:[], selectedId:null,
     view:{x:0,y:0,s:1},
     jobs:[], splitPct:50, trayCollapsed:false, srcCollapsed:false,
     trayScope:"session", trayView:"list", historyItems:[], historyError:"",
-    lightbox:null, shortcutsOpen:false, dragActive:false
+    lightbox:null, shortcutsOpen:false, dragActive:false, controlsCollapsed:false,
+    sizeControlKey:""
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
   let drawing=false, deleting=false, panning=null, movingId=null, moveOff=null, ro=null;
@@ -515,17 +638,31 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- static shell ----------
   function shell(){
-    const modelOpts = BOOT.models.map(m=>`<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}>${esc(m.label)}</option>`).join("");
+    const providerNames={google:"Google · Gemini",openai:"OpenAI"};
+    const modelOpts = ["google","openai"].map(provider=>{
+      const opts=BOOT.models.filter(m=>m.provider===provider).map(m=>{
+        const suffix=!m.enabled?" — unavailable":"";
+        return `<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}${m.enabled?"":" disabled"}>${esc(m.label+suffix)}</option>`;
+      }).join("");
+      return opts?`<optgroup label="${esc(providerNames[provider])}">${opts}</optgroup>`:"";
+    }).join("");
     $("app").innerHTML = `
-      <div style="background:var(--bg);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;gap:16px;align-items:center">
-        <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
-          <div style="font-size:16px;font-weight:600;letter-spacing:-.2px">genimg</div>
-          <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
+      <header class="studiohead">
+        <div class="headmain">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:104px">
+            <div style="font-size:16px;font-weight:600;letter-spacing:-.2px">genimg</div>
+            <div style="font-size:11px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-weight:500">draw studio</div>
+          </div>
+          <div class="modelslot controlfield">
+            <label class="toplbl" for="modelSel">Model</label>
+            <select id="modelSel" style="width:100%">${modelOpts}</select>
+          </div>
         </div>
-        <span style="flex:1"></span>
-        <select id="modelSel" style="width:250px">${modelOpts}</select>
-        <select id="paramSel" style="width:250px"></select>
-      </div>
+        <div id="generationControls" class="controlpanel">
+          <button id="controlsToggle" class="controltoggle" type="button" data-act="toggleControls" aria-expanded="true" aria-controls="paramControls"><span class="controltoggleinner"><span>Generation controls</span><span id="controlsIcon" aria-hidden="true"></span></span></button>
+          <div id="paramControls" class="paramgrid"></div>
+        </div>
+      </header>
       <div id="main" style="flex:1;display:flex;min-height:0;padding:16px 20px;gap:10px">
         <div id="srccol" style="display:flex"></div>
         <div id="studiogrid" style="flex:1;display:grid;gap:10px;min-height:0;min-width:0">
@@ -546,7 +683,7 @@ const BOOT = /*__BOOT__*/;
               </div>
             </div>
             <div id="promptbox" style="display:flex;flex-direction:column;gap:4px"></div>
-            <button data-act="generate" style="background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(76,175,80,.25)">⚡ Generate <span id="costtext" style="font-weight:400;opacity:.85;font-size:13px"></span></button>
+            <button id="generateBtn" data-act="generate" style="background:var(--accent);border:none;color:#fff;font-size:15px;font-weight:600;padding:12px;border-radius:10px;cursor:pointer;box-shadow:0 4px 14px rgba(76,175,80,.25)">⚡ Generate <span id="costtext" style="font-weight:400;opacity:.85;font-size:13px"></span></button>
           </div>
           <div id="splith" data-act="split" style="cursor:col-resize;width:14px;margin:0 -4px;display:flex;align-items:center;justify-content:center;touch-action:none"><div style="width:3px;height:56px;background:var(--btnb);border-radius:2px"></div></div>
           <div id="traycol" style="display:flex;flex-direction:column;min-width:0;min-height:0"></div>
@@ -565,7 +702,6 @@ const BOOT = /*__BOOT__*/;
     wrap.addEventListener("dragleave", ()=>{S.dragActive=false; wrap.style.borderColor="var(--border)"; wrap.style.borderStyle="solid";});
     wrap.addEventListener("drop", onDrop);
     $("modelSel").addEventListener("change", e=>{ S.model=e.target.value; renderTopbar(); renderCost(); });
-    $("paramSel").addEventListener("change", e=>{ if(isOai()) S.quality=e.target.value; else S.resolution=e.target.value; renderCost(); });
     ro = new ResizeObserver(sizeCanvas); ro.observe(cv);
     renderTopbar(); renderToolbar(); renderPrompt(); renderCost(); renderTray(); renderSrc(); renderGrid();
     sizeCanvas();
@@ -574,15 +710,83 @@ const BOOT = /*__BOOT__*/;
   const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
+  function panelTopIcon(expanded){
+    const chevron=expanded?'<path d="m9 15 3-3 3 3"/>':'<path d="m9 12 3 3 3-3"/>';
+    return `<svg class="railicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/>${chevron}</svg>`;
+  }
+  function panelRightIcon(expanded){
+    const chevron=expanded?'<path d="m9 9 3 3-3 3"/>':'<path d="m12 9-3 3 3 3"/>';
+    return `<svg class="railicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/>${chevron}</svg>`;
+  }
+  function prettyControlValue(v){return v.charAt(0).toUpperCase()+v.slice(1);}
+  function segmentedControl(key,label,options,value,fieldClass){
+    return `<div class="controlfield ${fieldClass}"><span class="toplbl" id="${key}Label">${esc(label)}</span><div class="segctl" style="--segments:${options.length}" role="radiogroup" aria-labelledby="${key}Label">${options.map(v=>{const on=v===value;return `<button type="button" class="segopt ${on?'on':''}" role="radio" aria-checked="${on}" tabindex="${on?0:-1}" data-seg-key="${key}" data-seg-value="${esc(v)}">${esc(prettyControlValue(v))}</button>`;}).join("")}</div></div>`;
+  }
+  function controlFocusSnapshot(){
+    const active=document.activeElement, controls=$("paramControls");
+    if(!active||!controls?.contains(active))return null;
+    if(active.id)return {id:active.id};
+    if(active.dataset?.segKey)return {key:active.dataset.segKey,value:active.dataset.segValue};
+    return null;
+  }
+  function restoreControlFocus(snapshot){
+    if(!snapshot)return;
+    const target=snapshot.id?$(snapshot.id):document.querySelector(`[data-seg-key="${snapshot.key}"][data-seg-value="${snapshot.value}"]`);
+    target?.focus({preventScroll:true});
+  }
+  function renderControlsVisibility(){
+    const panel=$("generationControls"), controls=$("paramControls"), toggle=$("controlsToggle");
+    panel.classList.toggle("collapsed",S.controlsCollapsed);
+    controls.hidden=S.controlsCollapsed;
+    toggle.setAttribute("aria-expanded",String(!S.controlsCollapsed));
+    toggle.title=S.controlsCollapsed?"Show generation controls":"Hide generation controls";
+    $("controlsIcon").innerHTML=panelTopIcon(!S.controlsCollapsed);
+  }
   function renderTopbar(){
+    const focusSnapshot=controlFocusSnapshot();
     $("modelSel").value = S.model;
-    const sel = $("paramSel");
-    const opts = isOai()
-      ? [["medium","quality: medium (default)"],["low","quality: low — fastest"],["high","quality: high — 30–90s/image"]]
-      : [["1K","image_size: 1K (default)"],["2K","image_size: 2K"],["4K","image_size: 4K"]];
-    sel.title = isOai() ? "quality — gpt-image request parameter" : "image_size — Gemini image_config parameter";
-    sel.innerHTML = opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("");
-    sel.value = isOai()? S.quality : S.resolution;
+    const meta=MM[S.model]||{};
+    const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta), thinking=meta.thinkingOptions||[];
+    if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
+    if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
+    if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
+    const supportedAspects=meta.aspectOptions||["1:1","4:3","3:4","16:9","9:16"];
+    if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
+    const aspects=[["auto","Auto"]].concat(supportedAspects.map(a=>[a,a]));
+    S.sizeControlKey=sizeControlKey(meta);
+    $("paramControls").innerHTML =
+      (qualities.length?segmentedControl("quality","Quality",qualities,S.quality,"qualityfield"):"")+
+      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,S.resolution,"sizefield"):"")+
+      `<div class="controlfield aspectfield"><label class="toplbl" for="aspectSel">Aspect ratio</label><select id="aspectSel" aria-label="Aspect ratio" style="width:100%">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`+
+      (thinking.length?segmentedControl("thinking","Thinking",thinking,S.thinking,"thinkingfield"):"");
+    renderControlsVisibility();
+    const optionSets={quality:qualities,resolution:resolutions,thinking};
+    const selectSegment=(key,value,focus=false)=>{
+      S[key]=value;
+      for(const button of document.querySelectorAll(`[data-seg-key="${key}"]`)){
+        const on=button.dataset.segValue===value;
+        button.classList.toggle("on",on); button.setAttribute("aria-checked",String(on)); button.tabIndex=on?0:-1;
+      }
+      renderCost();
+      if(focus)document.querySelector(`[data-seg-key="${key}"][data-seg-value="${value}"]`)?.focus();
+    };
+    for(const button of document.querySelectorAll("[data-seg-key]")){
+      button.addEventListener("click",()=>selectSegment(button.dataset.segKey,button.dataset.segValue));
+      button.addEventListener("keydown",e=>{
+        const key=button.dataset.segKey, options=optionSets[key]||[];
+        let idx=options.indexOf(S[key]);
+        if(e.key==="ArrowRight"||e.key==="ArrowDown")idx=(idx+1)%options.length;
+        else if(e.key==="ArrowLeft"||e.key==="ArrowUp")idx=(idx-1+options.length)%options.length;
+        else if(e.key==="Home")idx=0;
+        else if(e.key==="End")idx=options.length-1;
+        else return;
+        e.preventDefault(); selectSegment(key,options[idx],true);
+      });
+    }
+    $("aspectSel").addEventListener("change",e=>{S.aspect=e.target.value;renderTopbar();renderCost();});
+    const gen=$("generateBtn");
+    if(gen){gen.disabled=!meta.enabled;gen.style.opacity=meta.enabled?"1":".45";gen.style.cursor=meta.enabled?"pointer":"not-allowed";gen.title=meta.enabled?"":"Selected model is unavailable";}
+    restoreControlFocus(focusSnapshot);
   }
   function renderToolbar(){
     const tool=(t,svg,title)=>`<button class="tbtn ${S.tool===t?'on':''}" data-act="tool" data-tool="${t}" title="${title}">${svg}</button>`;
@@ -616,18 +820,29 @@ const BOOT = /*__BOOT__*/;
     cv.style.cursor = S.tool==="move" ? "default" : "crosshair";
   }
   function renderPrompt(){
-    const starters=(BOOT.promptStarters||[]).map((p,i)=>`<button data-act="promptStarter" data-idx="${i}" title="${esc(p.prompt)}" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">${esc(p.label)}</button>`).join("");
+    const starters=(BOOT.promptStarters||[]).map((p,i)=>{
+      const active=S.prompt.startsWith(p.prompt);
+      return `<button class="promptchip ${active?'on':''}" data-act="promptStarter" data-idx="${i}" title="Use this prompt starter" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">${esc(p.label)}</button>`;
+    }).join("");
+    const defaultActive=S.prompt===BOOT.defaultPrompt;
     $("promptbox").innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button>${starters}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="togglePrompt" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:0;text-align:left;margin-right:4px">${S.promptExpanded?"▴ hide prompt":"▸ view or edit prompt"}</button><span style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Start with</span>${starters}<button class="promptchip ${defaultActive?'on':''}" data-act="promptDefault" title="Restore the default annotation instructions" style="background:var(--btn);border:1px solid var(--btnb);color:var(--text);padding:4px 10px;border-radius:999px;font-size:11px;cursor:pointer">Default</button></div>
       ${S.promptExpanded?`<textarea id="promptta" rows="5" spellcheck="false" placeholder="Describe the image you want…" style="background:var(--panel);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;line-height:1.6;padding:9px 14px;font-family:inherit;width:100%;resize:vertical">${esc(S.prompt)}</textarea>`:""}`;
     const ta = $("promptta");
-    if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; });
+    if (ta) ta.addEventListener("input", e=>{ S.prompt = e.target.value; updatePromptChipState(); });
+  }
+  function updatePromptChipState(){
+    for(const button of document.querySelectorAll('[data-act="promptStarter"]')){
+      const starter=(BOOT.promptStarters||[])[parseInt(button.dataset.idx,10)];
+      button.classList.toggle("on",Boolean(starter&&S.prompt.startsWith(starter.prompt)));
+    }
+    document.querySelector('[data-act="promptDefault"]')?.classList.toggle("on",S.prompt===BOOT.defaultPrompt);
   }
   function renderCost(){ const el=$("costtext"); if(el) el.textContent = "· " + costEstimate(); }
-  function nearestAspect(w,h){const A={"1:1":1,"4:3":4/3,"3:4":3/4,"16:9":16/9,"9:16":9/16};const r=h?w/h:1;let best="1:1",bd=1e9;for(const a in A){const d=Math.abs(A[a]-r);if(d<bd){bd=d;best=a;}}return best;}
+  function nearestAspect(w,h,aspects){const options=aspects&&aspects.length?aspects:["1:1"];const r=h?w/h:1;let best=options[0],bd=1e9;for(const a of options){const parts=a.split(":").map(Number),ar=parts[0]/parts[1],d=Math.abs(ar-r);if(d<bd){bd=d;best=a;}}return best;}
   function renderGrid(){
     const g = $("studiogrid");
-    if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 44px";
+    if (S.trayCollapsed) g.style.gridTemplateColumns = "1fr 0 36px";
     else g.style.gridTemplateColumns = `minmax(280px,${S.splitPct}%) 14px minmax(220px,1fr)`;
     $("splith").style.display = S.trayCollapsed ? "none" : "flex";
   }
@@ -686,7 +901,7 @@ const BOOT = /*__BOOT__*/;
   function renderTray(){
     const col = $("traycol");
     if (S.trayCollapsed){
-      col.innerHTML = `<button class="card" data-act="toggleTray" title="Show generated images" style="width:44px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;color:var(--sub);cursor:pointer;border:1px solid var(--border)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg><span style="writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button>`;
+      col.innerHTML = `<div class="trayframe"><button class="trayrail" data-act="toggleTray" title="Show generated images" aria-label="Show generated images">${panelRightIcon(false)}<span class="trayraillabel">Generated${S.jobs.length?" · "+S.jobs.length:""}</span></button></div>`;
       return;
     }
     const items=trayItems();
@@ -709,15 +924,18 @@ const BOOT = /*__BOOT__*/;
     const vbtn=(val,svg,title)=>`<button data-act="trayView" data-view="${val}" title="${title}" style="background:${S.trayView===val?'var(--btnb)':'transparent'};border:none;color:var(--text);width:26px;height:24px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">${svg}</button>`;
     const listIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
     const gridIco='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
-    col.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:13px;font-weight:600">Generated</span>
-        <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(BOOT.genDir||'')}">${esc(BOOT.genDir||"~/.genimg/generations/")}</span>
-        <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
-        <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
-        <button class="icon" data-act="toggleTray" title="Collapse" style="width:22px;height:22px;color:var(--sub)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
+    col.innerHTML = `<div class="trayframe expanded">
+      <div class="traycontent">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">Generated</span>
+          <span style="font-size:11px;color:var(--sub);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(BOOT.genDir||'')}">${esc(BOOT.genDir||"~/.genimg/generations/")}</span>
+          <div class="grp" style="padding:2px;gap:2px" title="Session = this run · All = your whole ~/.genimg history">${seg("Session","session")}${seg("All","all")}</div>
+          <div class="grp" style="padding:2px;gap:2px">${vbtn("list",listIco,"List view")}${vbtn("grid",gridIco,"Grid view")}</div>
+        </div>
+        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0">${body}</div>
       </div>
-      <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0">${body}</div>`;
+      <button class="trayrail" data-act="toggleTray" title="Hide generated images" aria-label="Hide generated images">${panelRightIcon(true)}</button>
+    </div>`;
   }
   function renderOverlays(){
     const parts=[];
@@ -732,18 +950,41 @@ const BOOT = /*__BOOT__*/;
   function toast(m){ S.toast=m; renderOverlays(); clearTimeout(toast._t); toast._t=setTimeout(()=>{S.toast="";renderOverlays();},2800); }
 
   // ---------- cost (mirrors genimg cost.py) ----------
+  function selectedAspect(){
+    if(S.aspect!=="auto")return S.aspect;
+    const b=contentBounds();
+    const aspects=(MM[S.model]||{}).aspectOptions||["1:1"];
+    return b?nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2,aspects):"1:1";
+  }
+  function resolutionOptions(meta=MM[S.model]||{}){
+    const all=meta.resolutionOptions||[], byAspect=meta.resolutionOptionsByAspect||{};
+    return byAspect[selectedAspect()]||all;
+  }
+  function sizeControlKey(meta=MM[S.model]||{}){
+    const byAspect=meta.resolutionOptionsByAspect||{}, options=resolutionOptions(meta);
+    return (Object.keys(byAspect).length?selectedAspect()+"|":"")+options.join(",");
+  }
+  function selectedResolution(){
+    const options=resolutionOptions();
+    if(!options.length)return null;
+    if(options.includes(S.resolution))return S.resolution;
+    return options.includes("2K")?"2K":options[0];
+  }
+  function effectiveResolution(){
+    if(!isOai())return selectedResolution()||"1K";
+    const valid={"1:1":["1K","2K","4K"],"4:3":["1K","2K"],"3:4":["1K","2K"],"16:9":["2K","4K"],"9:16":["2K","4K"]}[selectedAspect()];
+    return valid.includes(S.resolution)?S.resolution:"2K";
+  }
   function costEstimate(){
     const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
     let usd;
     if (isOai()){
       usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
-      // server forces 2K for 16:9/9:16 (1K is below OpenAI's pixel min) → mirror cost.py's mult
-      const b=contentBounds();
-      if(b){const a=nearestAspect((b[2]-b[0])+PAD*2,(b[3]-b[1])+PAD*2); if(a==="16:9"||a==="9:16") usd*=((C.openaiResMult||{})["2K"]||2.5);}  // match flatten()'s padded dims
+      usd*=((C.openaiResMult||{})[effectiveResolution()]||1);
     } else {
       const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id
       const t=(C.googlePerImage||{})[key]||{};
-      usd=t[S.resolution]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
+      usd=t[selectedResolution()||"1K"]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
     }
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
@@ -827,7 +1068,12 @@ const BOOT = /*__BOOT__*/;
     ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(off,0,0);
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
-    renderCost();  // aspect can change the OpenAI estimate as content changes
+    const resolution=selectedResolution();
+    if(sizeControlKey()!==S.sizeControlKey||(resolution&&resolution!==S.resolution)){
+      if(resolution)S.resolution=resolution;
+      renderTopbar();
+    }
+    renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
 
@@ -885,6 +1131,8 @@ const BOOT = /*__BOOT__*/;
     return {url:c.toDataURL("image/png"), w:c.width, h:c.height};
   }
   async function generate(){
+    const meta=MM[S.model]||{};
+    if(!meta.enabled){toast("Selected model is unavailable");return;}
     let flat=null;
     try{ flat=flatten(); }
     catch(e){ toast("can't export the canvas (a cross-origin image tainted it)"); return; }
@@ -895,7 +1143,7 @@ const BOOT = /*__BOOT__*/;
     }
     try{
       const d=await apiJson("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:S.resolution,w:flat?flat.w:1024,h:flat?flat.h:1024})});
+        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,thinking:(meta.thinkingOptions||[]).includes(S.thinking)?S.thinking:null,w:flat?flat.w:1024,h:flat?flat.h:1024})});
       S.jobs.push({id:d.job_id,model:S.model,status:"queued",createdAt:Date.now()});
       if(S.trayCollapsed){S.trayCollapsed=false;renderGrid();}
       renderTray();
@@ -945,6 +1193,8 @@ const BOOT = /*__BOOT__*/;
       const p=(BOOT.promptStarters||[])[parseInt(t.dataset.idx,10)];
       if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
     }
+    else if(a==="promptDefault"){S.prompt=BOOT.defaultPrompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>$("promptta")?.focus());}
+    else if(a==="toggleControls"){S.controlsCollapsed=!S.controlsCollapsed;renderControlsVisibility();}
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
     else if(a==="toggleSrc"){S.srcCollapsed=!S.srcCollapsed;renderSrc();}

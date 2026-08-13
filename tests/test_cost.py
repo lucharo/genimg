@@ -27,12 +27,12 @@ class CostEstimateTests(unittest.TestCase):
 
   def test_google_resolution_keyed(self) -> None:
     self.assertAlmostEqual(
-      cost.estimate(provider="google", model_id="gemini-3-pro-image-preview", n=1, resolution="2K"),
+      cost.estimate(provider="google", model_id="gemini-3-pro-image", n=1, resolution="2K"),
       0.134,
     )
 
   def test_ga_and_preview_ids_price_identically(self) -> None:
-    # inference resolves the GA id (no -preview); it must price the same as the registry's preview id
+    # Saved metadata may still contain the retired preview id; price it like the stable id.
     ga = cost.estimate(provider="google", model_id="gemini-3.1-flash-image", n=1)
     preview = cost.estimate(provider="google", model_id="gemini-3.1-flash-image-preview", n=1)
     self.assertAlmostEqual(ga, 0.067)

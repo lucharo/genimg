@@ -49,7 +49,7 @@ def embed_into_images(meta: dict[str, Any]) -> None:
   record. Non-PNG or unreadable outputs are skipped silently — embedding is
   provenance, never load-bearing.
   """
-  params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio")}
+  params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio", "thinking_level")}
   params = {k: v for k, v in params.items() if v is not None}
   fields = {
     "prompt": meta.get("prompt"),
@@ -98,7 +98,8 @@ def save(meta: dict[str, Any], gen_id: str) -> Path:
 def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
-          quality: str | None = None, grid_path: Path | None = None,
+          quality: str | None = None, thinking_level: str | None = None,
+          grid_path: Path | None = None,
           prompt_deltas: list[str | None] | None = None,
           mode: str | None = None, diverse: bool = False) -> dict[str, Any]:
   from . import diversify
@@ -122,6 +123,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "resolution": resolution,
     "aspect_ratio": aspect_ratio,
     "quality": quality,
+    "thinking_level": thinking_level,
     "input": str(input) if input else None,
     "refs": [str(r) for r in (refs or [])],
     "mode": mode or "auto",
