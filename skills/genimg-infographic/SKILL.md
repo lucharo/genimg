@@ -169,8 +169,10 @@ infographic/<topic-slug>/
 │   └── 01-ref-<slug>.<ext>
 ├── prompts/
 │   └── infographic.md
+├── candidates/                 # only for multi-candidate work
+├── iterations/                 # only when regenerating a single candidate
 ├── infographic.png
-├── selection-manifest.md     # only for multi-candidate work
+├── selection-manifest.md       # whenever more than one render or iteration exists
 └── comparison.html           # only for multi-candidate work
 ```
 
@@ -253,18 +255,20 @@ For a material batch, first render one candidate at the lowest resolution compat
 For one image:
 
 ```bash
+mkdir -p iterations
 genimg "$(<prompts/infographic.md)" [refs...] \
   -m <model> -a <ratio> -r <resolution> \
-  -o infographic.png
+  -o iterations/01-initial.png
 ```
 
-For controlled alternatives, keep one subject and one information architecture. Use one `-n` call with tailored deltas, not a prompt asking the model to draw a contact sheet:
+For controlled alternatives, keep one subject and one information architecture. Before generation, write `prompts/style-deltas.txt` with at least `<count> - 1` non-empty, subject-specific lines; candidate 1 keeps the base prompt and candidates 2 through `<count>` receive those deltas in order. Then use one `-n` call, not a prompt asking the model to draw a contact sheet:
 
 ```bash
+mkdir -p candidates
 genimg "$(<prompts/infographic.md)" [refs...] \
   -m <model> -a <ratio> -r <resolution> \
   -n <count> --deltas @prompts/style-deltas.txt \
-  -o infographic.png
+  -o candidates/infographic.png
 ```
 
 Record stable candidate IDs, model, original index, filename, and review state in `selection-manifest.md`.
@@ -279,7 +283,7 @@ Open every candidate at full resolution. For dense diagrams, crop and inspect ea
 - No instruction text leaked into the artwork.
 - Nothing important is cropped or illegible.
 
-If structure is wrong, regenerate from a corrected full prompt. Use `-i` only for a small cosmetic edit to a selected image, always passing the aspect again. Preserve flawed candidates for comparison.
+If structure is wrong, regenerate from a corrected full prompt to a new versioned path such as `iterations/02-corrected-arrows.png`; never reuse an existing output path. Use `-i` only for a small cosmetic edit to a selected image, always passing the aspect again and writing a new versioned file. Record every attempt and disposition in `selection-manifest.md`. After acceptance, copy the selected file unchanged to `infographic.png`. Preserve flawed candidates for comparison.
 
 For multiple candidates:
 

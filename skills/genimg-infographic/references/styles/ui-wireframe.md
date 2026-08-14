@@ -20,7 +20,7 @@ Grayscale interface mockup style
 ## Typography
 
 - System fonts
-- Placeholder "Lorem ipsum"
+- Source-derived labels only; no placeholder copy
 - UI label style
 - Sans-serif throughout
 
