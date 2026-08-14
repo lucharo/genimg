@@ -1,0 +1,4 @@
+interface:
+  display_name: "GenIMG Infographic"
+  short_description: "Create structured infographics with GenIMG"
+  default_prompt: "Use $genimg-infographic to turn this material into a polished infographic."
