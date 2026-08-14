@@ -75,6 +75,7 @@ genimg skills install codex genimg              # targeted install
 
 Bundled skills:
 - `genimg`: lean CLI usage patterns.
+- `genimg-infographic`: Baoyu-derived 21-layout × 22-style infographic workflow using GenIMG.
 - `genimg-agent-refinement`: agent loop for inspecting outputs and removing obvious artifacts.
 - `image-to-app`: staged workflow from visual directions through implementation and browser QA.
 
