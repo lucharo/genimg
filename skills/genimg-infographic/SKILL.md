@@ -32,11 +32,11 @@ Resolve the model in this order:
    - `oai:gi2` for simple layouts where exact typography and crisp UI treatment dominate.
 4. If no suitable configured model serves, stop and explain the available setup path.
 
-Always pass `-m`. A model listed in the catalogue is advertised, not proven serving, and `genimg auth --check` proves only its fixed provider canaries. The first real generation with the selected model is the exact-model canary. For a material batch, generate and inspect one 1K candidate with that exact model before launching the rest. Do not combine `--check` with `--json`: GenIMG's JSON auth view reports configuration and cached inventory but does not execute the live probe.
+Always pass `-m`. A model listed in the catalogue is advertised, not proven serving, and `genimg auth --check` proves only its fixed provider canaries. The first real generation with the selected model is the exact-model canary. For a material batch, generate and inspect one candidate at the lowest resolution supported by that exact model and aspect before launching the rest. Do not combine `--check` with `--json`: GenIMG's JSON auth view reports configuration and cached inventory but does not execute the live probe.
 
 ## Reference images
 
-Accept reference files supplied in the request or through `--ref`. Copy each one into the output directory as `refs/NN-ref-<slug>.<ext>` so the prompt remains reproducible.
+Accept reference files supplied in the request and copy each one into the output directory as `refs/NN-ref-<slug>.<ext>` so the prompt remains reproducible. GenIMG accepts direct references as positional file arguments; it has no `--ref` option.
 
 Assign one usage mode per reference:
 
@@ -124,7 +124,7 @@ Load the selected definition from `references/layouts/<layout>.md`.
 | `hand-drawn-edu` | Pastel educational drawing |
 | `retro-popup-pop` | Vintage UI collage and flat pop colour |
 
-Load the selected definition from `references/styles/<style>.md`.
+For a built-in style, load `references/styles/<style>.md`. For a configured custom style, use its `prompt_fragment` directly and do not resolve a built-in style file.
 
 ## Recommended combinations
 
@@ -227,7 +227,7 @@ Load:
 
 - `references/base-prompt.md`
 - `references/layouts/<layout>.md`
-- `references/styles/<style>.md`
+- `references/styles/<style>.md` for a built-in style, or the configured `prompt_fragment` for a custom style
 - `structured-content.md`
 
 Assemble one complete prompt at `prompts/infographic.md`. Include reference provenance frontmatter, append extracted style/palette traits, and pin every required cell, row, arrow, label, and metric explicitly. Phrase constraints so they cannot be mistaken for visible labels.
@@ -246,7 +246,7 @@ genimg "$(<prompts/infographic.md)" [refs...] \
 
 Read the model, parameters, output path, and estimated cost. Resolve any mismatch before the real call.
 
-For a material batch, first render one 1K candidate with the exact selected model and inspect it. A successful provider auth probe or dry-run does not prove that model serves. The normal single-image generation is itself the exact-model canary.
+For a material batch, first render one candidate at the lowest resolution compatible with the exact selected model and aspect, then inspect it. For example, OpenAI 16:9 and 9:16 require at least 2K. A successful provider auth probe or dry-run does not prove that model serves. The normal single-image generation is itself the exact-model canary.
 
 ### 7. Generate
 

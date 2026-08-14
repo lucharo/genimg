@@ -29,6 +29,6 @@ custom_styles:
 | `language` | `null` | Output language, or source-language detection |
 | `preferred_model` | `auto` | A GenIMG alias such as `gdm:nb2`, `gdm:nbp`, or `oai:gi2` |
 | `preferred_resolution` | `2K` | `1K`, `2K`, or `4K` when supported by the selected model |
-| `custom_styles` | `[]` | Extra named style fragments merged with the built-in gallery |
+| `custom_styles` | `[]` | Extra named styles whose configured `prompt_fragment` is used directly instead of loading `references/styles/<name>.md` |
 
 Preferences never bypass per-generation confirmation. If a preferred model is not currently working, fall back to live model selection and state the substitution before generation.

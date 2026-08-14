@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 import unittest
@@ -58,6 +59,17 @@ class BundledSkillTests(unittest.TestCase):
         }
 
     self.assertEqual(wheel_files, source_files)
+
+  def test_layout_pairings_reference_bundled_styles(self) -> None:
+    skill = cli._skill_sources()["genimg-infographic"]
+    style_names = {path.stem for path in (skill / "references" / "styles").glob("*.md")}
+    paired_names: set[str] = set()
+
+    for layout in (skill / "references" / "layouts").glob("*.md"):
+      _, _, pairings = layout.read_text().partition("## Recommended Pairings")
+      paired_names.update(re.findall(r"^- `([^`]+)`:", pairings, flags=re.MULTILINE))
+
+    self.assertEqual(paired_names - style_names, set())
 
   def test_genimg_infographic_path_command(self) -> None:
     result = CliRunner().invoke(

@@ -36,6 +36,6 @@ Surface vs hidden depths, visible vs underlying factors.
 
 ## Recommended Pairings
 
-- `cartoon-hand-drawn`: Friendly metaphor
+- `hand-drawn-edu`: Friendly metaphor
 - `storybook-watercolor`: Artistic depth
-- `graphic-novel`: Dramatic revelation
+- `bold-graphic`: Dramatic revelation

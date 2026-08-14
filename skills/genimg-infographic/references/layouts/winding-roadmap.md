@@ -37,5 +37,5 @@ Curved path showing journey with milestones and checkpoints.
 ## Recommended Pairings
 
 - `storybook-watercolor`: Whimsical journeys
-- `cartoon-hand-drawn`: Friendly roadmaps
-- `isometric-3d`: Technical project paths
+- `hand-drawn-edu`: Friendly roadmaps
+- `technical-schematic`: Technical project paths

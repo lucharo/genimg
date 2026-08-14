@@ -36,6 +36,6 @@ Interlocking puzzle pieces showing how parts fit together.
 
 ## Recommended Pairings
 
-- `cartoon-hand-drawn`: Friendly integration concepts
-- `paper-cutout`: Tactile puzzle feel
+- `hand-drawn-edu`: Friendly integration concepts
+- `craft-handmade`: Tactile puzzle feel
 - `corporate-memphis`: Business strategy pieces
