@@ -14,7 +14,7 @@ Load the `genimg` skill before invoking the CLI.
 - Save the full final prompt under `prompts/` before generation.
 - Preserve source statistics, quotes, names, dates, and technical terms exactly.
 - Strip credentials, tokens, and secrets from source material before writing output files.
-- Confirm layout, style, aspect, and language before generation unless the user explicitly says to skip confirmation.
+- Select layout, style, aspect, language, model, resolution, and reference usage automatically from the source, explicit user constraints, saved preferences, and live availability. Do not ask the user to confirm routine generation choices.
 - Use raster generation. Do not silently substitute SVG, HTML, canvas, or CSS art.
 - Never repair rendered text by painting over the bitmap. Correct the prompt and regenerate.
 - Preserve every supplied reference and record whether it is used directly, for style, or for palette extraction.
@@ -55,7 +55,7 @@ references:
     usage: direct
 ```
 
-Verify every preserved file before generation. Only `direct` references appear as positional CLI arguments. When the user has not specified a mode, recommend one from their stated intent and include it in the confirmation gate.
+Verify every preserved file before generation. Only `direct` references appear as positional CLI arguments. When the user has not specified a mode, infer it from their stated intent and record the choice in the prompt frontmatter.
 
 ## Options
 
@@ -151,7 +151,7 @@ For a built-in style, load `references/styles/<style>.md`. For a configured cust
 
 ## Keyword shortcuts
 
-Check these before content-based layout inference. A match makes the mapped layout the leading recommendation, promotes its listed styles, and supplies the default aspect. It remains a recommendation input and never bypasses confirmation.
+Check these before content-based layout inference. A match makes the mapped layout the leading selection, promotes its listed styles, and supplies the default aspect unless explicit user constraints or source structure require another choice.
 
 | User keyword | Layout | Recommended styles | Default aspect | Prompt notes |
 | --- | --- | --- | --- | --- |
@@ -188,7 +188,7 @@ Read the first `EXTEND.md` found:
 2. `${XDG_CONFIG_HOME:-$HOME/.config}/genimg/infographic/EXTEND.md`
 3. `$HOME/.genimg/infographic/EXTEND.md`
 
-If none exists, load `references/config/first-time-setup.md`, complete its blocking setup, save preferences, then continue. Preferences influence recommendations only; they never bypass confirmation.
+If none exists, use the automatic defaults in `references/config/first-time-setup.md` and continue without creating a file or asking setup questions. Preferences guide automatic selection when present.
 
 ### 2. Analyse the source
 
@@ -211,17 +211,18 @@ Load `references/structured-content-template.md` and write `structured-content.m
 
 Do not introduce new facts.
 
-### 4. Recommend and confirm
+### 4. Select automatically
 
-Apply a matching keyword shortcut first; otherwise infer from the content. Recommend 3-5 layout/style combinations using the source structure, tone, audience, and saved preferences. Confirm:
+Apply a matching keyword shortcut first; otherwise infer from the content. Select one coherent configuration without a question panel, in this priority order:
 
-1. Layout and style combination.
-2. Aspect ratio.
-3. Language when source and user language differ.
-4. Model only when the user requested a choice, the saved model is unavailable, or multiple routes have a meaningful trade-off.
-5. Usage mode for each supplied reference when the user did not already specify it.
+1. Explicit constraints in the current request.
+2. Compatible saved preferences.
+3. A matching keyword shortcut.
+4. Source structure, tone, audience, language, and visual density.
 
-Skip this gate only when the current request explicitly says to generate directly or use defaults without confirmation. State all assumptions before generating.
+Choose the layout/style pair, aspect ratio, output language, resolution, and reference usage modes. Resolve the model through the live model-selection rules above. State the selected configuration in a concise progress update, then continue immediately; cost reporting before a material batch is informational, not a request for permission. If constraints conflict, preserve source fidelity and legibility, record the trade-off, and proceed with the strongest fit.
+
+Do not present a menu or ask for confirmation unless the user explicitly asks to compare or choose among alternatives. When alternatives are requested, keep one information architecture and generate controlled candidates for selection.
 
 ### 5. Build the prompt
 

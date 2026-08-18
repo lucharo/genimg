@@ -94,6 +94,25 @@ class BundledSkillTests(unittest.TestCase):
     self.assertNotIn("auth --check --json", text)
     self.assertIn("genimg auth --check", text)
 
+  def test_infographic_generation_choices_are_automatic(self) -> None:
+    skill = cli._skill_sources()["genimg-infographic"]
+    workflow = (skill / "SKILL.md").read_text()
+    setup = (skill / "references" / "config" / "first-time-setup.md").read_text()
+    schema = (skill / "references" / "config" / "preferences-schema.md").read_text()
+
+    self.assertIn("### 4. Select automatically", workflow)
+    self.assertIn("Do not present a menu or ask for confirmation", workflow)
+    self.assertIn("Do not run a first-time questionnaire", setup)
+    self.assertIn("Preferences guide automatic selection", schema)
+    for legacy_phrase in (
+      "### 4. Recommend and confirm",
+      "confirmation gate",
+      "per-generation confirmation",
+      "complete its blocking setup",
+      "never bypasses confirmation",
+    ):
+      self.assertNotIn(legacy_phrase, workflow + setup + schema)
+
 
 if __name__ == "__main__":
   unittest.main()

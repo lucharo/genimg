@@ -31,4 +31,4 @@ custom_styles:
 | `preferred_resolution` | `2K` | `1K`, `2K`, or `4K` when supported by the selected model |
 | `custom_styles` | `[]` | Extra named styles whose configured `prompt_fragment` is used directly instead of loading `references/styles/<name>.md` |
 
-Preferences never bypass per-generation confirmation. If a preferred model is not currently working, fall back to live model selection and state the substitution before generation.
+Preferences guide automatic selection. If a preferred model is not currently working, fall back to live model selection and state the substitution before generation without pausing for approval.
