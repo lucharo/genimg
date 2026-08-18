@@ -104,6 +104,8 @@ class BundledSkillTests(unittest.TestCase):
     self.assertIn("Do not present a menu or ask for confirmation", workflow)
     self.assertIn("Do not run a first-time questionnaire", setup)
     self.assertIn("Preferences guide automatic selection", schema)
+    self.assertIn("Automatic user/source rule", schema)
+    self.assertIn("compatible saved preference", workflow)
     for legacy_phrase in (
       "### 4. Recommend and confirm",
       "confirmation gate",

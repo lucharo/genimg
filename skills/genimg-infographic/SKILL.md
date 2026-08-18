@@ -151,7 +151,7 @@ For a built-in style, load `references/styles/<style>.md`. For a configured cust
 
 ## Keyword shortcuts
 
-Check these before content-based layout inference. A match makes the mapped layout the leading selection, promotes its listed styles, and supplies the default aspect unless explicit user constraints or source structure require another choice.
+Check these before content-based layout inference. A match makes the mapped layout the leading selection, promotes its listed styles, and supplies the default aspect unless explicit user constraints, a compatible saved preference, or source structure require another choice.
 
 | User keyword | Layout | Recommended styles | Default aspect | Prompt notes |
 | --- | --- | --- | --- | --- |
