@@ -26,9 +26,9 @@ custom_styles:
 | `preferred_layout` | `null` | One of the 21 layouts, or automatic selection |
 | `preferred_style` | `null` | One of the 22 styles, or automatic selection |
 | `preferred_aspect` | `null` | `landscape`, `portrait`, `square`, a supported ratio, or automatic selection |
-| `language` | `null` | Output language, or source-language detection |
+| `language` | `null` | Automatic user/source rule: use the user's language when it differs from the source; otherwise preserve the source language |
 | `preferred_model` | `auto` | A GenIMG alias such as `gdm:nb2`, `gdm:nbp`, or `oai:gi2` |
 | `preferred_resolution` | `2K` | `1K`, `2K`, or `4K` when supported by the selected model |
 | `custom_styles` | `[]` | Extra named styles whose configured `prompt_fragment` is used directly instead of loading `references/styles/<name>.md` |
 
-Preferences never bypass per-generation confirmation. If a preferred model is not currently working, fall back to live model selection and state the substitution before generation.
+Preferences guide automatic selection. If a preferred model is not currently working, fall back to live model selection and state the substitution before generation without pausing for approval.

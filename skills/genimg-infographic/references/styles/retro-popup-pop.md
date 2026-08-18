@@ -28,7 +28,7 @@ Retro pixel popup × pop-art collage — content rendered as a stack of 80/90s d
 - Headers: Pixel / dot-matrix / chunky bitmap display fonts, large and high-contrast
 - Body: Retro monospace or system-style sans-serif, high legibility
 - Title bars: Reverse white on solid black, all-caps preferred
-- Decorative all-caps English allowed for filenames, status strings, button labels (PROBLEMS.EXE, OK, CANCEL); body content text remains in the confirmed output language
+- Decorative all-caps English allowed for filenames, status strings, button labels (PROBLEMS.EXE, OK, CANCEL); body content text remains in the selected output language
 
 ## Style Enforcement
 

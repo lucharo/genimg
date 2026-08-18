@@ -1,40 +1,20 @@
 ---
 name: first-time-setup
-description: First-time preference setup for genimg-infographic
+description: Automatic defaults and optional preference persistence for genimg-infographic
 ---
 
-# First-time setup
+# Automatic defaults
 
-Complete this setup before analysing source content. Saved preferences change recommendations only; every generation still follows the confirmation gate in `SKILL.md`.
+Do not run a first-time questionnaire. When no `EXTEND.md` exists, use the template below in memory and continue with automatic selection. Do not create a preferences file unless the user explicitly asks to persist preferences.
 
-Ask with the runtime's structured user-input tool. Batch as many questions as the tool supports.
+The automatic defaults are:
 
-## Questions
-
-1. **Preferred layout**
-   - Auto-select (recommended)
-   - `bento-grid`
-   - `linear-progression`
-   - `dense-modules`
-2. **Preferred style**
-   - Auto-select (recommended)
-   - `craft-handmade`
-   - `technical-schematic`
-   - `morandi-journal`
-3. **Preferred aspect**
-   - Auto-select (recommended)
-   - `landscape`
-   - `portrait`
-   - `square`
-4. **Output language**
-   - Auto-detect (recommended)
-   - `en`
-   - `zh`
-5. **Save location**
-   - Project: `.genimg/infographic/EXTEND.md`
-   - User: `${XDG_CONFIG_HOME:-$HOME/.config}/genimg/infographic/EXTEND.md`
-
-The runtime may add a free-text option. Read it as authoritative when it conflicts with a clicked choice.
+- Layout: infer from content structure.
+- Style: infer from tone and audience.
+- Aspect: infer from layout and target surface.
+- Language: use the user's language when it differs from the source; otherwise preserve the source language.
+- Model: `auto`, resolved through live availability.
+- Resolution: `2K` unless the selected model or requested output requires another supported value.
 
 ## Template
 
@@ -51,4 +31,4 @@ custom_styles: []
 ---
 ```
 
-Create the selected parent directory and save the file. Confirm its path, then continue with source analysis.
+If the user asks to save preferences, write only their explicit choices into the first supported `EXTEND.md` location and leave all unspecified fields at the automatic defaults. Report the saved path, then continue without another generation-choice gate.
