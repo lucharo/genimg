@@ -21,6 +21,9 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 - **Quality/size (OpenAI):** `-q high` is crisp but 30–90s/image (fine with `-n`, it's parallel); `-q medium` (default) is good for exploration. `-a` aspect (`1:1 3:4 4:3 9:16 16:9`), `-r` resolution (`1K 2K 4K`).
 - **Iterate, don't restart:** once a candidate is close, `-i` it with a small instruction rather than regenerating from scratch. The `genimg-agent-refinement` skill is a structured polish loop for this.
 - **Cost:** `genimg cost` / `genimg history`. `-q high` + big `-n` adds up (~$0.05–0.21/image). Preflight any pricey batch with `--dry-run` — prints model, params, per-path plan, and the cost estimate without calling the API.
+- **Benchmarking:** never label one-shot CLI wall time as provider generation latency. Record local
+  setup or cold-start time and provider-call time separately, and state which clock each comparison
+  uses.
 - **Agent-friendly plumbing:** `--json` on `models`, `auth`, `history`, and `cost` emits machine-readable output; `history -n 50` widens the window; `models --refresh` re-probes availability (`--aliases` shows alias mappings); `auth --check` does a tiny live probe per provider; `genimg config show|path|edit` inspects the saved config.
 
 ## Diverse exploration across providers
