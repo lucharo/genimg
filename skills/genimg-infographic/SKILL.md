@@ -235,6 +235,12 @@ Load:
 
 Assemble one complete prompt at `prompts/infographic.md`. Include reference provenance frontmatter, append extracted style/palette traits, and pin every required cell, row, arrow, label, and metric explicitly. Phrase constraints so they cannot be mistaken for visible labels.
 
+The file mixes YAML provenance frontmatter with the free-text prompt, and `genimg` treats the whole argument as prompt text — leading `---` lines can even be misparsed as CLI flags, and `references:` keys leak into the render as pseudo-labels. Strip the frontmatter into a variable and pass THAT, in the preflight and every generate call:
+
+```bash
+PROMPT=$(awk 'NR==1 && /^---$/{skip=1; next} skip && /^---$/{skip=0; next} !skip' prompts/infographic.md)
+```
+
 Map named aspects to CLI ratios: `landscape` → `16:9`, `portrait` → `9:16`, `square` → `1:1`.
 
 ### 6. Preflight GenIMG
@@ -242,7 +248,7 @@ Map named aspects to CLI ratios: `landscape` → `16:9`, `portrait` → `9:16`, 
 Run the exact planned command with `--dry-run`. Use the saved prompt as one shell argument and pass only `direct` reference images positionally after it:
 
 ```bash
-genimg "$(<prompts/infographic.md)" [refs...] \
+genimg "$PROMPT" [refs...] \
   -m <model> -a <ratio> -r <resolution> \
   -o infographic.png --dry-run
 ```
@@ -257,7 +263,7 @@ For one image:
 
 ```bash
 mkdir -p iterations
-genimg "$(<prompts/infographic.md)" [refs...] \
+genimg "$PROMPT" [refs...] \
   -m <model> -a <ratio> -r <resolution> \
   -o iterations/01-initial.png
 ```
@@ -266,7 +272,7 @@ For controlled alternatives, keep one subject and one information architecture. 
 
 ```bash
 mkdir -p candidates
-genimg "$(<prompts/infographic.md)" [refs...] \
+genimg "$PROMPT" [refs...] \
   -m <model> -a <ratio> -r <resolution> \
   -n <count> --deltas @prompts/style-deltas.txt \
   -o candidates/infographic.png
