@@ -69,6 +69,17 @@ class GridRenderTests(unittest.TestCase):
     # None-valued fields are omitted, not rendered.
     self.assertNotIn(">resolution<", html)
 
+  def test_info_panel_shows_edit_input_and_ordered_references(self) -> None:
+    html = self._render(meta=self._meta(
+      input="original-room.jpg",
+      refs=["approved-concept.png", "palette.png"],
+    ))
+    self.assertIn(">edit input<", html)
+    self.assertIn("original-room.jpg", html)
+    self.assertIn(">reference 1<", html)
+    self.assertIn(">reference 2<", html)
+    self.assertLess(html.index("approved-concept.png"), html.index("palette.png"))
+
   def test_cost_prefers_meta_over_per_image_estimate(self) -> None:
     # meta cost ($0.53) wins over the renderer's per-image openai estimate ($0.05*3).
     with tempfile.TemporaryDirectory() as td:

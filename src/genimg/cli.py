@@ -117,7 +117,7 @@ def _root_callback(
 
 _PANEL_CORE = "Core"
 _PANEL_OUTPUT = "Output"
-_PANEL_GOOGLE = "Google-only (Vertex/Imagen)"
+_PANEL_GOOGLE = "Google-only (Gemini Image)"
 _PANEL_OPENAI = "OpenAI-only (gpt-image-*)"
 
 
@@ -144,9 +144,9 @@ def _run(
   n: Annotated[int, typer.Option("-n", "--num", min=1, max=10, rich_help_panel=_PANEL_CORE,
     help="Number of variants 1-10 (n>1 runs in parallel). Pair with -d for deliberate variety.")] = 1,
   mode: Annotated[str | None, typer.Option("--mode", rich_help_panel=_PANEL_CORE,
-    help="parallel = n separate API requests (default for all but Imagen); batch = ONE n-image "
+    help="parallel = n separate API requests (default); batch = ONE n-image "
          "request, Google only: Gemini multi-image response (pair with -d for a model-curated set; "
-         "may return fewer than n) or Imagen number_of_images. Rejected on OpenAI — gpt-image n>1 "
+         "may return fewer than n). Rejected on OpenAI — gpt-image n>1 "
          "returns near-duplicate independent samples (verified live), i.e. wasted spend.")] = None,
   aspect_ratio: Annotated[str | None, typer.Option("-a", "--aspect-ratio", rich_help_panel=_PANEL_CORE,
     help="Output aspect ratio. Options depend on the selected model.")] = None,
@@ -279,6 +279,16 @@ def _run(
   console.print(f'  [dim]prompt[/dim]   "{_rich_escape(prompt_preview)}"')
   if name:
     console.print(f"  [dim]name[/dim]     {_rich_escape(name)}")
+  if input:
+    console.print(
+      f"  [dim]{'input':<7}[/dim]  {_rich_escape(_short_path(input))}", soft_wrap=True
+    )
+  for i, ref in enumerate(refs or []):
+    row_label = "refs" if i == 0 else ""
+    console.print(
+      f"  [dim]{row_label:<7}[/dim]  #{i + 1} {_rich_escape(_short_path(ref))}",
+      soft_wrap=True,
+    )
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     {cost_label}  [dim]id={gen_id}[/dim]")
@@ -732,7 +742,7 @@ def draw_cmd(
 
   # The studio can prompt-generate a first image, but later canvas iterations send -i,
   # so the selected model must remain image-editable. Canonicalize aliases; fall back to
-  # gdm:nb2 otherwise (e.g. an Imagen default cannot support the iterative workflow).
+  # gdm:nb2 otherwise.
   studio_aliases = [m["alias"] for m in draw_module.STUDIO_MODELS]
   requested = model or config.get_default_model() or "gdm:nb2"
   try:
@@ -963,8 +973,6 @@ _ASPECT_VALUES = {
 }
 _GEMINI_ASPECT_VALUES = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
 _GEMINI_31_FLASH_ASPECT_VALUES = _ASPECT_VALUES
-_IMAGEN_ASPECT_VALUES = {"1:1", "3:4", "4:3", "9:16", "16:9"}
-_IMAGEN_RESOLUTION_VALUES = {"1K", "2K"}
 _OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _OPENAI_MAX_INPUT_MB = 50
 _OPENAI_MAX_INPUTS = 16
@@ -986,11 +994,6 @@ def _size_params_supported(
     return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
   if provider == "codex":
     return resolution is None
-  if model_id.startswith("imagen-"):
-    return (
-      (resolution is None or resolution in _IMAGEN_RESOLUTION_VALUES)
-      and (aspect_ratio is None or aspect_ratio in _IMAGEN_ASPECT_VALUES)
-    )
   if provider == "google" and model_id.startswith("gemini-"):
     if model_id.startswith("gemini-3.1-flash-image"):
       allowed_resolutions = {"512", "1K", "2K", "4K"}
@@ -1099,13 +1102,6 @@ def _validate_provider_flags(
       '--deltas "..." for variety — or switch to a Gemini model (-m gdm:nb2) for batch.'
     )
 
-  if mode == "batch" and diverse and model_id and model_id.startswith("imagen-"):
-    _die(
-      "--diverse with --mode batch needs a model that sees all n takes in one request — "
-      "Gemini image models only (-m gdm:nb2 / gdm:nbp). Imagen draws independent samples "
-      "of one prompt. Use --mode parallel (the default) for per-request prompt deltas instead."
-    )
-
   if quality is not None:
     if provider != "openai":
       _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
@@ -1119,18 +1115,6 @@ def _validate_provider_flags(
       _die(f"--thinking must be minimal or high, got {thinking_level!r}")
     if provider != "google" or not (model_id or "").startswith("gemini-3.1-flash-image"):
       _die("--thinking is supported only by Gemini 3.1 Flash Image (-m gdm:nb2).")
-
-  if model_id and model_id.startswith("imagen-") and (input or refs):
-    _die(
-      "Imagen does not support --input or reference images (text-to-image only). "
-      "Drop the flag(s), or switch to a Gemini Image model (-m gdm:nb2 / gdm:nbp) or OpenAI (-m oai:gi2)."
-    )
-
-  if model_id and model_id.startswith("imagen-"):
-    if resolution is not None and resolution not in _IMAGEN_RESOLUTION_VALUES:
-      _die(f"{model_id} supports image sizes: {', '.join(sorted(_IMAGEN_RESOLUTION_VALUES))}.")
-    if aspect_ratio is not None and aspect_ratio not in _IMAGEN_ASPECT_VALUES:
-      _die(f"{model_id} does not support aspect ratio {aspect_ratio}.")
 
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")

@@ -62,19 +62,6 @@ class ValidationMatrixTests(unittest.TestCase):
     with self.assertRaises(typer.Exit):
       _validate(provider="google", thinking_level="high", model_id="gemini-3-pro-image")
 
-  def test_resolution_on_imagen_ok(self) -> None:
-    _validate(provider="google", resolution="2K", model_id="imagen-4.0-generate-001")
-
-  def test_imagen_rejects_unsupported_size_and_aspect(self) -> None:
-    with self.assertRaises(typer.Exit):
-      _validate(provider="google", resolution="4K", model_id="imagen-4.0-generate-001")
-    with self.assertRaises(typer.Exit):
-      _validate(provider="google", aspect_ratio="1:8", model_id="imagen-4.0-generate-001")
-
-  def test_imagen_with_input_rejected(self) -> None:
-    with self.assertRaises(typer.Exit):
-      _validate(provider="google", model_id="imagen-4.0-generate-001", input=self.png)
-
   def test_region_on_openai_rejected(self) -> None:
     with self.assertRaises(typer.Exit):
       _validate(provider="openai", region="us-central1")

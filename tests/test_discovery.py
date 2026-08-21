@@ -51,7 +51,7 @@ class DiscoveryProbeTests(unittest.TestCase):
   def test_probe_all_uses_parallel_model_list_checks(self) -> None:
     entries = {
       "gdm:global": discovery.ModelSpec("google", "gemini-listed", region="global"),
-      "gdm:regional": discovery.ModelSpec("google", "imagen-listed", region="us-central1"),
+      "gdm:regional": discovery.ModelSpec("google", "gemini-regional-image", region="us-central1"),
       "oai:listed": discovery.ModelSpec("openai", "gpt-image-listed"),
       "oai:missing": discovery.ModelSpec("openai", "gpt-image-missing"),
     }
@@ -72,7 +72,7 @@ class DiscoveryProbeTests(unittest.TestCase):
     def fake_google_client(region: str = "global", project: str | None = None) -> FakeClient:
       if region == "global":
         return FakeClient([{"name": "models/gemini-listed"}])
-      return FakeClient([SimpleNamespace(name="publishers/google/models/imagen-listed")])
+      return FakeClient([SimpleNamespace(name="publishers/google/models/gemini-regional-image")])
 
     with (
       patch.object(discovery, "all_canonical", return_value=entries),

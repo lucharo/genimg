@@ -1,8 +1,4 @@
-"""Google Gemini Image / Imagen provider.
-
-Gemini Image returns one image per generate_content call → uses IImageGen template parallelism.
-Imagen accepts number_of_images server-side → overrides generate() with a single batched call.
-"""
+"""Google Gemini Image provider."""
 from __future__ import annotations
 
 import time
@@ -16,10 +12,6 @@ from ..auth.google import get_client
 from ..interfaces import GenerateRequest, GenerateResult, IImageGen, ProbeResult
 
 
-def _is_imagen(model_id: str) -> bool:
-  return model_id.startswith("imagen-")
-
-
 class GeminiImageGen(IImageGen):
   def __init__(self, region: str = "global", project: str | None = None):
     self.region = region
@@ -29,19 +21,13 @@ class GeminiImageGen(IImageGen):
     return get_client(region=region or self.region, project=self.project)
 
   def generate(self, req: GenerateRequest) -> GenerateResult:
-    """Imagen's natural mode is one batched call — kept unless --mode parallel or
-    diverse per-variant prompts force a fan-out. Gemini uses template parallelism,
-    or _generate_batch on explicit --mode batch."""
-    if _is_imagen(req.model) and req.mode != "parallel" and not req.prompt_variants:
-      return self._generate_imagen_batched(req)
+    """Use template parallelism, or one Gemini call on explicit --mode batch."""
     try:
       return super().generate(req)
     except ClientError as e:
       raise self._friendly(e, req) from e
 
   def _generate_single_image(self, req: GenerateRequest, i: int) -> Path:
-    if _is_imagen(req.model):
-      return self._generate_imagen_single(req, i)
     client = self._client(req.region)
     contents: list = [req.prompt]
     for ref in req.refs:
@@ -76,7 +62,7 @@ class GeminiImageGen(IImageGen):
 
   def _generate_batch(self, req: GenerateRequest) -> list[Path]:
     """--mode batch on Gemini: ONE generate_content call asked to emit all n images.
-    Unlike OpenAI/Imagen n>1 (independent samples of one prompt), the model sees the
+    Unlike OpenAI n>1 (independent samples of one prompt), the model sees the
     whole batch, so with req.diverse it can deliberately differentiate the takes.
     Multi-image output is prompt-instructed, i.e. best-effort: partial results are
     kept with a warning rather than discarded."""
@@ -119,60 +105,13 @@ class GeminiImageGen(IImageGen):
             f"(multi-image output is model-discretionary; --mode parallel guarantees n)")
     return paths
 
-  def _generate_imagen_single(self, req: GenerateRequest, i: int) -> Path:
-    """One Imagen image for one prompt variant (diverse mode can't use the batched call)."""
-    client = self._client(req.region)
-    cfg_kwargs = {
-      "number_of_images": 1,
-      "aspect_ratio": req.aspect_ratio or "1:1",
-      "output_mime_type": "image/png",
-    }
-    if req.resolution:
-      cfg_kwargs["image_size"] = req.resolution
-    resp = client.models.generate_images(
-      model=req.model, prompt=req.prompt, config=types.GenerateImagesConfig(**cfg_kwargs),
-    )
-    out = self.numbered_path(req.output, i, req.n)
-    resp.generated_images[0].image.save(str(out))
-    return out
-
-  def _generate_imagen_batched(self, req: GenerateRequest) -> GenerateResult:
-    client = self._client(req.region)
-    cfg_kwargs = {
-      "number_of_images": req.n,
-      "aspect_ratio": req.aspect_ratio or "1:1",
-      "output_mime_type": "image/png",
-    }
-    if req.resolution:
-      cfg_kwargs["image_size"] = req.resolution
-    config = types.GenerateImagesConfig(**cfg_kwargs)
-    try:
-      resp = client.models.generate_images(model=req.model, prompt=req.prompt, config=config)
-    except ClientError as e:
-      raise self._friendly(e, req) from e
-    if not resp.generated_images:
-      raise RuntimeError("No images returned. Likely a safety filter — rephrase the prompt.")
-    paths: list[Path] = []
-    for i, gen in enumerate(resp.generated_images):
-      out = self.numbered_path(req.output, i, req.n)
-      out.parent.mkdir(parents=True, exist_ok=True)
-      gen.image.save(str(out))
-      paths.append(out)
-    return GenerateResult(paths=paths, model_used=req.model)
-
   def probe(self, model: str, region: str | None = None) -> ProbeResult:
     try:
       client = self._client(region)
-      if _is_imagen(model):
-        client.models.generate_images(
-          model=model, prompt="test",
-          config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/png"),
-        )
-      else:
-        client.models.generate_content(
-          model=model, contents=["test"],
-          config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
-        )
+      client.models.generate_content(
+        model=model, contents=["test"],
+        config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+      )
       return ProbeResult(model=model, status="working")
     except ClientError as e:
       code = getattr(e, "code", None)

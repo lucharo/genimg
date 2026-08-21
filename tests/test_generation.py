@@ -36,22 +36,40 @@ class NoDefaultModelTests(unittest.TestCase):
     self.assertNotIn("r=4K", params_line)
     self.assertNotIn("a=1:8", params_line)
 
-  def test_incompatible_global_size_defaults_are_ignored_for_imagen(self) -> None:
+  def test_retired_imagen_alias_explains_the_supported_replacement(self) -> None:
     runner = CliRunner()
-    config = {
-      "default_resolution": "4K",
-      "default_aspect_ratio": "1:8",
-    }
-    with (
-      patch.object(cli.config, "load", return_value=config),
-      patch.object(cli.auth_google, "auth_info", return_value={"mode": "vertex"}),
-    ):
+    with patch.object(cli.config, "load", return_value={}):
       result = runner.invoke(cli._app, ["a prompt", "-m", "gdm:imagen4", "--dry-run"])
 
+    self.assertEqual(result.exit_code, 1)
+    self.assertIn("Imagen 4 was retired", result.output)
+    self.assertIn("gdm:nb2", result.output)
+
+
+class DryRunProvenanceTests(unittest.TestCase):
+  def test_input_and_ordered_references_are_labelled(self) -> None:
+    root = Path(tempfile.mkdtemp())
+    edit_input = root / "original.png"
+    first_ref = root / "approved-concept.png"
+    second_ref = root / "palette.png"
+    for path in (edit_input, first_ref, second_ref):
+      path.write_bytes(b"x")
+
+    with (
+      patch.object(cli.config, "load", return_value={}),
+      patch.object(cli.auth_google, "auth_info", return_value={"mode": "vertex"}),
+    ):
+      result = CliRunner().invoke(cli._app, [
+        "preserve the room", str(first_ref), str(second_ref),
+        "-i", str(edit_input), "-m", "gdm:nb2", "--dry-run",
+      ])
+
     self.assertEqual(result.exit_code, 0, result.output)
-    params_line = next(line for line in result.output.splitlines() if "params" in line)
-    self.assertNotIn("r=4K", params_line)
-    self.assertNotIn("a=1:8", params_line)
+    lines = [" ".join(line.split()) for line in result.output.splitlines()]
+    self.assertIn(f"input {edit_input}", lines)
+    self.assertIn(f"refs #1 {first_ref}", lines)
+    self.assertIn(f"#2 {second_ref}", lines)
+    self.assertLess(result.output.index(str(first_ref)), result.output.index(str(second_ref)))
 
 
 class _FakeGen(IImageGen):

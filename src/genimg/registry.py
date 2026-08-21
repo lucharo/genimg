@@ -28,10 +28,6 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "gdm:nano-banana-2-lite": "gdm:nb2-lite",
   "gdm:nb":              ModelSpec("google", "gemini-2.5-flash-image",         region="us-central1", quality_rank=6),
   "gdm:nano-banana":     "gdm:nb",
-  "gdm:imagen4":         ModelSpec("google", "imagen-4.0-generate-001",        region="us-central1", quality_rank=7),
-  "gdm:imagen4-fast":    ModelSpec("google", "imagen-4.0-fast-generate-001",   region="us-central1", quality_rank=5),
-  "gdm:imagen4-ultra":   ModelSpec("google", "imagen-4.0-ultra-generate-001",  region="us-central1", quality_rank=8),
-
   # OpenAI / Azure OpenAI.
   # Availability varies by account and Azure deployment — run `genimg models` to see
   # what your credentials can actually reach. Some ids (e.g. gpt-image-1.5) may be
@@ -50,6 +46,15 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "oai:gi1-mini":         "oai:gpt-image-1-mini",
 }
 
+_RETIRED_IMAGEN_ALIASES = {"gdm:imagen4", "gdm:imagen4-fast", "gdm:imagen4-ultra"}
+
+
+def _retired_imagen_error() -> ValueError:
+  return ValueError(
+    "Imagen 4 was retired by Google on August 17, 2026. "
+    "Use gdm:nb2 (Gemini 3.1 Flash Image) instead."
+  )
+
 def _infer_spec(model_id: str) -> ModelSpec | None:
   """Infer a spec for a well-formed but unregistered model id from its shape.
 
@@ -65,8 +70,6 @@ def _infer_spec(model_id: str) -> ModelSpec | None:
   mid = model_id.lower()
   if mid.startswith("gpt-image"):
     return ModelSpec("openai", model_id, region=None, quality_rank=0)
-  if mid.startswith("imagen-"):
-    return ModelSpec("google", model_id, region="us-central1", quality_rank=0)
   if mid.startswith("gemini-") and "image" in mid:
     return ModelSpec("google", model_id, region="global", quality_rank=0)
   return None
@@ -83,6 +86,8 @@ def resolve(name: str) -> tuple[str, ModelSpec]:
   """
   seen: set[str] = set()
   key = name
+  if key in _RETIRED_IMAGEN_ALIASES or key.lower().startswith("imagen-"):
+    raise _retired_imagen_error()
   while key in _REGISTRY:
     if key in seen:
       raise ValueError(f"alias cycle for {name!r}")
@@ -99,7 +104,7 @@ def resolve(name: str) -> tuple[str, ModelSpec]:
     return name, inferred
   raise ValueError(
     f"unknown model {name!r}. Run `genimg models` to see aliases, or pass a full provider "
-    f"model id (gpt-image-*, imagen-*, or gemini-*-image)."
+    f"model id (gpt-image-* or gemini-*-image)."
   )
 
 

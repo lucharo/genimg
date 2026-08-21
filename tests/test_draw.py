@@ -353,13 +353,9 @@ class BootJsonTests(unittest.TestCase):
 
 
 class StudioModelsTests(unittest.TestCase):
-  def test_excludes_imagen_and_includes_editable_models(self) -> None:
+  def test_includes_all_supported_editable_models(self) -> None:
     models = draw._studio_models()
     aliases = [m["alias"] for m in models]
-    # Imagen is text-to-image only → it cannot support canvas iterations after the first image.
-    self.assertNotIn("gdm:imagen4", aliases)
-    self.assertTrue(all(not m["modelId"].startswith("imagen-") for m in models))
-    # The image-editable models (incl. the ones previously missing from the hardcoded 3) are present.
     for a in ("gdm:nb2", "gdm:nbp", "gdm:nb2-lite", "oai:gpt-image-2", "oai:gpt-image-1.5"):
       self.assertIn(a, aliases)
 
@@ -517,9 +513,6 @@ class DrawCommandModelTests(unittest.TestCase):
     ):
       CliRunner().invoke(cli._app, ["draw", "--no-open", *args])
     return captured["model"]
-
-  def test_imagen_default_falls_back_to_nb2(self) -> None:
-    self.assertEqual(self._serve_model(["-m", "gdm:imagen4"], None), "gdm:nb2")
 
   def test_alias_is_canonicalized_to_studio_model(self) -> None:
     self.assertEqual(self._serve_model(["-m", "oai:gi2"], None), "oai:gpt-image-2")

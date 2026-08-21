@@ -19,7 +19,7 @@ from typing import Any
 
 from PIL import Image
 
-# Per-image cost map (rough). Google Imagen by max edge; OpenAI gpt-image-2 by quality+size.
+# Per-image cost map (rough). Google Gemini by resolution; OpenAI gpt-image by quality+size.
 _GOOGLE_COST_BY_EDGE = {1024: 0.04, 2048: 0.13, 4096: 0.24}
 _OPENAI_COST_BY_QUALITY = {"low": 0.006, "medium": 0.053, "high": 0.211, "auto": 0.053}
 
@@ -234,6 +234,13 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
     ("billing", pricing.billing_label(meta) if meta else None, False),
     ("reported generator", provenance.describe(meta["outputs"]) + " (C2PA, unverified)" if "api_equivalent_cost" in meta else None, False),
     ("API equivalent", pricing.format_equivalent(meta["api_equivalent_cost"]) + " (theoretical, rough, output only)" if "api_equivalent_cost" in meta else None, False),
+    ("edit input", meta.get("input"), False),
+  ]
+  rows.extend(
+    (f"reference {i}", ref, False)
+    for i, ref in enumerate(meta.get("refs") or [], start=1)
+  )
+  rows.extend([
     ("n", meta.get("n"), False),
     ("mode", meta.get("mode"), False),
     ("diverse", _diverse_note(meta), False),
@@ -241,7 +248,7 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
     ("resolution", meta.get("resolution"), False),
     ("aspect ratio", meta.get("aspect_ratio"), False),
     ("time", meta.get("time"), False),
-  ]
+  ])
   if cost is not None:
     rows.append(("est. cost", f"${cost:.2f}", True))
   html_rows = "".join(

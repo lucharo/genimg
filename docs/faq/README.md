@@ -107,11 +107,11 @@ Use the Create, Diagram or Polish starter, or choose Default to restore the anno
 instructions. Expanding the prompt lets you edit it directly; the selected starter updates
 as the text changes.
 
-## Why is Imagen absent from Draw Studio?
+## Why is Imagen unavailable?
 
-Imagen is text-to-image only in genimg. Draw Studio needs models that can accept the current
-canvas as an input for later iterations, so Imagen remains available through the CLI but is
-not offered in the Studio model selector.
+Google shut down the Imagen 4 API models on August 17, 2026. Genimg no longer exposes their
+aliases or accepts Imagen model IDs. Use `gdm:nb2` (Gemini 3.1 Flash Image), which supports both
+generation and canvas editing.
 
 ## Where are Draw Studio results saved?
 

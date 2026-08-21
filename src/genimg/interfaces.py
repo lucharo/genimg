@@ -15,7 +15,7 @@ AspectRatio = Literal[
 ]
 Quality = Literal["low", "medium", "high", "xhigh", "max", "auto"]
 ThinkingLevel = Literal["minimal", "high"]
-# None = provider's natural mode (Imagen batches, everything else fans out in parallel).
+# None = fan out in parallel; "batch" requests one provider-side multi-image call.
 Mode = Literal["parallel", "batch"]
 
 
