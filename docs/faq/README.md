@@ -46,5 +46,6 @@ Generated images are saved under `~/.genimg/generations/`. The Generated panel s
 current session or the wider saved history, and metadata sidecars are stored under
 `~/.genimg/metadata/`.
 
-See also [Maintaining the model list](../maintaining-models.md) and
+See also the [Draw Studio guide](../draw-studio.md),
+[Maintaining the model list](../maintaining-models.md) and
 [ADR-0001: No built-in default model](../adr/0001-no-built-in-default-model.md).
