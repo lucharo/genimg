@@ -31,8 +31,9 @@ genimg config show                               # inspect saved config (config 
 There is **no built-in default model** — pass `-m <alias>`, or run `genimg setup`
 (or `genimg models set-default <alias>`) to save one so you can omit `-m`.
 
-See the [FAQ](docs/faq/README.md) for Draw Studio recovery, model availability and
-provider-specific controls.
+See the [Draw Studio guide](docs/draw-studio.md) for the local canvas workflow, iPad/Apple Pencil
+and remote-screen setup, security boundary, and the features that remain CLI-only. The
+[FAQ](docs/faq/README.md) covers recovery, model availability and provider-specific controls.
 
 ## Getting the most variety
 
