@@ -21,6 +21,9 @@ genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --de
 genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Gemini image models only)
 genimg grid *.png -o g.html --open               # standalone grid from existing files
 genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
+genimg "X" -m gdm:nb2 --name deep-between         # optional history label (duplicates allowed)
+genimg history                                    # recent generations as a table
+genimg history view                               # interactive image/history browser
 genimg draw diagrams/                            # draw studio: annotate/sketch with image-editable models
 genimg models                                    # discover listed models
 genimg setup                                     # interactive auth wizard (also sets a default)
@@ -34,6 +37,11 @@ There is **no built-in default model** — pass `-m <alias>`, or run `genimg set
 See the [Draw Studio guide](docs/draw-studio.md) for the local canvas workflow, iPad/Apple Pencil
 and remote-screen setup, security boundary, and the features that remain CLI-only. The
 [FAQ](docs/faq/README.md) covers recovery, model availability and provider-specific controls.
+
+`genimg history view` browses every recorded output image with arrow or Vim navigation, an
+in-terminal preview, the full prompt and absolute provenance paths. Press `?` inside the browser
+for all keys. `genimg history --json` remains the non-interactive interface and always emits
+absolute paths, including when reading older sidecars that recorded paths relative to `workdir`.
 
 ## Getting the most variety
 

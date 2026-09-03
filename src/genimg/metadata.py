@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import secrets
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,52 @@ GENIMG_HOME = Path(os.getenv("GENIMG_HOME") or Path.home() / ".genimg")
 GEN_DIR = GENIMG_HOME / "generations"
 META_DIR = GENIMG_HOME / "metadata"
 GRID_DIR = GENIMG_HOME / "grids"
+
+
+def _absolute_path(value: str | Path, workdir: Path | None) -> str:
+  path = Path(value).expanduser()
+  if path.is_absolute():
+    return str(path.resolve(strict=False))
+  if workdir is None:
+    raise ValueError(f"relative metadata path has no absolute workdir: {value}")
+  return str((workdir / path).resolve(strict=False))
+
+
+def normalize_paths(meta: dict[str, Any]) -> dict[str, Any]:
+  """Return a copy whose path-bearing fields are absolute.
+
+  Legacy relative paths are resolved against the workdir recorded in their
+  sidecar. A relative path without an absolute recorded workdir is ambiguous,
+  so callers must treat that record as unreadable rather than guessing.
+  """
+  out = deepcopy(meta)
+  raw_workdir = out.get("workdir")
+  workdir = None
+  if raw_workdir:
+    candidate = Path(raw_workdir).expanduser()
+    if not candidate.is_absolute():
+      raise ValueError(f"metadata workdir is not absolute: {raw_workdir}")
+    workdir = candidate.resolve(strict=False)
+    out["workdir"] = str(workdir)
+
+  if out.get("input") is not None:
+    out["input"] = _absolute_path(out["input"], workdir)
+  out["refs"] = [_absolute_path(path, workdir) for path in out.get("refs", [])]
+
+  outputs = []
+  for item in out.get("outputs", []):
+    if isinstance(item, dict):
+      item = dict(item)
+      item["path"] = _absolute_path(item["path"], workdir)
+    else:
+      item = _absolute_path(item, workdir)
+    outputs.append(item)
+  out["outputs"] = outputs
+
+  if isinstance(out.get("grid"), dict) and out["grid"].get("path") is not None:
+    out["grid"] = dict(out["grid"])
+    out["grid"]["path"] = _absolute_path(out["grid"]["path"], workdir)
+  return out
 
 
 def make_id(prompt: str, model_id: str) -> str:
@@ -53,6 +100,7 @@ def embed_into_images(meta: dict[str, Any]) -> None:
   params = {k: v for k, v in params.items() if v is not None}
   fields = {
     "prompt": meta.get("prompt"),
+    "genimg.name": meta.get("name"),
     "genimg.model": meta.get("model_id"),
     "genimg.provider": meta.get("provider"),
     "genimg.id": meta.get("id"),
@@ -101,11 +149,19 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           quality: str | None = None, thinking_level: str | None = None,
           grid_path: Path | None = None,
           prompt_deltas: list[str | None] | None = None,
-          mode: str | None = None, diverse: bool = False) -> dict[str, Any]:
+          mode: str | None = None, diverse: bool = False,
+          name: str | None = None) -> dict[str, Any]:
   from . import diversify
 
+  workdir = Path.cwd().resolve(strict=False)
+
   def _output_entry(i: int, p: Path) -> dict[str, Any]:
-    entry: dict[str, Any] = {"path": str(p), "format": p.suffix.lstrip("."), "bytes": p.stat().st_size}
+    absolute = p.expanduser().resolve(strict=False)
+    entry: dict[str, Any] = {
+      "path": str(absolute),
+      "format": absolute.suffix.lstrip("."),
+      "bytes": absolute.stat().st_size,
+    }
     if prompt_deltas is not None:
       entry["prompt_delta"] = prompt_deltas[i]
       entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])
@@ -114,6 +170,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
   meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),
+    "name": name,
     "prompt": prompt,
     "alias": alias,
     "model_id": spec.model_id,
@@ -124,18 +181,19 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "aspect_ratio": aspect_ratio,
     "quality": quality,
     "thinking_level": thinking_level,
-    "input": str(input) if input else None,
-    "refs": [str(r) for r in (refs or [])],
+    "input": _absolute_path(input, workdir) if input else None,
+    "refs": [_absolute_path(r, workdir) for r in (refs or [])],
     "mode": mode or "auto",
     "diverse": diverse or prompt_deltas is not None,
     "outputs": [_output_entry(i, p) for i, p in enumerate(paths)],
     "cost_usd_estimated": round(cost_usd, 4),
-    "workdir": str(Path.cwd()),
+    "workdir": str(workdir),
   }
   if grid_path is not None:
+    absolute_grid = grid_path.expanduser().resolve(strict=False)
     meta["grid"] = {
-      "path": str(grid_path),
-      "format": grid_path.suffix.lstrip("."),
-      "bytes": grid_path.stat().st_size,
+      "path": str(absolute_grid),
+      "format": absolute_grid.suffix.lstrip("."),
+      "bytes": absolute_grid.stat().st_size,
     }
   return meta

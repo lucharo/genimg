@@ -125,6 +125,8 @@ def _run(
   refs: Annotated[list[Path] | None, typer.Argument(help="Reference image paths (space-separated, after PROMPT).")] = None,
   model: Annotated[str | None, typer.Option("-m", "--model", rich_help_panel=_PANEL_CORE,
     help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to the user-set default; if none, pass -m or run `genimg setup`.")] = None,
+  name: Annotated[str | None, typer.Option("--name", rich_help_panel=_PANEL_CORE,
+    help="Optional human-readable generation name (duplicates allowed).")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
     help="Input image to edit (image-to-image).")] = None,
   diverse: Annotated[bool, typer.Option("-d", "--diverse", rich_help_panel=_PANEL_CORE,
@@ -167,6 +169,10 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  if name is not None:
+    if "\n" in name or "\r" in name:
+      _die("--name must be one line")
+    name = name.strip() or None
   diverse = diverse or deltas_arg is not None
   if diverse and n < 2:
     _die("--diverse requires -n >= 2 (diversity across a single image is meaningless). Try -n 4 -d.")
@@ -267,6 +273,8 @@ def _run(
   prompt_preview = prompt if len(prompt) <= 80 else prompt[:77] + "…"
   # Escape user input — bracketed prompts would otherwise be parsed as Rich markup.
   console.print(f'  [dim]prompt[/dim]   "{_rich_escape(prompt_preview)}"')
+  if name:
+    console.print(f"  [dim]name[/dim]     {_rich_escape(name)}")
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
@@ -336,6 +344,7 @@ def _run(
     n=n, cost_usd=est_cost, input=input, refs=refs,
     resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
     thinking_level=thinking_level, prompt_deltas=output_deltas, mode=mode, diverse=diverse,
+    name=name,
   )
   metadata.embed_into_images(meta)
   meta_path = metadata.save(meta, gen_id)
@@ -350,6 +359,7 @@ def _run(
       resolution=resolution, aspect_ratio=aspect_ratio, quality=quality,
       thinking_level=thinking_level, grid_path=written_grid,
       prompt_deltas=output_deltas, mode=mode, diverse=diverse,
+      name=name,
     )
     meta_path = metadata.save(meta, gen_id)
     console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
@@ -555,14 +565,30 @@ def auth_cmd(
     console.print(f"  openai → gpt-image-2             {_color_status(o.status)}")
 
 
-# ────────────────────── history command ──────────────────────
+# ────────────────────── history commands ─────────────────────
 
-@_app.command("history", help="List recent generations, or aggregate spend with --summary.")
-def history_cmd(
+history_app = typer.Typer(
+  help="List or interactively browse generation history.",
+  context_settings={"help_option_names": ["-h", "--help"]},
+  invoke_without_command=True,
+  no_args_is_help=False,
+)
+_app.add_typer(history_app, name="history")
+
+
+@history_app.callback(invoke_without_command=True)
+def _history_root(
+  ctx: typer.Context,
   limit: Annotated[int, typer.Option("-n", "--limit", min=1, max=200, help="Max rows.")] = 20,
   summary: Annotated[bool, typer.Option("--summary", help="Aggregate total spend across all generations.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table.")] = False,
 ):
+  if ctx.invoked_subcommand is not None:
+    return
+  _show_history(limit=limit, summary=summary, json_out=json_out)
+
+
+def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   if summary:
     total, count = history.total_spent()
     if json_out:
@@ -574,7 +600,7 @@ def history_cmd(
       console.print(f"[dim]avg ${total/count:.4f}/gen  •  reads ~/.genimg/metadata/*.json[/dim]")
     return
 
-  entries = history.recent(limit=limit)
+  entries, skipped = history.load(limit=limit)
   if json_out:
     import json as _json
     typer.echo(_json.dumps(entries, indent=2))
@@ -582,29 +608,51 @@ def history_cmd(
 
   if not entries:
     console.print("[dim]no generations yet. Run `genimg \"a prompt\"` to start.[/dim]")
+    if skipped:
+      console.print(f"[yellow]{skipped} unreadable metadata sidecars skipped.[/yellow]")
     return
 
   table = Table(title=f"recent {len(entries)} generation(s)")
   table.add_column("time", style="dim")
-  table.add_column("alias", style="cyan")
-  table.add_column("prompt")
-  table.add_column("n", justify="right")
+  table.add_column("name", style="bold", min_width=12, max_width=24, overflow="fold")
+  table.add_column("model", style="cyan", overflow="fold")
+  table.add_column("prompt", ratio=3, overflow="fold")
+  table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  table.add_column("output", style="dim")
+  table.add_column("output", style="dim", ratio=2, overflow="fold")
   for e in entries:
     paths = e.get("outputs", [])
-    out = paths[0]["path"] if paths else "?"
+    first = paths[0] if paths else None
+    out = first.get("path", "?") if isinstance(first, dict) else first or "?"
     out_short = out.replace(str(Path.home()), "~")
-    prompt_short = e.get("prompt", "")[:50] + ("…" if len(e.get("prompt", "")) > 50 else "")
+    prompt = e.get("prompt", "")
+    prompt_short = prompt[:100] + ("…" if len(prompt) > 100 else "")
+    alias = e.get("alias", "?")
+    model_id = e.get("model_id", "?")
+    model = alias if alias == model_id else f"{alias}\n→ {model_id}"
+    requested = int(e.get("n", len(paths) or 1))
+    delivered = len(paths)
+    image_count = str(delivered) if delivered == requested else f"{delivered}/{requested}"
     table.add_row(
       e.get("time", "")[:19].replace("T", " "),
-      e.get("alias", "?"),
-      prompt_short,
-      str(e.get("n", 1)),
+      _rich_escape(e.get("name") or "-"),
+      model,
+      _rich_escape(prompt_short),
+      image_count,
       f"${e.get('cost_usd_estimated', 0):.4f}",
-      out_short,
+      _rich_escape(out_short),
     )
   console.print(table)
+  if skipped:
+    console.print(f"[yellow]{skipped} unreadable metadata sidecars skipped.[/yellow]")
+  console.print("[dim]Interactive browser: genimg history view[/dim]")
+
+
+@history_app.command("view", help="Interactively browse all generated images and their metadata.")
+def history_view_cmd():
+  from . import history_view
+
+  history_view.run()
 
 
 # ────────────────────── cost command ──────────────────────
@@ -617,7 +665,7 @@ def history_cmd(
 def cost_cmd(
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
 ):
-  history_cmd(limit=20, summary=True, json_out=json_out)
+  _show_history(limit=20, summary=True, json_out=json_out)
 
 
 # ────────────────────── grid command (standalone) ──────────────────────
