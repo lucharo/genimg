@@ -296,15 +296,12 @@ class Studio:
     # Oldest → newest so a later sidecar writing the same output path wins on collision.
     for f in sorted(meta_dir.glob("*.json"), key=lambda p: p.stat().st_mtime):
       try:
-        data = json.loads(f.read_text())
-      except (json.JSONDecodeError, OSError):
+        data = metadata.normalize_paths(json.loads(f.read_text()))
+      except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
         continue
       info = {"model": data.get("alias") or data.get("model_id"), "time": data.get("time")}
-      workdir = data.get("workdir")
       for o in data.get("outputs", []):
         p = Path(o["path"] if isinstance(o, dict) else o)
-        if not p.is_absolute() and workdir:  # resolve against the recorded cwd, not ours
-          p = Path(workdir) / p
         out[str(p.resolve())] = info
     return out
 

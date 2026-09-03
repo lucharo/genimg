@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from os import chdir
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -78,6 +79,45 @@ class EmbedIntoImagesTest(unittest.TestCase):
       self.assertEqual(meta["thinking_level"], "high")
       params = getattr(Image.open(path), "text", {})["genimg.params"]
       self.assertEqual(__import__("json").loads(params), {"n": 1, "thinking_level": "high"})
+
+  def test_name_is_recorded_in_sidecar_and_png(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      path = Path(d) / "img.png"
+      Image.new("RGB", (4, 4), "white").save(path)
+      spec = SimpleNamespace(model_id="gpt-image-2", provider="openai", region=None)
+
+      meta = metadata.build(
+        gen_id="test", prompt="a cat", name="deep-between", alias="oai:gi2",
+        spec=spec, paths=[path], n=1, cost_usd=0.01,
+      )
+      metadata.embed_into_images(meta)
+
+      self.assertEqual(meta["name"], "deep-between")
+      self.assertEqual(getattr(Image.open(path), "text", {})["genimg.name"], "deep-between")
+
+  def test_build_stores_every_path_as_absolute(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      root = Path(d)
+      previous = Path.cwd()
+      try:
+        chdir(root)
+        for name in ("out.png", "input.png", "ref.png", "grid.html"):
+          (root / name).write_bytes(b"x")
+        spec = SimpleNamespace(model_id="gpt-image-2", provider="openai", region=None)
+
+        meta = metadata.build(
+          gen_id="test", prompt="a cat", name=None, alias="oai:gi2", spec=spec,
+          paths=[Path("out.png")], n=1, cost_usd=0.01,
+          input=Path("input.png"), refs=[Path("ref.png")], grid_path=Path("grid.html"),
+        )
+      finally:
+        chdir(previous)
+
+      self.assertEqual(meta["workdir"], str(root.resolve()))
+      self.assertEqual(meta["input"], str((root / "input.png").resolve()))
+      self.assertEqual(meta["refs"], [str((root / "ref.png").resolve())])
+      self.assertEqual(meta["outputs"][0]["path"], str((root / "out.png").resolve()))
+      self.assertEqual(meta["grid"]["path"], str((root / "grid.html").resolve()))
 
 
 if __name__ == "__main__":

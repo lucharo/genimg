@@ -7,18 +7,27 @@ from typing import Any
 from . import metadata
 
 
-def recent(limit: int = 20) -> list[dict[str, Any]]:
-  """Return up to `limit` most-recent metadata entries (newest first)."""
+def load(limit: int | None = None) -> tuple[list[dict[str, Any]], int]:
+  """Return normalised metadata entries (newest first) and skipped-file count."""
   if not metadata.META_DIR.exists():
-    return []
-  files = sorted(metadata.META_DIR.glob("*.json"), reverse=True)[:limit]
+    return [], 0
+  files = sorted(metadata.META_DIR.glob("*.json"), reverse=True)
   out: list[dict[str, Any]] = []
+  skipped = 0
   for f in files:
+    if limit is not None and len(out) >= limit:
+      break
     try:
-      out.append(json.loads(f.read_text()))
-    except (json.JSONDecodeError, OSError):
+      out.append(metadata.normalize_paths(json.loads(f.read_text())))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
+      skipped += 1
       continue
-  return out
+  return out, skipped
+
+
+def recent(limit: int = 20) -> list[dict[str, Any]]:
+  """Return up to `limit` most-recent valid metadata entries (newest first)."""
+  return load(limit=limit)[0]
 
 
 def total_spent() -> tuple[float, int]:
