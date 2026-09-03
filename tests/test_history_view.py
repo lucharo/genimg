@@ -6,7 +6,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from genimg.history_view import HistoryViewApp, flatten_entries, render_preview
+from genimg.history_view import (
+  HelpScreen,
+  HistoryViewApp,
+  flatten_entries,
+  render_preview,
+)
 
 
 def _entry(root: Path, *, gen_id: str = "g1", outputs: int = 2) -> dict:
@@ -107,6 +112,18 @@ class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(app.items), 2)
         self.assertEqual(app.items[0].generation_id, "new")
         self.assertIn("1 unreadable sidecar", app.status_text.lower())
+
+  async def test_help_opens_without_treating_key_labels_as_markup(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      app = HistoryViewApp(entries=[_entry(Path(d), outputs=1)], skipped=0)
+      async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        await pilot.press("?")
+        await pilot.pause()
+        self.assertIsInstance(app.screen, HelpScreen)
+        await pilot.press("escape")
+        await pilot.pause()
+        self.assertNotIsInstance(app.screen, HelpScreen)
 
 
 if __name__ == "__main__":

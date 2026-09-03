@@ -109,6 +109,7 @@ class HelpScreen(ModalScreen[None]):
       "Tab  switch pane on narrow terminals\n"
       "q/Esc/Ctrl-C  quit",
       id="help",
+      markup=False,
     )
 
 
