@@ -193,6 +193,15 @@ class HistoryViewApp(App[None]):
   #preview { width: auto; height: auto; max-width: 100%; max-height: 100%; }
   #details { height: 1fr; min-height: 10; padding: 1 2; overflow-y: auto; border-top: solid $primary-darken-2; }
   #status { height: 1; padding: 0 1; color: $text-muted; }
+  #textual-toastrack {
+    dock: top;
+    width: 1fr;
+    height: 1fr;
+    margin: 0;
+    align: center middle;
+    overflow: hidden;
+  }
+  #textual-toastrack ToastHolder { align-horizontal: center; }
   #body.narrow #history-list { width: 1fr; min-width: 0; }
   #body.narrow #detail-pane { display: none; }
   #body.narrow.show-detail #history-list { display: none; }
