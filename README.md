@@ -39,9 +39,11 @@ and remote-screen setup, security boundary, and the features that remain CLI-onl
 [FAQ](docs/faq/README.md) covers recovery, model availability and provider-specific controls.
 
 `genimg history view` browses every recorded output image with arrow or Vim navigation, an
-in-terminal preview, the full prompt and absolute provenance paths. Press `?` inside the browser
-for all keys. `genimg history --json` remains the non-interactive interface and always emits
-absolute paths, including when reading older sidecars that recorded paths relative to `workdir`.
+in-terminal preview, the full prompt and absolute provenance paths. It uses the terminal's native
+image protocol when available and falls back to Unicode rendering. Press `yi` to copy the selected
+image, `yp` to copy its absolute path, or `?` for all keys. `genimg history --json` remains the
+non-interactive interface and always emits absolute paths, including when reading older sidecars
+that recorded paths relative to `workdir`.
 
 ## Getting the most variety
 
