@@ -19,6 +19,7 @@ dependencies = [
   "httpx>=0.27",
   "questionary>=2.0",
   "textual>=8,<9",
+  "textual-image[textual]>=0.13.2,<0.14 ; python_full_version >= '3.12'",
 ]
 
 [project.scripts]

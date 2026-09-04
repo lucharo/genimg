@@ -1,6 +1,12 @@
 """Interactive terminal browser for generation history."""
 from __future__ import annotations
 
+import io
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -12,8 +18,9 @@ from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.widgets import DataTable, Footer, Header, Static
 
 from . import grid as grid_module
@@ -91,6 +98,67 @@ def render_preview(path: Path, *, width: int, height: int) -> Text:
   return _render_preview_cached(str(path), stat.st_mtime_ns, width, height)
 
 
+def load_protocol_image_widget() -> type[Widget] | None:
+  """Load the best terminal-native image widget before Textual takes over input."""
+  if not sys.__stdin__ or not sys.__stdout__:
+    return None
+  if not sys.__stdin__.isatty() or not sys.__stdout__.isatty():
+    return None
+  try:
+    from textual_image.widget import Image as TerminalImage
+  except Exception:
+    # Terminal capability probes can raise platform-specific errors (including
+    # termios.error, which is not an OSError on every supported Python).
+    return None
+  return TerminalImage
+
+
+def copy_image_to_clipboard(path: Path) -> None:
+  """Copy image pixels to the system clipboard where a native helper exists."""
+  if sys.platform == "darwin":
+    source = path
+    temporary_path: Path | None = None
+    try:
+      if path.suffix.lower() != ".png":
+        descriptor, temporary_name = tempfile.mkstemp(suffix=".png")
+        os.close(descriptor)
+        temporary_path = Path(temporary_name)
+        with Image.open(path) as image:
+          image.save(temporary_path, format="PNG")
+        source = temporary_path
+      script = (
+        "on run argv\n"
+        "set the clipboard to (read (POSIX file (item 1 of argv)) as «class PNGf»)\n"
+        "end run"
+      )
+      subprocess.run(
+        ["osascript", "-e", script, str(source)],
+        check=True,
+        capture_output=True,
+        text=True,
+      )
+    finally:
+      if temporary_path is not None:
+        temporary_path.unlink(missing_ok=True)
+    return
+
+  png = io.BytesIO()
+  with Image.open(path) as image:
+    image.save(png, format="PNG")
+  payload = png.getvalue()
+  if command := shutil.which("wl-copy"):
+    subprocess.run([command, "--type", "image/png"], input=payload, check=True)
+    return
+  if command := shutil.which("xclip"):
+    subprocess.run(
+      [command, "-selection", "clipboard", "-t", "image/png", "-i"],
+      input=payload,
+      check=True,
+    )
+    return
+  raise RuntimeError("No supported image clipboard helper found")
+
+
 class HelpScreen(ModalScreen[None]):
   CSS = """
   HelpScreen { align: center middle; background: $background 70%; }
@@ -105,6 +173,8 @@ class HelpScreen(ModalScreen[None]):
       "g/Home, G/End  first/last\n"
       "[/]  previous/next sibling output\n"
       "Enter/o  open selected image\n"
+      "yi  yank image to clipboard\n"
+      "yp  yank absolute image path\n"
       "r  reload history\n"
       "Tab  switch pane on narrow terminals\n"
       "q/Esc/Ctrl-C  quit",
@@ -119,7 +189,8 @@ class HistoryViewApp(App[None]):
   #body { height: 1fr; layout: horizontal; }
   #history-list { width: 42%; min-width: 32; }
   #detail-pane { width: 58%; }
-  #preview { height: 2fr; padding: 1; content-align: center middle; overflow: hidden; }
+  #preview-frame { height: 2fr; padding: 1; align: center middle; overflow: hidden; }
+  #preview { width: auto; height: auto; max-width: 100%; max-height: 100%; }
   #details { height: 1fr; min-height: 10; padding: 1 2; overflow-y: auto; border-top: solid $primary-darken-2; }
   #status { height: 1; padding: 0 1; color: $text-muted; }
   #body.narrow #history-list { width: 1fr; min-width: 0; }
@@ -137,6 +208,9 @@ class HistoryViewApp(App[None]):
     Binding("left_square_bracket", "previous_sibling", "Previous output", show=False),
     Binding("right_square_bracket", "next_sibling", "Next output", show=False),
     Binding("enter,o", "open_image", "Open"),
+    Binding("y", "yank", "Yank"),
+    Binding("i", "yank_image", "", show=False),
+    Binding("p", "yank_path", "", show=False),
     Binding("r", "reload", "Reload"),
     Binding("question_mark", "help", "Help"),
     Binding("tab", "toggle_pane", "Switch pane", show=False),
@@ -150,12 +224,19 @@ class HistoryViewApp(App[None]):
     skipped: int = 0,
     loader: Callable[[], tuple[list[dict], int]] | None = None,
     opener: Callable[[Path], object] | None = None,
+    preview_widget_class: type[Widget] | None = None,
+    image_copier: Callable[[Path], object] | None = None,
+    path_copier: Callable[[str], object] | None = None,
   ) -> None:
     super().__init__()
     self._fixed_entries = entries
     self._fixed_skipped = skipped
     self._loader = loader or (lambda: history.load(limit=None))
     self._opener = opener or grid_module.open_in_browser
+    self._preview_widget_class = preview_widget_class
+    self._image_copier = image_copier or copy_image_to_clipboard
+    self._path_copier = path_copier or self.copy_to_clipboard
+    self._yank_pending = False
     self.items: list[HistoryImage] = []
     self.selected_item: HistoryImage | None = None
     self.details_text = ""
@@ -168,7 +249,11 @@ class HistoryViewApp(App[None]):
     with Horizontal(id="body"):
       yield DataTable(id="history-list", cursor_type="row", zebra_stripes=True)
       with Vertical(id="detail-pane"):
-        yield Static("Select an image", id="preview")
+        with Container(id="preview-frame"):
+          if self._preview_widget_class is None:
+            yield Static("Select an image", id="preview")
+          else:
+            yield self._preview_widget_class(id="preview")
         yield Static("", id="details", markup=False)
     yield Static("", id="status", markup=False)
     yield Footer()
@@ -224,7 +309,9 @@ class HistoryViewApp(App[None]):
       self.details_text = "No generation images found."
       self.preview_text = "No preview."
       self.query_one("#details", Static).update(self.details_text)
-      self.query_one("#preview", Static).update(self.preview_text)
+      preview = self.query_one("#preview")
+      if isinstance(preview, Static):
+        preview.update(self.preview_text)
     if not initial:
       self.notify("History reloaded")
 
@@ -238,7 +325,19 @@ class HistoryViewApp(App[None]):
     self.selected_item = item
     self.details_text = self._format_details(item)
     self.query_one("#details", Static).update(self.details_text)
-    self._load_preview(item)
+    if self._preview_widget_class is None:
+      self._load_preview(item)
+    else:
+      self._set_protocol_preview(item)
+
+  def _set_protocol_preview(self, item: HistoryImage) -> None:
+    preview = self.query_one("#preview")
+    if not item.path.exists():
+      self.preview_text = f"Image not found:\n{item.path}"
+      setattr(preview, "image", None)
+      return
+    self.preview_text = str(item.path)
+    setattr(preview, "image", item.path)
 
   def _format_details(self, item: HistoryImage) -> str:
     entry = item.generation
@@ -335,6 +434,36 @@ class HistoryViewApp(App[None]):
     if self.selected_item is not None and self.selected_item.path.exists():
       self._opener(self.selected_item.path)
 
+  def action_yank(self) -> None:
+    self._yank_pending = True
+    self.notify("Yank: i image · p absolute path")
+
+  def action_yank_image(self) -> None:
+    if not self._yank_pending:
+      return
+    self._yank_pending = False
+    item = self.selected_item
+    if item is None or not item.path.exists():
+      self.notify("Selected image is unavailable", severity="error")
+      return
+    try:
+      self._image_copier(item.path)
+    except Exception as error:
+      self.notify(f"Could not copy image: {error}", severity="error")
+      return
+    self.notify("Copied image")
+
+  def action_yank_path(self) -> None:
+    if not self._yank_pending:
+      return
+    self._yank_pending = False
+    item = self.selected_item
+    if item is None:
+      self.notify("No image selected", severity="error")
+      return
+    self._path_copier(str(item.path.resolve()))
+    self.notify("Copied absolute image path")
+
   def action_reload(self) -> None:
     if self._fixed_entries is not None:
       return
@@ -349,4 +478,4 @@ class HistoryViewApp(App[None]):
 
 
 def run() -> None:
-  HistoryViewApp().run()
+  HistoryViewApp(preview_widget_class=load_protocol_image_widget()).run()

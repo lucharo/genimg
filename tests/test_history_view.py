@@ -3,12 +3,15 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
+from textual.widgets import Static
 
 from genimg.history_view import (
   HelpScreen,
   HistoryViewApp,
+  copy_image_to_clipboard,
   flatten_entries,
   render_preview,
 )
@@ -35,6 +38,12 @@ def _entry(root: Path, *, gen_id: str = "g1", outputs: int = 2) -> dict:
   }
 
 
+class _ImageProbe(Static):
+  def __init__(self, image=None, **kwargs) -> None:
+    super().__init__(**kwargs)
+    self.image = image
+
+
 class HistoryViewModelTests(unittest.TestCase):
   def test_flattens_each_output_into_a_selectable_image(self) -> None:
     with tempfile.TemporaryDirectory() as d:
@@ -57,8 +66,34 @@ class HistoryViewModelTests(unittest.TestCase):
     self.assertLessEqual(max(map(len, preview.plain.splitlines())), 6)
     self.assertLessEqual(len(preview.plain.splitlines()), 4)
 
+  @patch("genimg.history_view.subprocess.run")
+  @patch("genimg.history_view.sys.platform", "darwin")
+  def test_macos_image_copy_sends_png_pixels_to_the_clipboard(self, run) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      path = Path(d) / "image.png"
+      Image.new("RGB", (8, 6), "red").save(path)
+      copy_image_to_clipboard(path)
+
+    args = run.call_args.args[0]
+    self.assertEqual(args[0], "osascript")
+    self.assertIn("class PNGf", args[2])
+    self.assertEqual(args[3], str(path))
+    self.assertTrue(run.call_args.kwargs["check"])
+
 
 class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
+  async def test_protocol_preview_receives_the_original_image_path(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      path = Path(d) / "image-1.png"
+      app = HistoryViewApp(
+        entries=[_entry(Path(d), outputs=1)],
+        skipped=0,
+        preview_widget_class=_ImageProbe,
+      )
+      async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        self.assertEqual(app.query_one("#preview", _ImageProbe).image, path)
+
   async def test_navigation_updates_selected_output_and_details(self) -> None:
     with tempfile.TemporaryDirectory() as d:
       app = HistoryViewApp(entries=[_entry(Path(d), outputs=2)], skipped=0)
@@ -124,6 +159,27 @@ class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
         await pilot.press("escape")
         await pilot.pause()
         self.assertNotIsInstance(app.screen, HelpScreen)
+
+  async def test_vim_yank_shortcuts_copy_image_and_absolute_path(self) -> None:
+    copied_images: list[Path] = []
+    copied_paths: list[str] = []
+    with tempfile.TemporaryDirectory() as d:
+      path = Path(d) / "image-1.png"
+      app = HistoryViewApp(
+        entries=[_entry(Path(d), outputs=1)],
+        skipped=0,
+        image_copier=copied_images.append,
+        path_copier=copied_paths.append,
+      )
+      async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        await pilot.press("y", "i")
+        await pilot.pause()
+        await pilot.press("y", "p")
+        await pilot.pause()
+
+    self.assertEqual(copied_images, [path])
+    self.assertEqual(copied_paths, [str(path.resolve())])
 
 
 if __name__ == "__main__":
