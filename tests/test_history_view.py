@@ -120,7 +120,10 @@ class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
     self.assertIn(("deep-between", "ansi_bright_cyan bold"), styled_text)
     self.assertIn(("time", "ansi_cyan bold"), styled_text)
     self.assertIn(("model", "ansi_cyan bold"), styled_text)
-    self.assertIn(("prompt", "ansi_bright_magenta bold"), styled_text)
+    self.assertIn(("prompt", "ansi_cyan bold"), styled_text)
+    styles = " ".join(style for _, style in styled_text)
+    for rainbow_colour in ("magenta", "blue", "green", "yellow", "bright_white"):
+      self.assertNotIn(rainbow_colour, styles)
 
   async def test_open_action_targets_the_exact_selected_image(self) -> None:
     opened: list[Path] = []

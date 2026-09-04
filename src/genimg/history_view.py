@@ -350,25 +350,25 @@ class HistoryViewApp(App[None]):
     details.append(item.name or "(unnamed)", style="bold bright_cyan")
     details.append("\n")
 
-    def field(label: str, value: object, style: str = "") -> None:
+    def field(label: str, value: object, *, dim: bool = False) -> None:
       details.append(label, style="bold cyan")
       details.append(": ")
-      details.append(str(value), style=style)
+      details.append(str(value), style="dim" if dim else "")
       details.append("\n")
 
     field("time", entry.get("time", "?"))
-    field("id", item.generation_id, "dim")
+    field("id", item.generation_id, dim=True)
     field("image", f"{item.output_label} (requested {entry.get('n', len(outputs))})")
-    field("model", f"{alias} -> {model_id}", "bright_magenta")
-    field("provider", entry.get("provider", "?"), "bright_blue")
-    field("cost", f"${entry.get('cost_usd_estimated', 0):.4f} (generation)", "bright_green")
-    field("path", item.path, "bright_blue")
+    field("model", f"{alias} -> {model_id}")
+    field("provider", entry.get("provider", "?"))
+    field("cost", f"${entry.get('cost_usd_estimated', 0):.4f} (generation)")
+    field("path", item.path)
     if entry.get("input"):
-      field("input", entry["input"], "bright_blue")
+      field("input", entry["input"])
     for ref in refs:
-      field("ref", ref, "bright_blue")
+      field("ref", ref)
     if isinstance(entry.get("grid"), dict) and entry["grid"].get("path"):
-      field("grid", entry["grid"]["path"], "bright_blue")
+      field("grid", entry["grid"]["path"])
     params = [
       f"n={entry.get('n', 1)}",
       f"mode={entry.get('mode', 'auto')}",
@@ -377,11 +377,11 @@ class HistoryViewApp(App[None]):
       f"quality={entry.get('quality') or '-'}",
       f"thinking={entry.get('thinking_level') or '-'}",
     ]
-    field("params", " · ".join(params), "yellow")
+    field("params", " · ".join(params))
     details.append("\n")
-    details.append("prompt", style="bold bright_magenta")
+    details.append("prompt", style="bold cyan")
     details.append(":\n")
-    details.append(str(entry.get("prompt", "")), style="bright_white")
+    details.append(str(entry.get("prompt", "")))
     return details
 
   @work(exclusive=True, thread=True, group="preview")
