@@ -200,6 +200,20 @@ class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
     self.assertEqual(copied_images, [path])
     self.assertEqual(copied_paths, [str(path.resolve())])
 
+  async def test_notifications_appear_in_the_middle_of_the_screen(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      app = HistoryViewApp(entries=[_entry(Path(d), outputs=1)], skipped=0)
+      async with app.run_test(size=(120, 36), notifications=True) as pilot:
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        toast = app.screen.query_one("Toast")
+        screen_x, screen_y = app.screen.region.center
+        toast_x, toast_y = toast.region.center
+
+    self.assertLessEqual(abs(toast_x - screen_x), 1)
+    self.assertLessEqual(abs(toast_y - screen_y), 1)
+
 
 if __name__ == "__main__":
   unittest.main()
