@@ -323,8 +323,9 @@ class HistoryViewApp(App[None]):
       return
     item = self.items[index]
     self.selected_item = item
-    self.details_text = self._format_details(item)
-    self.query_one("#details", Static).update(self.details_text)
+    details = self._format_details(item)
+    self.details_text = details.plain
+    self.query_one("#details", Static).update(details)
     if self._preview_widget_class is None:
       self._load_preview(item)
     else:
@@ -339,27 +340,35 @@ class HistoryViewApp(App[None]):
     self.preview_text = str(item.path)
     setattr(preview, "image", item.path)
 
-  def _format_details(self, item: HistoryImage) -> str:
+  def _format_details(self, item: HistoryImage) -> Text:
     entry = item.generation
     alias = entry.get("alias") or "?"
     model_id = entry.get("model_id") or "?"
     refs = entry.get("refs") or []
     outputs = entry.get("outputs") or []
-    lines = [
-      item.name or "(unnamed)",
-      f"time: {entry.get('time', '?')}",
-      f"id: {item.generation_id}",
-      f"image: {item.output_label} (requested {entry.get('n', len(outputs))})",
-      f"model: {alias} -> {model_id}",
-      f"provider: {entry.get('provider', '?')}",
-      f"cost: ${entry.get('cost_usd_estimated', 0):.4f} (generation)",
-      f"path: {item.path}",
-    ]
+    details = Text()
+    details.append(item.name or "(unnamed)", style="bold bright_cyan")
+    details.append("\n")
+
+    def field(label: str, value: object, style: str = "") -> None:
+      details.append(label, style="bold cyan")
+      details.append(": ")
+      details.append(str(value), style=style)
+      details.append("\n")
+
+    field("time", entry.get("time", "?"))
+    field("id", item.generation_id, "dim")
+    field("image", f"{item.output_label} (requested {entry.get('n', len(outputs))})")
+    field("model", f"{alias} -> {model_id}", "bright_magenta")
+    field("provider", entry.get("provider", "?"), "bright_blue")
+    field("cost", f"${entry.get('cost_usd_estimated', 0):.4f} (generation)", "bright_green")
+    field("path", item.path, "bright_blue")
     if entry.get("input"):
-      lines.append(f"input: {entry['input']}")
-    lines.extend(f"ref: {ref}" for ref in refs)
+      field("input", entry["input"], "bright_blue")
+    for ref in refs:
+      field("ref", ref, "bright_blue")
     if isinstance(entry.get("grid"), dict) and entry["grid"].get("path"):
-      lines.append(f"grid: {entry['grid']['path']}")
+      field("grid", entry["grid"]["path"], "bright_blue")
     params = [
       f"n={entry.get('n', 1)}",
       f"mode={entry.get('mode', 'auto')}",
@@ -368,8 +377,12 @@ class HistoryViewApp(App[None]):
       f"quality={entry.get('quality') or '-'}",
       f"thinking={entry.get('thinking_level') or '-'}",
     ]
-    lines.extend((f"params: {' · '.join(params)}", "", "prompt:", str(entry.get("prompt", ""))))
-    return "\n".join(lines)
+    field("params", " · ".join(params), "yellow")
+    details.append("\n")
+    details.append("prompt", style="bold bright_magenta")
+    details.append(":\n")
+    details.append(str(entry.get("prompt", "")), style="bright_white")
+    return details
 
   @work(exclusive=True, thread=True, group="preview")
   def _load_preview(self, item: HistoryImage) -> None:

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PIL import Image
+from textual.content import Content
 from textual.widgets import Static
 
 from genimg.history_view import (
@@ -105,6 +106,21 @@ class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app.selected_item.output_index, 1)
         self.assertIn("image-2.png", app.details_text)
         self.assertIn("A full prompt that must remain visible", app.details_text)
+
+  async def test_details_panel_uses_bold_colour_to_separate_metadata(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      app = HistoryViewApp(entries=[_entry(Path(d), outputs=1)], skipped=0)
+      async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        rendered = app.query_one("#details", Static).render()
+
+    self.assertIsInstance(rendered, Content)
+    self.assertEqual(rendered.plain, app.details_text)
+    styled_text = [(rendered.plain[span.start:span.end], str(span.style)) for span in rendered.spans]
+    self.assertIn(("deep-between", "ansi_bright_cyan bold"), styled_text)
+    self.assertIn(("time", "ansi_cyan bold"), styled_text)
+    self.assertIn(("model", "ansi_cyan bold"), styled_text)
+    self.assertIn(("prompt", "ansi_bright_magenta bold"), styled_text)
 
   async def test_open_action_targets_the_exact_selected_image(self) -> None:
     opened: list[Path] = []
