@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Provider = Literal["google", "openai"]
+Provider = Literal["google", "openai", "codex"]
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,8 @@ class ModelSpec:
 
 
 _REGISTRY: dict[str, ModelSpec | str] = {
+  # A subscription backend, not a pinned image model. Opt in explicitly.
+  "codex:image": ModelSpec("codex", "codex:image", quality_rank=0),
   # Google DeepMind / Gemini Image. Canonical alias is gdm:<short>; descriptive
   # nano-banana* names are kept for discoverability. Bare model ids also resolve.
   "gdm:nbp":             ModelSpec("google", "gemini-3-pro-image",             region="global", quality_rank=10),

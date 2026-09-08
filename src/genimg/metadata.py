@@ -189,6 +189,8 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "cost_usd_estimated": round(cost_usd, 4) if cost_usd is not None else None,
     "workdir": str(workdir),
   }
+  if spec.provider == "codex":
+    meta.update(billing="subscription", model_selection="runtime", aspect_ratio_mode="prompt")
   if grid_path is not None:
     absolute_grid = grid_path.expanduser().resolve(strict=False)
     meta["grid"] = {

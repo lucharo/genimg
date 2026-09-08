@@ -57,7 +57,7 @@ class GenerateResult(BaseModel):
 
 class ProbeResult(BaseModel):
   model: str
-  status: Literal["listed", "missing", "working", "404", "403", "auth", "error"]
+  status: Literal["listed", "ready", "missing", "working", "404", "403", "auth", "error"]
   detail: str = ""
 
 

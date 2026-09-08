@@ -24,6 +24,7 @@ from . import (
 )
 from . import grid as grid_module
 from . import setup as setup_module
+from .auth import codex as auth_codex
 from .auth import google as auth_google
 from .auth import openai as auth_openai
 from .generate import generate as run_generate
@@ -262,8 +263,10 @@ def _run(
                            quality=effective_q, resolution=resolution)
   auth_mode_str = (
     auth_openai.auth_info()["mode"] if spec.provider == "openai"
+    else auth_codex.auth_info()["mode"] if spec.provider == "codex"
     else auth_google.auth_info()["mode"]
   )
+  cost_label = "Codex subscription (usage limits apply)" if spec.provider == "codex" else f"{cost.format_usd(est_cost)} (estimate)"
   default_marker = "" if model_was_explicit else " [dim](default)[/dim]"
 
   console.print(
@@ -277,7 +280,9 @@ def _run(
     console.print(f"  [dim]name[/dim]     {_rich_escape(name)}")
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
-  console.print(f"  [dim]cost[/dim]     {cost.format_usd(est_cost)} (estimate)  [dim]id={gen_id}[/dim]")
+  console.print(f"  [dim]cost[/dim]     {cost_label}  [dim]id={gen_id}[/dim]")
+  if spec.provider == "codex":
+    console.print("  [dim]runtime[/dim]  Codex selects the image model and size; aspect ratio is a prompt request.")
   _print_planned_paths(planned_paths)
   if deltas:
     for i, d in enumerate(deltas):
@@ -367,7 +372,7 @@ def _run(
     console.print("[dim]--grid ignored: needs n>=2[/dim]")
 
   console.print(
-    f"  [dim]cost {cost.format_usd(est_cost)} (estimate)  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
+    f"  [dim]cost {cost_label}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
     soft_wrap=True,
   )
 
@@ -502,13 +507,14 @@ def setup_cmd():
 
 @_app.command("auth", help="Show auth status for both providers.")
 def auth_cmd(
-  check: Annotated[bool, typer.Option("--check", help="Run a tiny live probe per provider.")] = False,
+  check: Annotated[bool, typer.Option("--check", help="Run a tiny Google/OpenAI generation probe; check Codex login only.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table (agent-friendly).")] = False,
 ):
   cached = discovery.load_fresh_cache()
   probes = {a: p["status"] for a, p in (cached or {}).get("probes", {}).items()}
 
-  rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:")]
+  rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:"),
+          ("codex", auth_codex.auth_info(), "codex:")]
 
   if json_out:
     import json as _json
@@ -530,6 +536,8 @@ def auth_cmd(
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
     ok_probes = sum(1 for s in cohort if _status_counts_as_available(s))
     summary = f"{ok_probes}/{len(cohort)} listed" if cohort else "[yellow]no cache[/yellow]"
+    if name == "codex":
+      summary = "runtime-selected"
     cred_cell = (
       f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
       else "[red]✗ unset[/red]"
@@ -558,11 +566,13 @@ def auth_cmd(
 
   if check:
     console.print("\n[dim]live probe...[/dim]")
-    from .providers import GeminiImageGen, OpenAIImageGen
+    from .providers import CodexImageGen, GeminiImageGen, OpenAIImageGen
     g = GeminiImageGen().probe("gemini-2.5-flash-image", region="us-central1")
     o = OpenAIImageGen().probe("gpt-image-2")
     console.print(f"  google → gemini-2.5-flash-image  {_color_status(g.status)}")
     console.print(f"  openai → gpt-image-2             {_color_status(o.status)}")
+    c = CodexImageGen().probe("codex:image")
+    console.print(f"  codex → image_gen               {_color_status(c.status)} (login only)")
 
 
 # ────────────────────── history commands ─────────────────────
@@ -964,6 +974,8 @@ def _size_params_supported(
   if provider == "openai":
     from .providers.openai import _SIZE_MAP
     return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
+  if provider == "codex":
+    return resolution is None
   if model_id.startswith("imagen-"):
     return (
       (resolution is None or resolution in _IMAGEN_RESOLUTION_VALUES)
@@ -1066,6 +1078,9 @@ def _validate_provider_flags(
   for p in ([input] if input else []) + refs:
     if not p.exists():
       _die(f"input not found: {p}")
+
+  if provider == "codex" and (resolution is not None or mode == "batch"):
+    _die("codex:image does not support --resolution or --mode batch; Codex selects the image size.")
 
   if mode == "batch" and provider == "openai":
     _die(
@@ -1186,6 +1201,7 @@ def _fmt_age(seconds: float) -> str:
 def _color_status(s: str) -> str:
   return {
     "listed": "[green]listed[/green]",
+    "ready": "[green]login ready[/green]",
     "missing": "[yellow]missing[/yellow]",
     "working": "[green]working[/green]",
     "404": "[yellow]404[/yellow]",

@@ -6,8 +6,8 @@ to each generation instead. The pool is a fixed curated list; reproducibility
 comes from recording each generation's delta in the metadata sidecar, not
 from a fixed pick order.
 
-Design invariant: genimg never calls a text LLM — only image generation
-models. Tailored (non-curated) diversity is the caller's job: an agent
+Design invariant: genimg never calls a text LLM to compose variations.
+Tailored (non-curated) diversity is the caller's job: an agent
 driving the CLI is itself an LLM and can compose its own prompt variants.
 Do not add an LLM-expansion strategy here.
 

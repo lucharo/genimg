@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 from .interfaces import GenerateRequest, GenerateResult, IImageGen
-from .providers import GeminiImageGen, OpenAIImageGen
+from .providers import CodexImageGen, GeminiImageGen, OpenAIImageGen
 from .registry import resolve
 
 
 def _provider_for(provider: str, force_openai_auth: str | None = None) -> IImageGen:
+  if provider == "codex":
+    if force_openai_auth is not None:
+      raise ValueError("codex:image uses ChatGPT login, not --auth")
+    return CodexImageGen()
   if provider == "google":
     return GeminiImageGen()
   if provider == "openai":
