@@ -30,6 +30,7 @@ from urllib.parse import quote, unquote, urlparse
 from . import cost, discovery, metadata, registry
 from .auth import google as auth_google
 from .auth import openai as auth_openai
+from .providers.openai import quality_options
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -81,7 +82,7 @@ def _studio_models() -> list[dict]:
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
-      "qualityOptions": ["low", "medium", "high"] if spec.provider == "openai" else [],
+      "qualityOptions": quality_options(spec.model_id) if spec.provider == "openai" else [],
       "resolutionOptions": resolution_options,
       "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
       "aspectOptions": aspect_options,
@@ -976,7 +977,7 @@ const BOOT = /*__BOOT__*/;
     const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
     let usd;
     if (isOai()){
-      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
+      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) return "cost unknown";
       usd*=((C.openaiResMult||{})[effectiveResolution()]||1);
     } else {
       const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id

@@ -13,6 +13,8 @@ uv tool install --from . genimg
 ```bash
 genimg "a robot" -m gdm:nb -o robot.png          # pick a model (no built-in default)
 genimg "a robot" -m oai:gi2 -o robot.png         # OpenAI gpt-image-2
+genimg "a robot" -m oai:gi2.5 --dry-run           # GPT Image 2.5 Sunburst preview
+genimg "a robot" -m oai:gi2.5-flare --dry-run     # GPT Image 2.5 Flare preview
 genimg "with refs" a.png b.png -m gdm:nbp -o out.png     # reference images (positional)
 genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
 genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
@@ -107,4 +109,16 @@ The Vertex project is resolved from `--project` → `config.gcp_project` → `GO
 
 ## Models (`-m`)
 
-Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
+Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2.5` (Sunburst), `oai:gi2.5-flare`, `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
+
+GPT Image 2.5 uses the explicit IDs `gpt-image-2.5-sunburst` and
+`gpt-image-2.5-flare` for generation and editing. Both accept `-q xhigh` and
+`-q max` as well as the existing quality levels; genimg keeps its `medium` default.
+The existing OpenAI size options also apply. Dated provider IDs are accepted directly.
+See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).
+
+GPT Image 2.5 per-image cost estimates are **unknown**: OpenAI publishes token rates,
+but says the GPT Image 2 calculator does not estimate 2.5 token consumption.
+Unknown estimates are saved as `null` and excluded from history spend totals and
+priced generation counts. See [Sunburst pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst)
+and [Flare pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare).

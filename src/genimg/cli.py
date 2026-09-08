@@ -157,7 +157,7 @@ def _run(
   resolution: Annotated[str | None, typer.Option("-r", "--resolution", rich_help_panel=_PANEL_CORE,
     help="512 | 1K | 2K | 4K. Options depend on the selected model.")] = None,
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
-    help="low | medium (default) | high | auto. high = 30-90s/image.")] = None,
+    help="low | medium (default) | high | auto; GPT Image 2.5 also supports xhigh | max.")] = None,
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
     help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
@@ -277,7 +277,7 @@ def _run(
     console.print(f"  [dim]name[/dim]     {_rich_escape(name)}")
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
-  console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
+  console.print(f"  [dim]cost[/dim]     {cost.format_usd(est_cost)} (estimate)  [dim]id={gen_id}[/dim]")
   _print_planned_paths(planned_paths)
   if deltas:
     for i, d in enumerate(deltas):
@@ -362,12 +362,12 @@ def _run(
       name=name,
     )
     meta_path = metadata.save(meta, gen_id)
-    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
+    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. {cost.format_usd(total)})[/dim]", soft_wrap=True)
   elif grid and len(result.paths) == 1:
     console.print("[dim]--grid ignored: needs n>=2[/dim]")
 
   console.print(
-    f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
+    f"  [dim]cost {cost.format_usd(est_cost)} (estimate)  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
     soft_wrap=True,
   )
 
@@ -596,6 +596,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       typer.echo(_json.dumps({"total_usd": round(total, 4), "generations": count}))
       return
     console.print(f"[bold green]${total:.4f}[/bold green] across {count} generation(s)")
+    console.print("[dim]Generations with unknown cost are excluded from the total and count.[/dim]")
     if count:
       console.print(f"[dim]avg ${total/count:.4f}/gen  •  reads ~/.genimg/metadata/*.json[/dim]")
     return
@@ -639,7 +640,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       model,
       _rich_escape(prompt_short),
       image_count,
-      f"${e.get('cost_usd_estimated', 0):.4f}",
+      cost.format_usd(e.get("cost_usd_estimated")),
       _rich_escape(out_short),
     )
   console.print(table)
@@ -840,9 +841,9 @@ def skills_path(
   skill_names = _resolve_skill_names(skill, sources)
   for skill_name in skill_names:
     if len(skill_names) == 1:
-      console.print(str(sources[skill_name]))
+      console.print(str(sources[skill_name]), soft_wrap=True)
     else:
-      console.print(f"{skill_name}: {sources[skill_name]}")
+      console.print(f"{skill_name}: {sources[skill_name]}", soft_wrap=True)
 
 
 @skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
@@ -935,7 +936,6 @@ def skills_list():
 
 # ────────────────────── helpers ──────────────────────
 
-_QUALITY_VALUES = {"low", "medium", "high", "auto"}
 _RESOLUTION_VALUES = {"512", "1K", "2K", "4K"}
 _ASPECT_VALUES = {
   "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
@@ -1082,10 +1082,12 @@ def _validate_provider_flags(
     )
 
   if quality is not None:
-    if quality not in _QUALITY_VALUES:
-      _die(f"--quality must be one of {sorted(_QUALITY_VALUES)}, got {quality!r}")
     if provider != "openai":
       _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
+    from .providers.openai import quality_options
+    allowed_quality = quality_options(model_id or "")
+    if quality not in allowed_quality:
+      _die(f"--quality for {model_id} must be one of {allowed_quality}, got {quality!r}")
 
   if thinking_level is not None:
     if thinking_level not in {"minimal", "high"}:

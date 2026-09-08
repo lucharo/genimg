@@ -250,7 +250,7 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
 def render(images: list[Path], output: Path, *, embed: bool = True,
            copy_format: str = "I choose {label} ({filename})",
            provider: str | None = None, quality: str | None = None,
-           include_cost: bool = True, meta: dict[str, Any] | None = None) -> tuple[Path, float]:
+           include_cost: bool = True, meta: dict[str, Any] | None = None) -> tuple[Path, float | None]:
   """Render an HTML grid + carousel with a collapsible prompt and a bottom
   metadata panel. The cost shown is a single harmonized estimate: the value
   from `meta` (`cost_usd_estimated`, which the CLI computes with full size/quality
@@ -277,6 +277,8 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
   meta_cost = (meta or {}).get("cost_usd_estimated")
   if meta_cost is not None:
     cost: float | None = float(meta_cost)
+  elif meta is not None and "cost_usd_estimated" in meta:
+    cost = None  # Explicitly unpriced; do not substitute another model's estimate.
   elif include_cost and provider is not None:
     cost = sum(costs)
   else:
@@ -288,7 +290,7 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
               .replace("__IMAGES__", _js(items)))
   output.parent.mkdir(parents=True, exist_ok=True)
   output.write_text(html_doc)
-  return output, (cost if cost is not None else sum(costs))
+  return output, cost
 
 
 def open_in_browser(path: Path) -> None:

@@ -18,7 +18,8 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 - **Review candidates with `-g --open`** (when `-n ≥ 2`): writes an HTML grid and opens it in the browser. Best way to let a human pick. The grid embeds generation metadata (collapsible prompt + a per-line panel: model, params, single cost) and offers both a grid and a carousel view.
   - **Open without stealing focus (macOS):** `--open` raises the browser to the foreground. To load it in the background instead, drop `--open` and run `open -g <grid.html>` yourself (the CLI prints the grid path). Good when the user is mid-task and doesn't want focus yanked.
 - **Model choice:** there is **no built-in default** — pass `-m <alias>` explicitly, or the user may have saved one (`genimg models get-default` shows it; `genimg setup` / `models set-default` to save). For legible in-image **text, glyphs, logos, UI**, use `-m oai:gi2` (gpt-image-2). `-m gdm:nbp` (Gemini 3 Pro) — best for **photographic / painterly quality**, and (with `gdm:nb2`) **far better than gpt-image-2 at structured diagrams** — layout, arrows, spatial instructions (see *Diagrams & infographics* below). `genimg models` lists all.
-- **Quality/size (OpenAI):** `-q high` is crisp but 30–90s/image (fine with `-n`, it's parallel); `-q medium` (default) is good for exploration. `-a` aspect (`1:1 3:4 4:3 9:16 16:9`), `-r` resolution (`1K 2K 4K`).
+- **GPT Image 2.5:** `oai:gi2.5` resolves to `gpt-image-2.5-sunburst`; `oai:gi2.5-flare` resolves to `gpt-image-2.5-flare`. Both support generation, editing and `-q xhigh` / `-q max`. Availability depends on the endpoint; verify an exact-model generation. Their per-image costs are unknown, stored as `null`, and excluded from spend totals. The GPT Image 2 comparisons above are not benchmarks of 2.5.
+- **Quality/size (OpenAI):** `-q medium` remains genimg's default; `low`, `high` and `auto` are also available, with `xhigh` and `max` on GPT Image 2.5 only. `-a` aspect (`1:1 3:4 4:3 9:16 16:9`), `-r` resolution (`1K 2K 4K`).
 - **Iterate, don't restart:** once a candidate is close, `-i` it with a small instruction rather than regenerating from scratch. The `genimg-agent-refinement` skill is a structured polish loop for this.
 - **Cost:** `genimg cost` / `genimg history`. `-q high` + big `-n` adds up (~$0.05–0.21/image). Preflight any pricey batch with `--dry-run` — prints model, params, per-path plan, and the cost estimate without calling the API.
 - **Name generations you may revisit.** Pass `--name "deep-between"` to store an optional human label in history and the PNG metadata. Names may repeat; the timestamped generation ID remains unique.
@@ -128,6 +129,6 @@ genimg "warm cinematic photo of a mountain cabin at night" -m gdm:nbp -o cabin.p
   one native `genimg grid` containing all outputs. Use subject-specific `--deltas` where
   possible; on Gemini, `-d --mode batch` gives a coherent model-curated set. Plain `-n`
   without `-d` converges on near-duplicates. Never run parallel shell jobs instead of `-n N`.
-- Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **oai:gi2 only** — the CLI rejects it on gdm models, so omit it there.
+- Legible text/logo → `oai:gi2`. Photographic quality → `gdm:nbp`. `-q`/`--quality` is **OpenAI only** — the CLI rejects it on gdm models, so omit it there.
 - When a human must review, generate to a real `-o` path, retain stable IDs, and open one
   native grid containing the full candidate set; don't describe images you can't show.

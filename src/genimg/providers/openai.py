@@ -7,6 +7,7 @@ split into n parallel n=1 calls via the IImageGen base template.
 from __future__ import annotations
 
 import base64
+import re
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from openai import APIStatusError, AuthenticationError, NotFoundError
 from ..auth.openai import get_client
 from ..interfaces import GenerateRequest, IImageGen, ProbeResult
 
-# 2D map: (resolution, aspect) → WxH for gpt-image-2. Each entry honors the
+# 2D map: (resolution, aspect) → WxH for gpt-image-2 and 2.5. Each entry honors the
 # requested aspect EXACTLY (no 3:2 substitutions for 4:3 or 16:9).
 # Constraints: edges mult of 16, max edge ≤3840, total px in [655_360, 8_294_400].
 # Combos NOT in this map are rejected by _validate_provider_flags (CLI) and
@@ -36,6 +37,13 @@ _SIZE_MAP = {
   ("4K", "16:9"): "3840x2160",
   ("4K", "9:16"): "2160x3840",
 }
+
+
+def quality_options(model_id: str) -> list[str]:
+  """Documented quality levels, including the 2.5 models' dated snapshots."""
+  if re.fullmatch(r"gpt-image-2\.5-(sunburst|flare)(-\d{4}-\d{2}-\d{2})?", model_id):
+    return ["low", "medium", "high", "xhigh", "max", "auto"]
+  return ["low", "medium", "high", "auto"]
 
 
 class OpenAIImageGen(IImageGen):
@@ -62,9 +70,11 @@ class OpenAIImageGen(IImageGen):
     """One single-image API call with friendly error mapping. Deliberately no n>1
     variant: a batched gpt-image request returns near-duplicate independent samples
     (verified live) — the CLI rejects --mode batch on OpenAI as wasted spend."""
-    client = self._client()
     size = self._size_for(req)
     quality = req.quality or "medium"  # high is 30-90s/image; medium is the fast-ish default
+    if quality not in quality_options(req.model):
+      raise RuntimeError(f"OpenAI: quality {quality!r} is not supported by {req.model}.")
+    client = self._client()
     inputs: list[Path] = ([req.input] if req.input else []) + list(req.refs)
 
     try:

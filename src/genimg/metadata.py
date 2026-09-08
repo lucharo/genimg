@@ -144,7 +144,7 @@ def save(meta: dict[str, Any], gen_id: str) -> Path:
 
 
 def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
-          n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
+          n: int, cost_usd: float | None, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
           quality: str | None = None, thinking_level: str | None = None,
           grid_path: Path | None = None,
@@ -186,7 +186,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "mode": mode or "auto",
     "diverse": diverse or prompt_deltas is not None,
     "outputs": [_output_entry(i, p) for i, p in enumerate(paths)],
-    "cost_usd_estimated": round(cost_usd, 4),
+    "cost_usd_estimated": round(cost_usd, 4) if cost_usd is not None else None,
     "workdir": str(workdir),
   }
   if grid_path is not None:
