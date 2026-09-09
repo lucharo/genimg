@@ -93,6 +93,27 @@ def test_record_calls_no_generation_and_archives_original(credentialled_png, sdk
   assert meta["api_equivalent_cost"]["priced_images"] == 1
 
 
+def test_generation_preserves_sdk_credentials_without_png_chunk(sdk, monkeypatch, tmp_path):
+  # A provider can return another encoded format under a requested .png filename.
+  # The SDK recognises its credentials independently of PNG chunk detection.
+  image = tmp_path / "provider.png"
+  Image.new("RGB", (8, 8), "white").save(image, format="JPEG")
+  original = image.read_bytes()
+  monkeypatch.setattr(metadata, "META_DIR", tmp_path / "meta")
+  monkeypatch.setattr(cli.config, "load", lambda: {})
+  monkeypatch.setattr(cli, "run_generate", lambda *a, **kw: GenerateResult(
+    paths=[image], model_used="codex:image"))
+
+  result = CliRunner().invoke(cli._app, ["a cube", "-m", "codex:image", "-o", str(image)])
+
+  assert result.exit_code == 0, result.output
+  assert image.read_bytes() == original
+  output = history.load()[0][0]["outputs"][0]
+  assert output["sha256"] == hashlib.sha256(original).hexdigest()
+  assert output["bytes"] == len(original)
+  assert output["provenance"]["manifest"] == sdk[0]["manifests"]["active"]
+
+
 @pytest.mark.parametrize("failure", ["invalid", "existing", "billing"])
 def test_record_rejects_invalid_input_before_writing(tmp_path, monkeypatch, failure):
   source = tmp_path / "source.png"

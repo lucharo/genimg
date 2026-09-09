@@ -93,8 +93,9 @@ def embed_into_images(meta: dict[str, Any]) -> None:
 
   Travels with the file even when separated from the sidecar JSON. PNG is
   lossless, but re-saving can invalidate or remove content credentials. Keep
-  PNGs containing caBX byte-for-byte unchanged, even if those credentials are
-  unreadable; genimg fields live in their sidecars. Other unreadable outputs
+  images with SDK-recognised credentials byte-for-byte unchanged, including
+  provider payloads whose encoding differs from their .png filename. PNGs with
+  caBX are also preserved when unreadable; genimg fields live in sidecars. Other unreadable outputs
   are skipped — embedding must never fail a successful generation.
   """
   params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio", "thinking_level")}
@@ -122,7 +123,9 @@ def embed_into_images(meta: dict[str, Any]) -> None:
       if out.get("prompt_delta"):
         out_fields["genimg.prompt_delta"] = out["prompt_delta"]
     try:
-      if provenance.has_png_credentials(path):
+      if provenance.has_png_credentials(path) or (
+        isinstance(out, dict) and out.get("provenance", {}).get("status") == "present"
+      ):
         continue
       with Image.open(path) as img:
         img.load()
