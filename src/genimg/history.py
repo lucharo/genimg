@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import metadata
+from . import cost, metadata
 
 
 def load(limit: int | None = None) -> tuple[list[dict[str, Any]], int]:
@@ -39,6 +39,8 @@ def total_spent() -> tuple[float, int]:
   for f in metadata.META_DIR.glob("*.json"):
     try:
       data = json.loads(f.read_text())
+      if cost.billing_label(data) != "api":
+        continue
       value = data.get("cost_usd_estimated")
       if value is None:
         continue

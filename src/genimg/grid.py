@@ -223,11 +223,17 @@ def _diverse_note(meta: dict[str, Any]) -> str | None:
 
 def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
   """Bottom metadata panel: one field per line, single harmonized cost."""
+  from . import cost as pricing
+  from . import provenance
+
   meta = meta or {}
   model = " · ".join(str(v) for v in (meta.get("alias"), meta.get("model_id")) if v)
   rows: list[tuple[str, Any, bool]] = [
     ("model", model or None, False),
     ("provider", meta.get("provider"), False),
+    ("billing", pricing.billing_label(meta) if meta else None, False),
+    ("reported generator", provenance.describe(meta["outputs"]) + " (C2PA, unverified)" if "api_equivalent_cost" in meta else None, False),
+    ("API equivalent", pricing.format_equivalent(meta["api_equivalent_cost"]) + " (theoretical, rough, output only)" if "api_equivalent_cost" in meta else None, False),
     ("n", meta.get("n"), False),
     ("mode", meta.get("mode"), False),
     ("diverse", _diverse_note(meta), False),
