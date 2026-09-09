@@ -120,6 +120,12 @@ class HistoryCliTests(unittest.TestCase):
     self.assertEqual(result.exit_code, 0, result.output)
     run.assert_called_once_with()
 
+  def test_history_add_replaces_root_record_and_keeps_view(self) -> None:
+    import typer.main
+    command = typer.main.get_command(cli._app)
+    self.assertNotIn("record", command.commands)
+    self.assertEqual(set(command.commands["history"].commands), {"add", "view"})
+
 
 if __name__ == "__main__":
   unittest.main()

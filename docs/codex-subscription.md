@@ -6,10 +6,10 @@ When the agent has `image_gen` available, call it directly, then register its re
 image path with genimg. No second Codex agent is needed:
 
 ```bash
-genimg record native.png --prompt "a ceramic blue cube on white" -m codex:image --billing subscription
+genimg history add native.png --prompt "a ceramic blue cube on white" -m codex:image --billing subscription
 ```
 
-`record` generates nothing: it copies the original into the genimg archive, reads its
+`history add` generates nothing: it copies the original into the genimg archive, reads its
 embedded provenance and creates a history sidecar. `-o cube.png` selects a copy destination;
 existing files are never overwritten. Add `-i original.png` for edits and repeated
 `--ref reference.png` options to record references. The source image is left unchanged.
@@ -17,7 +17,7 @@ existing files are never overwritten. Add `-i original.png` for edits and repeat
 
 The native tool is an agent capability exposed by the Codex host, not a public image API
 that a standalone CLI can call. Its current inputs are a prompt and image references;
-it exposes no image-model or version selector. The `--model` option on `record` records
+it exposes no image-model or version selector. The `--model` option on `history add` records
 the route used; it does not change the image or select a backend version.
 
 ## From a terminal or Studio

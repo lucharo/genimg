@@ -49,7 +49,7 @@ non-interactive interface and always emits absolute paths, including when readin
 that recorded paths relative to `workdir`.
 
 Inside a Codex agent, prefer its native `image_gen` tool, then
-`genimg record native.png --prompt "your prompt" -m codex:image --billing subscription`.
+`genimg history add native.png --prompt "your prompt" -m codex:image --billing subscription`.
 This archives the image without launching another agent. Genimg preserves content credentials
 and records the reported generator/version, explicit subscription/API billing, and a separate
 theoretical API-cost estimate or range where possible. See the

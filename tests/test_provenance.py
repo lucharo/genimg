@@ -78,7 +78,7 @@ def test_record_calls_no_generation_and_archives_original(credentialled_png, sdk
   monkeypatch.setattr(cli, "run_generate", generation)
   original = credentialled_png.read_bytes()
 
-  result = CliRunner().invoke(cli._app, ["record", str(credentialled_png), "--prompt", "a cube",
+  result = CliRunner().invoke(cli._app, ["history", "add", str(credentialled_png), "--prompt", "a cube",
     "-m", "codex:image", "--billing", "subscription"])
 
   assert result.exit_code == 0, result.output
@@ -103,7 +103,7 @@ def test_record_rejects_invalid_input_before_writing(tmp_path, monkeypatch, fail
   if failure == "existing":
     output.write_bytes(b"keep me")
   monkeypatch.setattr(metadata, "META_DIR", tmp_path / "meta")
-  result = CliRunner().invoke(cli._app, ["record", str(source), "--prompt", "a cube",
+  result = CliRunner().invoke(cli._app, ["history", "add", str(source), "--prompt", "a cube",
     "-m", "codex:image", "--billing", "invalid" if failure == "billing" else "subscription", "-o", str(output)])
   assert result.exit_code != 0
   assert not metadata.META_DIR.exists()

@@ -389,52 +389,6 @@ def _print_provenance(meta: dict) -> None:
                 f"{cost.format_equivalent(meta.get('api_equivalent_cost'))} (rough output-only estimate)", markup=False)
 
 
-@_app.command("record", help="Archive an existing image and record its provenance, billing and API-equivalent estimate; generates nothing.")
-def record_cmd(
-  image: Annotated[Path, typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True)],
-  prompt: Annotated[str, typer.Option("--prompt", help="Prompt used to create this image.")],
-  model: Annotated[str, typer.Option("-m", "--model", help="Generation route/model to record; codex:image for the native Codex tool.")],
-  billing: Annotated[Literal["subscription", "api"], typer.Option("--billing", help="How this generation was billed; a declaration, not inferred from pixels.")],
-  output: Annotated[Path | None, typer.Option("-o", "--output", help="Copy destination; defaults to the genimg archive. Never overwrites.")] = None,
-  input: Annotated[Path | None, typer.Option("-i", "--input", exists=True, dir_okay=False)] = None,
-  refs: Annotated[list[Path] | None, typer.Option("--ref", exists=True, dir_okay=False)] = None,
-  quality: Annotated[str | None, typer.Option("-q", "--quality", help="Known API quality; unavailable for codex:image.")] = None,
-  resolution: Annotated[str | None, typer.Option("-r", "--resolution", help="Known API resolution; unavailable for codex:image.")] = None,
-):
-  import shutil
-
-  from PIL import Image
-
-  try:
-    alias, spec = registry.resolve(model)
-    if not prompt.strip():
-      raise ValueError("--prompt cannot be blank")
-    if spec.provider == "codex" and (quality is not None or resolution is not None):
-      raise ValueError("codex:image does not report quality or resolution settings")
-    source = image.expanduser().resolve()
-    with Image.open(source) as img:
-      suffix = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}.get(img.format)
-      if suffix is None:
-        raise ValueError("record supports PNG, JPEG and WebP images")
-      img.verify()
-    gen_id = metadata.make_id(prompt, spec.model_id)
-    target = output.expanduser().resolve() if output else metadata.auto_output_path(gen_id, suffix)
-    if target.suffix.lower() not in ((".jpg", ".jpeg") if suffix == ".jpg" else (suffix,)):
-      raise ValueError(f"output must keep the source format ({suffix}); record does not convert images")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with source.open("rb") as src, target.open("xb") as dst:
-      shutil.copyfileobj(src, dst)
-    estimate = cost.estimate(provider=spec.provider, model_id=spec.model_id, quality=quality, resolution=resolution)
-    meta = metadata.build(gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=[target],
-      n=1, cost_usd=estimate, billing=billing, input=input, refs=refs, quality=quality, resolution=resolution)
-    meta.update(recorded_from=str(source), billing_source="user_declared")
-    meta_path = metadata.save(meta, gen_id)
-  except (OSError, ValueError) as error:
-    _die(str(error))
-  console.print(f"recorded {target}\nmetadata {meta_path}", markup=False)
-  _print_provenance(meta)
-
-
 # ────────────────────── models sub-typer ──────────────────────
 
 models_app = typer.Typer(
@@ -633,7 +587,7 @@ def auth_cmd(
 # ────────────────────── history commands ─────────────────────
 
 history_app = typer.Typer(
-  help="List or interactively browse generation history.",
+  help="List or interactively browse generation history; add archives an existing image.",
   context_settings={"help_option_names": ["-h", "--help"]},
   invoke_without_command=True,
   no_args_is_help=False,
@@ -720,6 +674,52 @@ def history_view_cmd():
   from . import history_view
 
   history_view.run()
+
+
+@history_app.command("add", help="Archive an existing image and record its provenance, billing and API-equivalent estimate; generates nothing.")
+def history_add_cmd(
+  image: Annotated[Path, typer.Argument(exists=True, file_okay=True, dir_okay=False, readable=True)],
+  prompt: Annotated[str, typer.Option("--prompt", help="Prompt used to create this image.")],
+  model: Annotated[str, typer.Option("-m", "--model", help="Generation route/model to record; codex:image for the native Codex tool.")],
+  billing: Annotated[Literal["subscription", "api"], typer.Option("--billing", help="How this generation was billed; a declaration, not inferred from pixels.")],
+  output: Annotated[Path | None, typer.Option("-o", "--output", help="Copy destination; defaults to the genimg archive. Never overwrites.")] = None,
+  input: Annotated[Path | None, typer.Option("-i", "--input", exists=True, dir_okay=False)] = None,
+  refs: Annotated[list[Path] | None, typer.Option("--ref", exists=True, dir_okay=False)] = None,
+  quality: Annotated[str | None, typer.Option("-q", "--quality", help="Known API quality; unavailable for codex:image.")] = None,
+  resolution: Annotated[str | None, typer.Option("-r", "--resolution", help="Known API resolution; unavailable for codex:image.")] = None,
+):
+  import shutil
+
+  from PIL import Image
+
+  try:
+    alias, spec = registry.resolve(model)
+    if not prompt.strip():
+      raise ValueError("--prompt cannot be blank")
+    if spec.provider == "codex" and (quality is not None or resolution is not None):
+      raise ValueError("codex:image does not report quality or resolution settings")
+    source = image.expanduser().resolve()
+    with Image.open(source) as img:
+      suffix = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}.get(img.format)
+      if suffix is None:
+        raise ValueError("history add supports PNG, JPEG and WebP images")
+      img.verify()
+    gen_id = metadata.make_id(prompt, spec.model_id)
+    target = output.expanduser().resolve() if output else metadata.auto_output_path(gen_id, suffix)
+    if target.suffix.lower() not in ((".jpg", ".jpeg") if suffix == ".jpg" else (suffix,)):
+      raise ValueError(f"output must keep the source format ({suffix}); history add does not convert images")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with source.open("rb") as src, target.open("xb") as dst:
+      shutil.copyfileobj(src, dst)
+    estimate = cost.estimate(provider=spec.provider, model_id=spec.model_id, quality=quality, resolution=resolution)
+    meta = metadata.build(gen_id=gen_id, prompt=prompt, alias=alias, spec=spec, paths=[target],
+      n=1, cost_usd=estimate, billing=billing, input=input, refs=refs, quality=quality, resolution=resolution)
+    meta.update(recorded_from=str(source), billing_source="user_declared")
+    meta_path = metadata.save(meta, gen_id)
+  except (OSError, ValueError) as error:
+    _die(str(error))
+  console.print(f"recorded {target}\nmetadata {meta_path}", markup=False)
+  _print_provenance(meta)
 
 
 # ────────────────────── cost command ──────────────────────
