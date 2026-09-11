@@ -158,7 +158,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
           grid_path: Path | None = None,
           prompt_deltas: list[str | None] | None = None,
           mode: str | None = None, diverse: bool = False,
-          name: str | None = None, billing: str | None = None) -> dict[str, Any]:
+          name: str | None = None) -> dict[str, Any]:
   from . import diversify
 
   workdir = Path.cwd().resolve(strict=False)
@@ -178,7 +178,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
       entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])
     return entry
 
-  billing = billing or ("subscription" if spec.provider == "codex" else "api")
+  billing = "subscription" if spec.provider == "codex" else "api"
   meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),

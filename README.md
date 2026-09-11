@@ -48,12 +48,12 @@ image, `yp` to copy its absolute path, or `?` for all keys. `genimg history --js
 non-interactive interface and always emits absolute paths, including when reading older sidecars
 that recorded paths relative to `workdir`.
 
-Inside a Codex agent, prefer its native `image_gen` tool, then
-`genimg history add native.png --prompt "your prompt" -m codex:image --billing subscription`.
-This archives the image without launching another agent. Genimg preserves content credentials
-and records the reported generator/version, explicit subscription/API billing, and a separate
-theoretical API-cost estimate or range where possible. See the
-[native tool, provenance and billing guide](docs/codex-subscription.md).
+Images are added automatically to history when genimg creates them. History is read-only.
+For subscription generation, use `genimg "your prompt" -m codex:image`.
+Generation preserves content credentials and records the reported generator/version,
+subscription/API billing from the generation route, and a separate theoretical API-cost
+estimate or range where possible. See the
+[subscription, provenance and billing guide](docs/codex-subscription.md).
 
 ## Getting the most variety
 

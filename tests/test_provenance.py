@@ -71,28 +71,6 @@ def test_generation_preserves_credentials_and_records_observed_model(credentiall
   assert history.total_spent() == (0.0, 0)
 
 
-def test_record_calls_no_generation_and_archives_original(credentialled_png, sdk, monkeypatch, tmp_path):
-  monkeypatch.setattr(metadata, "META_DIR", tmp_path / "meta")
-  monkeypatch.setattr(metadata, "GEN_DIR", tmp_path / "generations")
-  generation = MagicMock(side_effect=AssertionError("record must not generate"))
-  monkeypatch.setattr(cli, "run_generate", generation)
-  original = credentialled_png.read_bytes()
-
-  result = CliRunner().invoke(cli._app, ["history", "add", str(credentialled_png), "--prompt", "a cube",
-    "-m", "codex:image", "--billing", "subscription"])
-
-  assert result.exit_code == 0, result.output
-  generation.assert_not_called()
-  meta = history.load()[0][0]
-  from pathlib import Path
-  archived = Path(meta["outputs"][0]["path"])
-  assert archived.parent == metadata.GEN_DIR
-  assert archived.read_bytes() == original == credentialled_png.read_bytes()
-  assert meta["recorded_from"] == str(credentialled_png)
-  assert meta["billing_source"] == "user_declared"
-  assert meta["api_equivalent_cost"]["priced_images"] == 1
-
-
 def test_generation_preserves_sdk_credentials_without_png_chunk(sdk, monkeypatch, tmp_path):
   # A provider can return another encoded format under a requested .png filename.
   # The SDK recognises its credentials independently of PNG chunk detection.
@@ -112,23 +90,6 @@ def test_generation_preserves_sdk_credentials_without_png_chunk(sdk, monkeypatch
   assert output["sha256"] == hashlib.sha256(original).hexdigest()
   assert output["bytes"] == len(original)
   assert output["provenance"]["manifest"] == sdk[0]["manifests"]["active"]
-
-
-@pytest.mark.parametrize("failure", ["invalid", "existing", "billing"])
-def test_record_rejects_invalid_input_before_writing(tmp_path, monkeypatch, failure):
-  source = tmp_path / "source.png"
-  output = tmp_path / "out.png"
-  Image.new("RGB", (4, 4)).save(source)
-  if failure == "invalid":
-    source.write_bytes(b"not a PNG")
-  if failure == "existing":
-    output.write_bytes(b"keep me")
-  monkeypatch.setattr(metadata, "META_DIR", tmp_path / "meta")
-  result = CliRunner().invoke(cli._app, ["history", "add", str(source), "--prompt", "a cube",
-    "-m", "codex:image", "--billing", "invalid" if failure == "billing" else "subscription", "-o", str(output)])
-  assert result.exit_code != 0
-  assert not metadata.META_DIR.exists()
-  assert output.read_bytes() == b"keep me" if failure == "existing" else not output.exists()
 
 
 def test_unreadable_credentials_are_kept_and_not_priced(credentialled_png):

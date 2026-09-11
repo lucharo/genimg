@@ -1,26 +1,6 @@
 # Codex subscription generation
 
-## Inside a Codex agent: native tool first
-
-When the agent has `image_gen` available, call it directly, then register its returned
-image path with genimg. No second Codex agent is needed:
-
-```bash
-genimg history add native.png --prompt "a ceramic blue cube on white" -m codex:image --billing subscription
-```
-
-`history add` generates nothing: it copies the original into the genimg archive, reads its
-embedded provenance and creates a history sidecar. `-o cube.png` selects a copy destination;
-existing files are never overwritten. Add `-i original.png` for edits and repeated
-`--ref reference.png` options to record references. The source image is left unchanged.
-`--billing` is explicitly declared because an image cannot prove how its generation was paid for.
-
-The native tool is an agent capability exposed by the Codex host, not a public image API
-that a standalone CLI can call. Its current inputs are a prompt and image references;
-it exposes no image-model or version selector. The `--model` option on `history add` records
-the route used; it does not change the image or select a backend version.
-
-## From a terminal or Studio
+## Generate, then browse
 
 Use your own ChatGPT login with the local [Codex CLI](https://developers.openai.com/codex/cli/):
 
@@ -28,7 +8,13 @@ Use your own ChatGPT login with the local [Codex CLI](https://developers.openai.
 codex login
 genimg "a simple black triangle on white" -m codex:image -a 1:1 -o triangle.png
 genimg "replace the triangle with an outlined circle" -i triangle.png -m codex:image -o circle.png
+genimg history view
 ```
+
+Images are added automatically to history when genimg creates them. Generation captures
+the image's provenance and the run's billing information in its metadata sidecar.
+History is read-only: it displays the records generation saved, without importing images
+or adding information later. `genimg history --json` reads those same records as JSON.
 
 `genimg auth` checks login readiness. `genimg setup` can enable Codex and offer it as your
 default; passing `-m codex:image` works without changing genimg config. API-key-only Codex
@@ -47,7 +33,8 @@ batch mode are rejected. Incompatible saved quality/resolution defaults are not 
 For a pinned image model and explicit quality/size controls, use the OpenAI API backend.
 
 Generation consumes your [normal Codex allowance](https://developers.openai.com/codex/image-generation/).
-The preview shows subscription billing. Metadata records `billing: subscription`,
+The preview shows subscription billing. Genimg derives billing from the generation route;
+it is not a user declaration or inferred from image pixels. Metadata records `billing: subscription`,
 `model_selection: runtime` and `cost_usd_estimated: null`; subscription runs are excluded
 from API-spend totals. API routes explicitly record `billing: api`.
 
@@ -98,5 +85,7 @@ Codex reports a subscription limit, wait for the account allowance to reset or a
 Codex. Updating Codex may change this output contract; an incompatible response fails clearly
 instead of reporting a stale image as success.
 
-The CLI backend makes subscription generation available when the caller has no native
-agent tool. Agents with that tool should use the native-first workflow above.
+An agent host may also expose its own native `image_gen` tool. That is an independent
+capability, with no image-model/version selector; invoking it directly does not run genimg
+or create a genimg history record. Use the genimg generation command above when the image
+should be managed by genimg.

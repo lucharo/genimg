@@ -103,10 +103,29 @@ def test_cli_subscription_generation_and_edit(fake_codex, tmp_path, edit):
   assert call["prompt"].endswith("Image request:\na circle")
   assert not Path(call["cwd"]).exists()  # owned scratch cleaned
   saved = json.loads(next((tmp_path / "meta").glob("*.json")).read_text())
-  assert {k: saved[k] for k in ("provider", "model_id", "quality", "resolution", "cost_usd_estimated", "billing", "model_selection", "aspect_ratio_mode")} == {
+  assert {k: saved[k] for k in ("provider", "model_id", "quality", "resolution", "cost_usd_estimated", "billing", "billing_source", "model_selection", "aspect_ratio_mode")} == {
     "provider": "codex", "model_id": "codex:image", "quality": None, "resolution": None,
-    "cost_usd_estimated": None, "billing": "subscription", "model_selection": "runtime", "aspect_ratio_mode": "prompt",
+    "cost_usd_estimated": None, "billing": "subscription", "billing_source": "provider_route",
+    "model_selection": "runtime", "aspect_ratio_mode": "prompt",
   }
+  # Generation has already saved the complete record. History reads it without
+  # running Codex again, touching the image or rewriting metadata.
+  def snapshot():
+    return {p: (p.read_bytes(), p.stat().st_mtime_ns)
+            for p in tmp_path.rglob("*") if p.is_file()}
+
+  before = snapshot()
+  runner = CliRunner()
+  listed = runner.invoke(cli._app, ["history", "--json"])
+  assert listed.exit_code == 0, listed.output
+  assert json.loads(listed.output) == [saved]
+  for flags in ([], ["--summary"], ["--summary", "--json"]):
+    viewed = runner.invoke(cli._app, ["history", *flags])
+    assert viewed.exit_code == 0, viewed.output
+  rejected = runner.invoke(cli._app, ["history", "add", str(out)])
+  assert rejected.exit_code == 2, rejected.output
+  assert "No such command 'add'" in rejected.output
+  assert snapshot() == before
 
 
 @pytest.mark.parametrize("mode,match", [
