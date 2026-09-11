@@ -14,8 +14,8 @@ uv tool install --from . genimg
 genimg "a robot" -m gdm:nb -o robot.png          # pick a model (no built-in default)
 genimg "a robot" -m oai:gi2 -o robot.png         # OpenAI gpt-image-2
 genimg "a robot" -m codex:image -o robot.png     # Codex subscription
-genimg "a robot" -m oai:gi2.5 --dry-run           # GPT Image 2.5 Sunburst preview
-genimg "a robot" -m oai:gi2.5-flare --dry-run     # GPT Image 2.5 Flare preview
+genimg "a robot" -m oai:gi2.5 -o sunburst.png    # GPT Image 2.5 Sunburst
+genimg "a robot" -m oai:gi2.5-flare -o flare.png # GPT Image 2.5 Flare
 genimg "with refs" a.png b.png -m gdm:nbp -o out.png     # reference images (positional)
 genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
 genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
