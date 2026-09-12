@@ -422,6 +422,7 @@ def run_setup() -> None:
     return
 
   if not (google_ok or openai_ok or codex_ok):
+    config.save(cfg)
     console.print("\n[yellow]No providers enabled.[/yellow] Re-run when ready.")
     return
 

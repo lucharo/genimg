@@ -242,6 +242,18 @@ def test_setup_drops_unavailable_codex_and_its_default():
   assert cfg == {"enabled_providers": ["openai_native"]}
 
 
+def test_setup_persists_cleanup_when_codex_was_the_only_provider(tmp_path, monkeypatch):
+  monkeypatch.setattr(setup.config, "CONFIG_PATH", tmp_path / "config.json")
+  setup.config.save({"enabled_providers": ["codex"], "default_model": "codex:image"})
+  with patch.object(auth, "auth_info", return_value={"ok": False, "hint": "Log in"}), \
+       patch.object(setup.auth_google, "adc_token_present", return_value=False), \
+       patch.object(setup.questionary, "select") as select:
+    select.return_value.ask.return_value = "skip"
+    result = CliRunner().invoke(cli._app, ["setup"])
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"enabled_providers": []}
+
+
 @pytest.mark.parametrize("kill_error", [None, subprocess.TimeoutExpired("taskkill", 5)])
 def test_windows_timeout_cleanup_remains_bounded(kill_error, tmp_path):
   proc = MagicMock(pid=123)
