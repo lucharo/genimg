@@ -18,6 +18,7 @@ import questionary
 from rich.console import Console
 
 from . import config, registry
+from .auth import codex as auth_codex
 from .auth import google as auth_google
 from .auth import openai as auth_openai
 
@@ -344,6 +345,30 @@ def _setup_openai(cfg: dict) -> bool:
 
 # ────────────────────── default model ──────────────────────
 
+def _setup_codex(cfg: dict) -> bool:
+  info = auth_codex.auth_info()
+  if not info["ok"]:
+    enabled = cfg.get("enabled_providers", [])
+    if "codex" in enabled:
+      enabled.remove("codex")
+    if cfg.get("default_model") == "codex:image":
+      cfg.pop("default_model")
+    console.print(f"[dim]Codex subscription: {info['hint']}[/dim]")
+    return False
+  enabled = cfg.setdefault("enabled_providers", [])
+  use = questionary.confirm("Use Codex image generation with your ChatGPT subscription?", default="codex" in enabled).ask()
+  if use:
+    if "codex" not in enabled:
+      enabled.append("codex")
+    return True
+  if use is False:
+    if "codex" in enabled:
+      enabled.remove("codex")
+    if cfg.get("default_model") == "codex:image":
+      cfg.pop("default_model")
+  return "codex" in enabled
+
+
 def _setup_default_model(cfg: dict) -> None:
   """Offer to set a default model so `genimg PROMPT` works without -m (ADR 0001).
 
@@ -351,7 +376,7 @@ def _setup_default_model(cfg: dict) -> None:
   providers cover, or skips and passes -m each run.
   """
   enabled = cfg.get("enabled_providers", [])
-  providers = {p for e in enabled for p in ("google", "openai") if e.startswith(p)}
+  providers = {p for e in enabled for p in ("google", "openai", "codex") if e.startswith(p)}
   models = [
     (alias, spec)
     for alias, spec in sorted(
@@ -394,11 +419,13 @@ def run_setup() -> None:
   try:
     google_ok = _setup_google(cfg)
     openai_ok = _setup_openai(cfg)
+    codex_ok = _setup_codex(cfg)
   except KeyboardInterrupt:
     console.print("\n[yellow]cancelled — config not saved[/yellow]")
     return
 
-  if not (google_ok or openai_ok):
+  if not (google_ok or openai_ok or codex_ok):
+    config.save(cfg)
     console.print("\n[yellow]No providers enabled.[/yellow] Re-run when ready.")
     return
 
@@ -416,5 +443,5 @@ def run_setup() -> None:
     console.print(f"  gcp project: {cfg['gcp_project']}")
   if cfg.get("openai_base_url"):
     console.print(f"  openai base url: {cfg['openai_base_url']}")
-  test_model = "" if cfg.get("default_model") else " -m gdm:nb"
+  test_model = "" if cfg.get("default_model") else " -m codex:image" if codex_ok else " -m gdm:nb"
   console.print(f"\n[dim]inspect: `genimg auth`  •  test: `genimg \"a robot\"{test_model} -o /tmp/r.png`[/dim]")

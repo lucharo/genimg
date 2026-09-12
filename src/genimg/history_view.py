@@ -23,8 +23,8 @@ from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import DataTable, Footer, Header, Static
 
+from . import cost, history
 from . import grid as grid_module
-from . import history
 
 
 @dataclass(frozen=True)
@@ -370,7 +370,12 @@ class HistoryViewApp(App[None]):
     field("image", f"{item.output_label} (requested {entry.get('n', len(outputs))})")
     field("model", f"{alias} -> {model_id}")
     field("provider", entry.get("provider", "?"))
-    field("cost", f"${entry.get('cost_usd_estimated', 0):.4f} (generation)")
+    field("billing", cost.billing_label(entry))
+    if "api_equivalent_cost" in entry:
+      from . import provenance
+      field("reported generator", provenance.describe(outputs) + " (C2PA, unverified)")
+      field("theoretical API equivalent", cost.format_equivalent(entry["api_equivalent_cost"]) + " (rough, output only)")
+    field("cost", f"{cost.format_usd(entry.get('cost_usd_estimated'))} (generation)")
     field("path", item.path)
     if entry.get("input"):
       field("input", entry["input"])

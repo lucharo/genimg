@@ -20,6 +20,7 @@ dependencies = [
   "questionary>=2.0",
   "textual>=8,<9",
   "textual-image[textual]>=0.13.2,<0.14 ; python_full_version >= '3.12'",
+  "c2pa-python>=0.37.10,<0.38",
 ]
 
 [project.scripts]

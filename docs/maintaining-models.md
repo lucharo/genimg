@@ -52,9 +52,16 @@ id independently, so you can price any id (registered or inferred) by adding a c
 
 2. **`src/genimg/cost.py`** — add a per-image price row keyed by model id
    (`_GOOGLE_PER_IMAGE` or `_OPENAI_BASE_PER_IMAGE`). Optional; a missing row just
-   shows `~$0.0000`.
+   shows `unknown` and stores a JSON `null`; spend totals exclude unpriced generations.
 
 3. Add a resolve test in `tests/test_registry.py`.
+
+For model-specific capabilities, update `quality_options()` in the OpenAI provider;
+the CLI and Draw Studio share it. GPT Image 2.5 Sunburst and Flare (including dated
+snapshots) add `xhigh` and `max`; older GPT Image models stop at `high`.
+Their [token rates](https://developers.openai.com/api/docs/pricing) do not establish
+per-image prices: [OpenAI explicitly excludes 2.5 from the GPT Image 2 calculator](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst).
+Keep those cost rows absent until per-image estimates can be supported.
 
 ## Where to check for new models + pricing
 

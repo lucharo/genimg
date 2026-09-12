@@ -20,10 +20,12 @@ from . import (
   diversify,
   history,
   metadata,
+  provenance,
   registry,
 )
 from . import grid as grid_module
 from . import setup as setup_module
+from .auth import codex as auth_codex
 from .auth import google as auth_google
 from .auth import openai as auth_openai
 from .generate import generate as run_generate
@@ -157,7 +159,7 @@ def _run(
   resolution: Annotated[str | None, typer.Option("-r", "--resolution", rich_help_panel=_PANEL_CORE,
     help="512 | 1K | 2K | 4K. Options depend on the selected model.")] = None,
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
-    help="low | medium (default) | high | auto. high = 30-90s/image.")] = None,
+    help="low | medium (default) | high | auto; GPT Image 2.5 also supports xhigh | max.")] = None,
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
     help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
@@ -262,8 +264,10 @@ def _run(
                            quality=effective_q, resolution=resolution)
   auth_mode_str = (
     auth_openai.auth_info()["mode"] if spec.provider == "openai"
+    else auth_codex.auth_info()["mode"] if spec.provider == "codex"
     else auth_google.auth_info()["mode"]
   )
+  cost_label = "Codex subscription (usage limits apply)" if spec.provider == "codex" else f"{cost.format_usd(est_cost)} (estimate)"
   default_marker = "" if model_was_explicit else " [dim](default)[/dim]"
 
   console.print(
@@ -277,7 +281,9 @@ def _run(
     console.print(f"  [dim]name[/dim]     {_rich_escape(name)}")
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
-  console.print(f"  [dim]cost[/dim]     ~${est_cost:.4f} (estimate)  [dim]id={gen_id}[/dim]")
+  console.print(f"  [dim]cost[/dim]     {cost_label}  [dim]id={gen_id}[/dim]")
+  if spec.provider == "codex":
+    console.print("  [dim]runtime[/dim]  Codex selects the image model and size; aspect ratio is a prompt request.")
   _print_planned_paths(planned_paths)
   if deltas:
     for i, d in enumerate(deltas):
@@ -362,17 +368,25 @@ def _run(
       name=name,
     )
     meta_path = metadata.save(meta, gen_id)
-    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. ${total:.2f})[/dim]", soft_wrap=True)
+    console.print(f"  [cyan]grid[/cyan] {written_grid} [dim](est. {cost.format_usd(total)})[/dim]", soft_wrap=True)
   elif grid and len(result.paths) == 1:
     console.print("[dim]--grid ignored: needs n>=2[/dim]")
 
   console.print(
-    f"  [dim]cost ~${est_cost:.4f}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
+    f"  [dim]cost {cost_label}  •  {elapsed:.1f}s  •  meta {meta_path}[/dim]",
     soft_wrap=True,
   )
 
+  _print_provenance(meta)
+
   if open_after and (written_grid or result.paths):
     grid_module.open_in_browser(written_grid or result.paths[0])
+
+
+def _print_provenance(meta: dict) -> None:
+  console.print(f"  reported generator: {provenance.describe(meta.get('outputs', []))} (C2PA, unverified)", markup=False)
+  console.print(f"  billing: {cost.billing_label(meta)}; theoretical API equivalent: "
+                f"{cost.format_equivalent(meta.get('api_equivalent_cost'))} (rough output-only estimate)", markup=False)
 
 
 # ────────────────────── models sub-typer ──────────────────────
@@ -502,13 +516,14 @@ def setup_cmd():
 
 @_app.command("auth", help="Show auth status for both providers.")
 def auth_cmd(
-  check: Annotated[bool, typer.Option("--check", help="Run a tiny live probe per provider.")] = False,
+  check: Annotated[bool, typer.Option("--check", help="Run a tiny Google/OpenAI generation probe; check Codex login only.")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table (agent-friendly).")] = False,
 ):
   cached = discovery.load_fresh_cache()
   probes = {a: p["status"] for a, p in (cached or {}).get("probes", {}).items()}
 
-  rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:")]
+  rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:"),
+          ("codex", auth_codex.auth_info(), "codex:")]
 
   if json_out:
     import json as _json
@@ -530,6 +545,8 @@ def auth_cmd(
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
     ok_probes = sum(1 for s in cohort if _status_counts_as_available(s))
     summary = f"{ok_probes}/{len(cohort)} listed" if cohort else "[yellow]no cache[/yellow]"
+    if name == "codex":
+      summary = "runtime-selected"
     cred_cell = (
       f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
       else "[red]✗ unset[/red]"
@@ -558,17 +575,19 @@ def auth_cmd(
 
   if check:
     console.print("\n[dim]live probe...[/dim]")
-    from .providers import GeminiImageGen, OpenAIImageGen
+    from .providers import CodexImageGen, GeminiImageGen, OpenAIImageGen
     g = GeminiImageGen().probe("gemini-2.5-flash-image", region="us-central1")
     o = OpenAIImageGen().probe("gpt-image-2")
     console.print(f"  google → gemini-2.5-flash-image  {_color_status(g.status)}")
     console.print(f"  openai → gpt-image-2             {_color_status(o.status)}")
+    c = CodexImageGen().probe("codex:image")
+    console.print(f"  codex → image_gen               {_color_status(c.status)} (login only)")
 
 
 # ────────────────────── history commands ─────────────────────
 
 history_app = typer.Typer(
-  help="List or interactively browse generation history.",
+  help="Read-only history of automatically recorded generations; list or browse interactively.",
   context_settings={"help_option_names": ["-h", "--help"]},
   invoke_without_command=True,
   no_args_is_help=False,
@@ -596,6 +615,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       typer.echo(_json.dumps({"total_usd": round(total, 4), "generations": count}))
       return
     console.print(f"[bold green]${total:.4f}[/bold green] across {count} generation(s)")
+    console.print("[dim]API estimates only; subscription usage and unknown costs are excluded.[/dim]")
     if count:
       console.print(f"[dim]avg ${total/count:.4f}/gen  •  reads ~/.genimg/metadata/*.json[/dim]")
     return
@@ -639,7 +659,8 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       model,
       _rich_escape(prompt_short),
       image_count,
-      f"${e.get('cost_usd_estimated', 0):.4f}",
+      "subscription\nAPI equiv. " + cost.format_equivalent(e.get("api_equivalent_cost"))
+      if cost.billing_label(e) == "subscription" else cost.format_usd(e.get("cost_usd_estimated")) + "\nAPI",
       _rich_escape(out_short),
     )
   console.print(table)
@@ -840,9 +861,9 @@ def skills_path(
   skill_names = _resolve_skill_names(skill, sources)
   for skill_name in skill_names:
     if len(skill_names) == 1:
-      console.print(str(sources[skill_name]))
+      console.print(str(sources[skill_name]), soft_wrap=True)
     else:
-      console.print(f"{skill_name}: {sources[skill_name]}")
+      console.print(f"{skill_name}: {sources[skill_name]}", soft_wrap=True)
 
 
 @skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
@@ -935,7 +956,6 @@ def skills_list():
 
 # ────────────────────── helpers ──────────────────────
 
-_QUALITY_VALUES = {"low", "medium", "high", "auto"}
 _RESOLUTION_VALUES = {"512", "1K", "2K", "4K"}
 _ASPECT_VALUES = {
   "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
@@ -964,6 +984,8 @@ def _size_params_supported(
   if provider == "openai":
     from .providers.openai import _SIZE_MAP
     return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
+  if provider == "codex":
+    return resolution is None
   if model_id.startswith("imagen-"):
     return (
       (resolution is None or resolution in _IMAGEN_RESOLUTION_VALUES)
@@ -1067,6 +1089,9 @@ def _validate_provider_flags(
     if not p.exists():
       _die(f"input not found: {p}")
 
+  if provider == "codex" and (resolution is not None or mode == "batch"):
+    _die("codex:image does not support --resolution or --mode batch; Codex selects the image size.")
+
   if mode == "batch" and provider == "openai":
     _die(
       "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
@@ -1082,10 +1107,12 @@ def _validate_provider_flags(
     )
 
   if quality is not None:
-    if quality not in _QUALITY_VALUES:
-      _die(f"--quality must be one of {sorted(_QUALITY_VALUES)}, got {quality!r}")
     if provider != "openai":
       _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
+    from .providers.openai import quality_options
+    allowed_quality = quality_options(model_id or "")
+    if quality not in allowed_quality:
+      _die(f"--quality for {model_id} must be one of {allowed_quality}, got {quality!r}")
 
   if thinking_level is not None:
     if thinking_level not in {"minimal", "high"}:
@@ -1184,6 +1211,7 @@ def _fmt_age(seconds: float) -> str:
 def _color_status(s: str) -> str:
   return {
     "listed": "[green]listed[/green]",
+    "ready": "[green]login ready[/green]",
     "missing": "[yellow]missing[/yellow]",
     "working": "[green]working[/green]",
     "404": "[yellow]404[/yellow]",

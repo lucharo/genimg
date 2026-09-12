@@ -16,6 +16,8 @@ from typing import Any
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
+from . import cost, provenance
+
 GENIMG_HOME = Path(os.getenv("GENIMG_HOME") or Path.home() / ".genimg")
 GEN_DIR = GENIMG_HOME / "generations"
 META_DIR = GENIMG_HOME / "metadata"
@@ -90,11 +92,11 @@ def embed_into_images(meta: dict[str, Any]) -> None:
   """Write prompt + generation params into each PNG output as tEXt chunks.
 
   Travels with the file even when separated from the sidecar JSON. PNG is
-  lossless so the re-save introduces no quality loss, but Pillow drops chunks
-  it doesn't model — notably C2PA content credentials (caBX) that some
-  providers embed. Accepted trade-off: the sidecar JSON is the provenance of
-  record. Non-PNG or unreadable outputs are skipped silently — embedding is
-  provenance, never load-bearing.
+  lossless, but re-saving can invalidate or remove content credentials. Keep
+  images with SDK-recognised credentials byte-for-byte unchanged, including
+  provider payloads whose encoding differs from their .png filename. PNGs with
+  caBX are also preserved when unreadable; genimg fields live in sidecars. Other unreadable outputs
+  are skipped — embedding must never fail a successful generation.
   """
   params = {k: meta.get(k) for k in ("n", "quality", "resolution", "aspect_ratio", "thinking_level")}
   params = {k: v for k, v in params.items() if v is not None}
@@ -121,6 +123,10 @@ def embed_into_images(meta: dict[str, Any]) -> None:
       if out.get("prompt_delta"):
         out_fields["genimg.prompt_delta"] = out["prompt_delta"]
     try:
+      if provenance.has_png_credentials(path) or (
+        isinstance(out, dict) and out.get("provenance", {}).get("status") == "present"
+      ):
+        continue
       with Image.open(path) as img:
         img.load()
         info = PngInfo()
@@ -132,6 +138,8 @@ def embed_into_images(meta: dict[str, Any]) -> None:
         for key, value in out_fields.items():
           info.add_text(key, str(value))
         img.save(path, pnginfo=info)
+      if isinstance(out, dict):
+        out.update(bytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     except Exception:
       continue
 
@@ -144,7 +152,7 @@ def save(meta: dict[str, Any], gen_id: str) -> Path:
 
 
 def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
-          n: int, cost_usd: float, input: Path | None = None, refs: list[Path] | None = None,
+          n: int, cost_usd: float | None, input: Path | None = None, refs: list[Path] | None = None,
           resolution: str | None = None, aspect_ratio: str | None = None,
           quality: str | None = None, thinking_level: str | None = None,
           grid_path: Path | None = None,
@@ -162,11 +170,15 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
       "format": absolute.suffix.lstrip("."),
       "bytes": absolute.stat().st_size,
     }
+    entry.update(provenance.inspect_image(absolute))
+    entry["api_equivalent_cost"] = cost.api_equivalent(
+      provider=spec.provider, model_id=spec.model_id, output=entry, quality=quality, resolution=resolution)
     if prompt_deltas is not None:
       entry["prompt_delta"] = prompt_deltas[i]
       entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])
     return entry
 
+  billing = "subscription" if spec.provider == "codex" else "api"
   meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -186,9 +198,14 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "mode": mode or "auto",
     "diverse": diverse or prompt_deltas is not None,
     "outputs": [_output_entry(i, p) for i, p in enumerate(paths)],
-    "cost_usd_estimated": round(cost_usd, 4),
+    "billing": billing,
+    "billing_source": "provider_route",
+    "cost_usd_estimated": round(cost_usd, 4) if billing == "api" and cost_usd is not None else None,
     "workdir": str(workdir),
   }
+  meta["api_equivalent_cost"] = cost.sum_equivalents([out["api_equivalent_cost"] for out in meta["outputs"]])
+  if spec.provider == "codex":
+    meta.update(model_selection="runtime", aspect_ratio_mode="prompt")
   if grid_path is not None:
     absolute_grid = grid_path.expanduser().resolve(strict=False)
     meta["grid"] = {

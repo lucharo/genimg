@@ -385,7 +385,8 @@ class StudioModelsTests(unittest.TestCase):
 
 
 class AvailableModelsTests(unittest.TestCase):
-  AUTH_OK = {"google": {"ok": True, "mode": "vertex", "hint": ""},
+  AUTH_OK = {"codex": {"ok": True, "mode": "subscription", "hint": ""},
+             "google": {"ok": True, "mode": "vertex", "hint": ""},
              "openai": {"ok": True, "mode": "azure", "hint": ""}}
 
   def test_no_cache_shows_all_grouped_models_enabled_when_auth_is_ready(self) -> None:
