@@ -361,8 +361,11 @@ def _setup_codex(cfg: dict) -> bool:
     if "codex" not in enabled:
       enabled.append("codex")
     return True
-  if use is False and "codex" in enabled:
-    enabled.remove("codex")
+  if use is False:
+    if "codex" in enabled:
+      enabled.remove("codex")
+    if cfg.get("default_model") == "codex:image":
+      cfg.pop("default_model")
   return "codex" in enabled
 
 
