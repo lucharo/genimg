@@ -91,13 +91,13 @@ and, for supported models, Thinking. Draw Studio hides controls the selected mod
 
 ## Why is there no OpenAI Quality `Auto` control in Draw Studio?
 
-The Studio presents the selected model's explicit quality choices, including `xhigh`
-and `max` for GPT Image 2.5. Genimg's normal OpenAI
-default is Medium, so an additional Auto choice would make the effective setting less clear.
-The CLI still accepts `--quality auto` when that provider behavior is wanted.
+Auto is now available for OpenAI models. Studio gets its choices from the selected model,
+including `xhigh` and `max` for GPT Image 2.5; the default remains Medium. The CLI also
+accepts `--quality auto`.
 
-**Correction (2026-09-12):** an earlier version listed only Low, Medium and High;
-GPT Image 2.5 also supports `xhigh` and `max`. See [model controls](../draw-studio.md).
+**Correction (2026-09-12):** an earlier version said Studio had no Auto control and listed
+only Low, Medium and High. Model-specific controls now include Auto, and GPT Image 2.5
+also supports `xhigh` and `max`. See [model controls](../draw-studio.md).
 
 _Created: 2026-08-13 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
