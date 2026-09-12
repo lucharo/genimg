@@ -348,6 +348,11 @@ def _setup_openai(cfg: dict) -> bool:
 def _setup_codex(cfg: dict) -> bool:
   info = auth_codex.auth_info()
   if not info["ok"]:
+    enabled = cfg.get("enabled_providers", [])
+    if "codex" in enabled:
+      enabled.remove("codex")
+    if cfg.get("default_model") == "codex:image":
+      cfg.pop("default_model")
     console.print(f"[dim]Codex subscription: {info['hint']}[/dim]")
     return False
   enabled = cfg.setdefault("enabled_providers", [])

@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
@@ -231,3 +231,46 @@ def test_setup_codex_choice(fake_codex, use):
     confirm.return_value.ask.return_value = use
     assert setup._setup_codex(cfg) is use
   assert cfg == {"enabled_providers": ["codex"] if use else []}
+
+
+def test_setup_drops_unavailable_codex_and_its_default():
+  cfg = {"enabled_providers": ["openai_native", "codex"], "default_model": "codex:image"}
+  with patch.object(auth, "auth_info", return_value={"ok": False, "hint": "Log in"}), \
+       patch.object(setup.questionary, "confirm") as confirm:
+    assert setup._setup_codex(cfg) is False
+  confirm.assert_not_called()
+  assert cfg == {"enabled_providers": ["openai_native"]}
+
+
+@pytest.mark.parametrize("kill_error", [None, subprocess.TimeoutExpired("taskkill", 5)])
+def test_windows_timeout_cleanup_remains_bounded(kill_error, tmp_path):
+  proc = MagicMock(pid=123)
+  proc.communicate.side_effect = subprocess.TimeoutExpired("codex", 300)
+  proc.wait.side_effect = subprocess.TimeoutExpired("codex", 5)
+  with patch.object(codex, "os", SimpleNamespace(name="nt")), \
+       patch.object(codex.subprocess, "Popen", return_value=proc) as popen, \
+       patch.object(codex.subprocess, "run", side_effect=kill_error) as taskkill:
+    with pytest.raises(RuntimeError, match="timed out"):
+      codex._run(["codex", "exec"], "circle", str(tmp_path))
+  taskkill.assert_called_once_with(["taskkill", "/PID", "123", "/T", "/F"],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+  proc.communicate.assert_called_once_with(None, timeout=300)
+  proc.wait.assert_called_once_with(timeout=5)
+  assert popen.call_args.kwargs["stdout"].closed
+  assert popen.call_args.kwargs["stdin"].closed
+
+
+def test_windows_run_reads_captured_output(tmp_path):
+  proc = MagicMock(returncode=0)
+  with patch.object(codex, "os", SimpleNamespace(name="nt")), \
+       patch.object(codex.subprocess, "Popen", return_value=proc) as popen:
+    def communicate(prompt, timeout):
+      assert prompt is None
+      assert popen.call_args.kwargs["stdin"].read() == "circle"
+      popen.call_args.kwargs["stdout"].write("native result\n")
+      return None, None
+    proc.communicate.side_effect = communicate
+    assert codex._run(["codex", "exec"], "circle", str(tmp_path)) == (0, "native result\n")
+  assert popen.call_args.kwargs["stdin"].closed
+  assert popen.call_args.kwargs["stdout"].closed
+  proc.kill.assert_not_called()

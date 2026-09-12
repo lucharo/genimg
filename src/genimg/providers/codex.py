@@ -36,17 +36,30 @@ def _failure_hint(events: list[dict]) -> str:
 
 def _run(cmd: list[str], prompt: str, workdir: str) -> tuple[int, str]:
   """Bound the whole run and reap only our own process group on cancellation."""
+  # Windows communicate() uses a reader thread: an inherited stdout pipe can
+  # outlive the parent and even block close(). A file avoids that dependency.
+  capture = tempfile.TemporaryFile(mode="w+t", encoding="utf-8") if os.name == "nt" else None
+  input_file = tempfile.TemporaryFile(mode="w+t", encoding="utf-8") if capture is not None else None
+  if input_file is not None:
+    input_file.write(prompt)
+    input_file.seek(0)
   try:
     proc = subprocess.Popen(
-      cmd, cwd=workdir, env=auth_codex.subprocess_env(), stdin=subprocess.PIPE,
-      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+      cmd, cwd=workdir, env=auth_codex.subprocess_env(), stdin=input_file if input_file is not None else subprocess.PIPE,
+      stdout=capture if capture is not None else subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
       start_new_session=os.name == "posix",
     )
   except OSError as e:
+    if capture is not None:
+      capture.close()
+      input_file.close()
     raise RuntimeError("Could not start Codex. Check `codex --version`.") from e
   completed = False
   try:
-    stdout, _ = proc.communicate(prompt, timeout=TIMEOUT_SECONDS)
+    stdout, _ = proc.communicate(None if input_file is not None else prompt, timeout=TIMEOUT_SECONDS)
+    if capture is not None:
+      capture.seek(0)
+      stdout = capture.read()
     completed = True
     return proc.returncode, stdout
   except subprocess.TimeoutExpired as e:
@@ -60,8 +73,26 @@ def _run(cmd: list[str], prompt: str, workdir: str) -> tuple[int, str]:
         except ProcessLookupError:
           pass
       else:
-        proc.kill()
-      proc.communicate()
+        try:
+          subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+          pass
+        try:
+          proc.kill()
+        except ProcessLookupError:
+          pass
+      try:
+        proc.wait(timeout=5)
+      except subprocess.TimeoutExpired:
+        pass
+      if input_file is None and proc.stdin is not None:
+        proc.stdin.close()
+      if capture is None and proc.stdout is not None:
+        proc.stdout.close()
+    if capture is not None:
+      capture.close()
+      input_file.close()
 
 
 class CodexImageGen(IImageGen):
