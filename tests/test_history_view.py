@@ -83,6 +83,15 @@ class HistoryViewModelTests(unittest.TestCase):
 
 
 class HistoryViewAppTests(unittest.IsolatedAsyncioTestCase):
+  async def test_unknown_cost_renders_in_details(self) -> None:
+    with tempfile.TemporaryDirectory() as d:
+      entry = _entry(Path(d), outputs=1)
+      entry["cost_usd_estimated"] = None
+      app = HistoryViewApp(entries=[entry], skipped=0)
+      async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        self.assertIn("cost: unknown (generation)", app.details_text)
+
   async def test_protocol_preview_receives_the_original_image_path(self) -> None:
     with tempfile.TemporaryDirectory() as d:
       path = Path(d) / "image-1.png"

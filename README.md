@@ -1,6 +1,6 @@
 # genimg
 
-Multi-provider image generation CLI. Single command for Gemini (Vertex/direct) and OpenAI (Azure/direct).
+Multi-provider image generation CLI. Single command for Gemini (Vertex/direct), OpenAI (Azure/direct), and Codex with your ChatGPT subscription.
 
 ## Install
 
@@ -13,6 +13,9 @@ uv tool install --from . genimg
 ```bash
 genimg "a robot" -m gdm:nb -o robot.png          # pick a model (no built-in default)
 genimg "a robot" -m oai:gi2 -o robot.png         # OpenAI gpt-image-2
+genimg "a robot" -m codex:image -o robot.png     # Codex subscription
+genimg "a robot" -m oai:gi2.5 -o sunburst.png    # GPT Image 2.5 Sunburst
+genimg "a robot" -m oai:gi2.5-flare -o flare.png # GPT Image 2.5 Flare
 genimg "with refs" a.png b.png -m gdm:nbp -o out.png     # reference images (positional)
 genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
 genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
@@ -44,6 +47,13 @@ image protocol when available and falls back to Unicode rendering. Press `yi` to
 image, `yp` to copy its absolute path, or `?` for all keys. `genimg history --json` remains the
 non-interactive interface and always emits absolute paths, including when reading older sidecars
 that recorded paths relative to `workdir`.
+
+Images are added automatically to history when genimg creates them. History is read-only.
+For subscription generation, use `genimg "your prompt" -m codex:image`.
+Generation preserves content credentials and records the reported generator/version,
+subscription/API billing from the generation route, and a separate theoretical API-cost
+estimate or range where possible. See the
+[subscription, provenance and billing guide](docs/codex-subscription.md).
 
 ## Getting the most variety
 
@@ -100,6 +110,7 @@ Run `genimg setup` for the guided flow (detect → fetch missing → live prefli
 Modes:
 - **Google**: `google_direct` (`GEMINI_API_KEY`/`GOOGLE_API_KEY`), `google_vertex` (service-account JSON via `GOOGLE_APPLICATION_CREDENTIALS`), or `google_vertex_adc` (`gcloud auth application-default login`).
 - **OpenAI**: `openai_native` (`OPENAI_API_KEY` → api.openai.com) or `openai_azure` (`AZURE_OPENAI_API_KEY` + endpoint URL).
+- **Codex**: `codex` uses the locally installed CLI and your own `codex login` with ChatGPT. No API key; normal Codex subscription limits apply. See [subscription generation](docs/codex-subscription.md).
 
 Saved config wins over env-var auto-detection. Secrets stay in env / shell rc; non-secret values (Azure endpoint, GCP project) live in `~/.config/genimg/config.json`.
 
@@ -107,4 +118,16 @@ The Vertex project is resolved from `--project` → `config.gcp_project` → `GO
 
 ## Models (`-m`)
 
-Aliases: `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
+Aliases: `codex:image` (runtime-selected image model), `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2.5` (Sunburst), `oai:gi2.5-flare`, `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
+
+GPT Image 2.5 uses the explicit IDs `gpt-image-2.5-sunburst` and
+`gpt-image-2.5-flare` for generation and editing. Both accept `-q xhigh` and
+`-q max` as well as the existing quality levels; genimg keeps its `medium` default.
+The existing OpenAI size options also apply. Dated provider IDs are accepted directly.
+See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).
+
+GPT Image 2.5 per-image cost estimates are **unknown**: OpenAI publishes token rates,
+but says the GPT Image 2 calculator does not estimate 2.5 token consumption.
+Unknown estimates are saved as `null` and excluded from history spend totals and
+priced generation counts. See [Sunburst pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst)
+and [Flare pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare).

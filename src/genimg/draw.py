@@ -28,8 +28,10 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from . import cost, discovery, metadata, registry
+from .auth import codex as auth_codex
 from .auth import google as auth_google
 from .auth import openai as auth_openai
+from .providers.openai import quality_options
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -52,7 +54,7 @@ _GEMINI_31_FLASH_ASPECTS = [
 def _studio_models() -> list[dict]:
   """Every image-editable model in the registry (excludes text-to-image Imagen, which can't take
   -i), as dropdown entries. Built from the registry so the studio never drifts out of sync with
-  what genimg supports. Ordered google→openai, best quality first."""
+  what genimg supports. Ordered google→openai→codex, best quality first."""
   out: list[dict] = []
   for alias, spec in registry.all_canonical().items():
     if spec.model_id.startswith("imagen-"):
@@ -77,17 +79,17 @@ def _studio_models() -> list[dict]:
       aspect_options = _GEMINI_ASPECTS
     out.append({
       "alias": alias,
-      "label": f"{alias} · {spec.model_id.replace('-preview', '')}",
+      "label": "codex:image · Codex subscription" if spec.provider == "codex" else f"{alias} · {spec.model_id.replace('-preview', '')}",
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
-      "qualityOptions": ["low", "medium", "high"] if spec.provider == "openai" else [],
+      "qualityOptions": quality_options(spec.model_id) if spec.provider == "openai" else [],
       "resolutionOptions": resolution_options,
       "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
       "aspectOptions": aspect_options,
       "thinkingOptions": ["minimal", "high"] if is_flash_31 else [],
     })
-  order = {"google": 0, "openai": 1}
+  order = {"google": 0, "openai": 1, "codex": 2}
   out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
   return out
 
@@ -111,6 +113,7 @@ def available_models(cache: dict | None, provider_auth: dict | None = None) -> l
   provider_auth = provider_auth or {
     "google": auth_google.auth_info(),
     "openai": auth_openai.auth_info(),
+    "codex": auth_codex.auth_info(),
   }
   out: list[dict] = []
   for m in STUDIO_MODELS:
@@ -123,6 +126,10 @@ def available_models(cache: dict | None, provider_auth: dict | None = None) -> l
     if status == "listed":
       availability = "listed"
       reason = "listed by provider; generation not verified"
+    if m["provider"] == "codex" and enabled:
+      status = "ready"  # Login is checked live; do not reuse an old logged-out cache.
+      availability = "ready"
+      reason = "Codex selects the image model and size; aspect ratio is a prompt request"
     if not enabled:
       availability = "unavailable"
       reason = str(auth.get("hint") or f"{m['provider']} auth is not configured")
@@ -223,7 +230,7 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
     return aspect, requested
   google_aspects = aspect_options or _GEMINI_31_FLASH_ASPECTS
   aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h, google_aspects)
-  return aspect, resolution or None
+  return aspect, None if provider == "codex" else resolution or None
 
 
 def _genimg_cmd() -> list[str]:
@@ -261,7 +268,8 @@ class Studio:
     drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
     # load_fresh_cache() returns None once the probe cache is older than the refresh interval
     # (5 days). Stale/missing probe data is shown as unknown rather than hiding models.
-    provider_auth = {"google": auth_google.auth_info(), "openai": auth_openai.auth_info()}
+    provider_auth = {"google": auth_google.auth_info(), "openai": auth_openai.auth_info(),
+                     "codex": auth_codex.auth_info()}
     models = available_models(discovery.load_fresh_cache(), provider_auth)
     enabled = [m for m in models if m["enabled"]]
     default = self.default_model if any(
@@ -635,8 +643,8 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- static shell ----------
   function shell(){
-    const providerNames={google:"Google · Gemini",openai:"OpenAI"};
-    const modelOpts = ["google","openai"].map(provider=>{
+    const providerNames={google:"Google · Gemini",openai:"OpenAI",codex:"Codex subscription"};
+    const modelOpts = Object.keys(providerNames).map(provider=>{
       const opts=BOOT.models.filter(m=>m.provider===provider).map(m=>{
         const suffix=!m.enabled?" — unavailable":"";
         return `<option value="${esc(m.alias)}"${m.alias===S.model?" selected":""}${m.enabled?"":" disabled"}>${esc(m.label+suffix)}</option>`;
@@ -975,8 +983,9 @@ const BOOT = /*__BOOT__*/;
   function costEstimate(){
     const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
     let usd;
+    if ((MM[S.model]||{}).provider === "codex") return "Codex subscription · model/size automatic";
     if (isOai()){
-      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) usd=0.053;
+      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) return "cost unknown";
       usd*=((C.openaiResMult||{})[effectiveResolution()]||1);
     } else {
       const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id

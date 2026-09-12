@@ -35,6 +35,11 @@ aspect ratio and thinking. Unsupported controls are hidden. Results are saved un
 `~/.genimg/generations/`; switch the Generated panel from **Session** to **All** to browse saved
 history and put an earlier result back on the canvas.
 
+Select **codex:image · Codex subscription** to generate with your local Codex ChatGPT login.
+Quality and image-size controls are hidden; the cost label shows subscription usage. Codex
+selects the image model and dimensions, and aspect ratio is a prompt request.
+See [Codex subscription generation](codex-subscription.md) for setup and limits.
+
 ## Draw from an iPad
 
 ### Sidecar and Apple Pencil

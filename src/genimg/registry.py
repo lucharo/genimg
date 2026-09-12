@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Provider = Literal["google", "openai"]
+Provider = Literal["google", "openai", "codex"]
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,8 @@ class ModelSpec:
 
 
 _REGISTRY: dict[str, ModelSpec | str] = {
+  # A subscription backend, not a pinned image model. Opt in explicitly.
+  "codex:image": ModelSpec("codex", "codex:image", quality_rank=0),
   # Google DeepMind / Gemini Image. Canonical alias is gdm:<short>; descriptive
   # nano-banana* names are kept for discoverability. Bare model ids also resolve.
   "gdm:nbp":             ModelSpec("google", "gemini-3-pro-image",             region="global", quality_rank=10),
@@ -34,6 +36,10 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   # Availability varies by account and Azure deployment — run `genimg models` to see
   # what your credentials can actually reach. Some ids (e.g. gpt-image-1.5) may be
   # OpenAI-direct only and absent from a given Azure resource.
+  "oai:gpt-image-2.5-sunburst": ModelSpec("openai", "gpt-image-2.5-sunburst", quality_rank=10),
+  "oai:gi2.5":            "oai:gpt-image-2.5-sunburst",
+  "oai:gpt-image-2.5-flare": ModelSpec("openai", "gpt-image-2.5-flare", quality_rank=9),
+  "oai:gi2.5-flare":      "oai:gpt-image-2.5-flare",
   "oai:gpt-image-2":      ModelSpec("openai", "gpt-image-2",      quality_rank=9),
   "oai:gi2":              "oai:gpt-image-2",
   "oai:gpt-image-1.5":    ModelSpec("openai", "gpt-image-1.5",    quality_rank=7),

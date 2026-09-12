@@ -77,15 +77,21 @@ def probe_all(parallel: int | None = None) -> dict[str, ProbeResult]:
 def _probe_groups(entries: list[tuple[str, ModelSpec]]):
   google_entries_by_region: dict[str, list[tuple[str, ModelSpec]]] = {}
   openai_entries: list[tuple[str, ModelSpec]] = []
+  codex_entries: list[tuple[str, ModelSpec]] = []
   for alias, spec in entries:
     if spec.provider == "google":
       google_entries_by_region.setdefault(spec.region or "global", []).append((alias, spec))
+    elif spec.provider == "codex":
+      codex_entries.append((alias, spec))
     elif spec.provider == "openai":
       openai_entries.append((alias, spec))
     else:
       raise ValueError(f"unknown provider for {alias}: {spec.provider}")
 
   groups = []
+  if codex_entries:
+    from .providers.codex import CodexImageGen
+    groups.append(lambda: {alias: CodexImageGen().probe(spec.model_id) for alias, spec in codex_entries})
   if openai_entries:
     groups.append(lambda entries=openai_entries: _probe_openai_from_model_list(entries))
   for region, region_entries in google_entries_by_region.items():

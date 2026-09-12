@@ -38,10 +38,10 @@ class CostEstimateTests(unittest.TestCase):
     self.assertAlmostEqual(ga, 0.067)
     self.assertAlmostEqual(ga, preview)
 
-  def test_unknown_returns_zero(self) -> None:
-    self.assertEqual(cost.estimate(provider="openai", model_id="nope", n=1), 0.0)
-    self.assertEqual(cost.estimate(provider="google", model_id="nope", n=1), 0.0)
-    self.assertEqual(cost.estimate(provider="mystery", model_id="x", n=1), 0.0)
+  def test_unknown_returns_none(self) -> None:
+    self.assertIsNone(cost.estimate(provider="openai", model_id="nope", n=1))
+    self.assertIsNone(cost.estimate(provider="google", model_id="nope", n=1))
+    self.assertIsNone(cost.estimate(provider="mystery", model_id="x", n=1))
 
 
 if __name__ == "__main__":
