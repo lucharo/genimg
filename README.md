@@ -76,10 +76,8 @@ subjects (logos, icons, single objects). Two ways to force real variety — pick
   ```bash
   genimg "a minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
   ```
-  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. Only Gemini image models
-  diversify a batch: OpenAI rejects `--mode batch` outright (gpt-image n>1 returns
-  near-duplicates), and on Imagen plain `--mode batch` works but can't diversify (independent
-  samples), so `-d --mode batch` is rejected there too.
+  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. OpenAI rejects
+  `--mode batch` outright because GPT Image n>1 returns near-duplicate independent samples.
 
 Either needs `-n >= 2`. `-d`/`--deltas` work everywhere; `--mode batch` variety is Gemini-only.
 The two don't combine: `--deltas` is parallel-mode only — under `--mode batch` the model does
@@ -118,7 +116,7 @@ The Vertex project is resolved from `--project` → `config.gcp_project` → `GO
 
 ## Models (`-m`)
 
-Aliases: `codex:image` (runtime-selected image model), `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb`, `gdm:imagen4` (+ `-fast`/`-ultra`), `oai:gi2.5` (Sunburst), `oai:gi2.5-flare`, `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Bare model IDs also accepted. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
+Aliases: `codex:image` (runtime-selected image model), `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb2-lite`, `gdm:nb`, `oai:gi2.5` (Sunburst), `oai:gi2.5-flare`, `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Compatible bare Gemini Image and GPT Image model IDs are also accepted. Imagen 4 was retired by Google on August 17, 2026; use `gdm:nb2` instead. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
 
 GPT Image 2.5 uses the explicit IDs `gpt-image-2.5-sunburst` and
 `gpt-image-2.5-flare` for generation and editing. Both accept `-q xhigh` and

@@ -2,9 +2,9 @@
 
 Created: 2026-08-13
 
-Updated: 2026-09-12
+Updated: 2026-09-13
 
-Verified: 2026-09-12 (new and changed answers; older entries retain their original scope)
+Verified: 2026-09-13 (new and changed answers; older entries retain their original scope)
 
 ## Can genimg generate images using a ChatGPT subscription?
 
@@ -71,6 +71,41 @@ See the [Draw Studio guide](../draw-studio.md).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
+## Is there a prompt-first GenIMG UI as well as Draw Studio?
+
+The CLI exposes prompt-first generation controls. The separate GUI concept is tracked in
+[issue #3](https://github.com/lucharo/genimg/issues/3); Draw Studio is the implemented,
+canvas-focused surface. See the [surface comparison](../draw-studio.md#draw-studio-and-the-full-cli-are-different-surfaces).
+
+_Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13_
+
+## Can I use Draw Studio from an iPad?
+
+Use the Mac browser through Sidecar or remote-screen control, not the Mac's localhost URL
+in iPad Safari. The [iPad guide](../draw-studio.md#draw-from-an-ipad) documents both routes;
+physical Apple Pencil and VNC behaviour still need a real-device check.
+
+_Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13 · Scope: documented setup, not physical-device validation_
+
+## How do users access models, and can Draw Studio be hosted?
+
+Use local provider credentials or the [Codex subscription route](../codex-subscription.md).
+The host sends prompts and image inputs to remote models: local Studio is not offline.
+A public multi-user service is not implemented; it would need a separate backend, not
+provider keys embedded in browser code. See the [security boundary](../draw-studio.md#security-boundary).
+
+_Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13_
+
+## What needs to happen before a release?
+
+Use the [release checklist](https://github.com/lucharo/genimg/issues/2) for scope and status.
+Validate the candidate's tests, wheel and source distribution; require green checks on
+the exact release-PR head before merging. A green preparation workflow is not publication:
+verify the resulting tag, GitHub release and, when publishing to PyPI, indexed files and a
+clean install. See the [release workflow](../../.github/workflows/release.yml).
+
+_Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13 · Scope: release gates; consult the live tracker for completion_
+
 ## Why can a listed model still fail to generate?
 
 Configured, listed and serving are different states. `genimg models --refresh` refreshes
@@ -107,11 +142,17 @@ Use the Create, Diagram or Polish starter, or choose Default to restore the anno
 instructions. Expanding the prompt lets you edit it directly; the selected starter updates
 as the text changes.
 
-## Why is Imagen absent from Draw Studio?
+## Why is Imagen unavailable?
 
-Imagen is text-to-image only in genimg. Draw Studio needs models that can accept the current
-canvas as an input for later iterations, so Imagen remains available through the CLI but is
-not offered in the Studio model selector.
+Google shut down the Imagen 4 API models on August 17, 2026. Genimg no longer exposes their
+aliases or accepts Imagen model IDs. Use `gdm:nb2` (Gemini 3.1 Flash Image), which supports both
+generation and canvas editing.
+
+If an Imagen alias was saved as your default, run `genimg models set-default gdm:nb2`
+or `genimg models clear-default`. Reading the old default reports the problem without
+silently changing your configuration.
+
+_Created: 2026-08-13 · Updated: 2026-09-13 · Verified: 2026-09-13_
 
 ## Where are Draw Studio results saved?
 

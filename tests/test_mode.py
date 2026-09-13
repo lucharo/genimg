@@ -196,12 +196,6 @@ class ModeCliTests(unittest.TestCase):
     self.assertIn("wasted spend", result.output)  # blanket OpenAI batch rejection fires first
     self.assertEqual(captured, [])
 
-  def test_batch_diverse_imagen_errors(self) -> None:
-    result, captured, _ = self._invoke(["p", "-m", "gdm:imagen4", "-n", "4", "-d", "--mode", "batch"])
-    self.assertEqual(result.exit_code, 1)
-    self.assertIn("Gemini image models only", result.output)
-    self.assertEqual(captured, [])
-
   def test_batch_diverse_gemini_skips_prompt_deltas(self) -> None:
     result, captured, payload = self._invoke(["p", "-m", "gdm:nb2", "-n", "3", "-d", "--mode", "batch"])
     self.assertEqual(result.exit_code, 0, result.output)

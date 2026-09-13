@@ -64,10 +64,9 @@ class SignatureInferenceTests(unittest.TestCase):
     with self.assertRaises(ValueError):
       registry.resolve("dall-e-3")
 
-  def test_unregistered_imagen_infers_google_regional(self) -> None:
-    _, spec = registry.resolve("imagen-5.0-generate-001")
-    self.assertEqual(spec.provider, "google")
-    self.assertEqual(spec.region, "us-central1")
+  def test_retired_imagen_ids_explain_the_supported_replacement(self) -> None:
+    with self.assertRaisesRegex(ValueError, "Imagen 4 was retired.*gdm:nb2"):
+      registry.resolve("imagen-4.0-generate-001")
 
   def test_registered_bare_id_keeps_curated_spec(self) -> None:
     # a registered id keeps its curated rank/region, not the inferred rank 0
