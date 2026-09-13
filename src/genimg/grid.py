@@ -234,10 +234,10 @@ def _info_panel(meta: dict[str, Any] | None, cost: float | None) -> str:
     ("billing", pricing.billing_label(meta) if meta else None, False),
     ("reported generator", provenance.describe(meta["outputs"]) + " (C2PA, unverified)" if "api_equivalent_cost" in meta else None, False),
     ("API equivalent", pricing.format_equivalent(meta["api_equivalent_cost"]) + " (theoretical, rough, output only)" if "api_equivalent_cost" in meta else None, False),
-    ("edit input", meta.get("input"), False),
+    ("edit input", Path(meta["input"]).name if meta.get("input") else None, False),
   ]
   rows.extend(
-    (f"reference {i}", ref, False)
+    (f"reference {i}", Path(ref).name, False)
     for i, ref in enumerate(meta.get("refs") or [], start=1)
   )
   rows.extend([
