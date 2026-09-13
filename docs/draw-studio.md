@@ -4,8 +4,13 @@ Draw Studio is GenIMG's local, pen-friendly canvas. Use it to sketch or annotate
 send the flattened canvas to an image-editable model, then put a result back on the canvas for
 another pass.
 
-The browser is only a control surface. Generation, provider authentication, files and history all
-remain on the Mac running `genimg`.
+The browser is a local control surface. The `genimg` process on the host computer manages
+credentials, files and history, but sends prompts and image inputs to the selected remote
+provider, including through Codex for subscription generation. Local Studio does not mean
+offline image generation.
+
+**Correction (2026-09-13):** an earlier version said generation remains on the Mac. The local
+process coordinates generation; the model runs remotely.
 
 ## Start the Studio
 
@@ -44,7 +49,7 @@ See [Codex subscription generation](codex-subscription.md) for setup and limits.
 
 ### Sidecar and Apple Pencil
 
-Sidecar is the simplest route when the iPad and Mac are nearby:
+Sidecar can provide a pen-input route when the iPad and Mac meet Apple's requirements:
 
 1. Run `genimg draw` on the Mac.
 2. Connect the iPad from the Mac's **Screen Mirroring** menu, using it as an extended or mirrored
@@ -54,12 +59,13 @@ Sidecar is the simplest route when the iPad and Mac are nearby:
 
 Apple documents the current requirements and controls in
 [Use iPad as a second display for your Mac](https://support.apple.com/en-gb/102597). Draw Studio
-uses standard pointer events, so Pencil strokes work as pointer input; pressure and Pencil
-double-tap are not currently used by the Studio.
+uses standard pointer events; pressure and Pencil double-tap are not currently used by the
+Studio. This setup follows Apple's documented display/input route, but physical Pencil input
+in Draw Studio has not yet been verified on a real iPad.
 
 ### VNC or another remote-screen app
 
-Remote-screen control also works because the browser and server both continue to run on the Mac:
+With remote-screen control, the browser and server both continue to run on the Mac:
 
 1. On the Mac, enable **System Settings → General → Sharing → Screen Sharing** and restrict access
    to the intended Mac user.
@@ -70,7 +76,8 @@ Remote-screen control also works because the browser and server both continue to
 Apple's [Screen Sharing guide](https://support.apple.com/en-gb/guide/mac-help/mh11848/mac) describes
 the Mac setting. Its [iPad VNC example](https://support.apple.com/en-us/125381) shows the same
 Mac-to-iPad connection pattern with a touch-panel client. Pencil behaviour and latency depend on
-the remote-screen client; unlike Sidecar, VNC is not a drawing-specific input path.
+the remote-screen client; unlike Sidecar, VNC is not a drawing-specific input path. This guide
+has not been validated with a physical iPad/VNC client.
 
 Do not open the printed `localhost` URL directly in Safari on the iPad: there, `localhost` means
 the iPad, not the Mac. Draw Studio deliberately listens only on `127.0.0.1` and rejects non-local

@@ -199,7 +199,7 @@ def _setup_google(cfg: dict) -> bool:
   has_sa = bool(os.getenv("CLAUDE_GCP_CRED") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
   has_adc = auth_google.adc_token_present()
 
-  console.print("[bold cyan]Google[/bold cyan] (Gemini Image / Imagen)")
+  console.print("[bold cyan]Google[/bold cyan] (Gemini Image)")
 
   direct_detail = (
     f"GEMINI_API_KEY={_mask(os.getenv('GEMINI_API_KEY'))} in env" if os.getenv("GEMINI_API_KEY")

@@ -115,6 +115,22 @@ class BundledSkillTests(unittest.TestCase):
     ):
       self.assertNotIn(legacy_phrase, workflow + setup + schema)
 
+  def test_genimg_skill_documents_multi_view_reset_recipe(self) -> None:
+    workflow = " ".join(
+      cli._skill_sources()["genimg"].joinpath("SKILL.md").read_text().split()
+    )
+
+    for requirement in (
+      "each original camera angle as `-i`",
+      "approved image as the locked appearance reference",
+      "one decision per call",
+      "Never feed a generated angle into the next angle",
+      "reset to the originals",
+      "human reject examples",
+      "not a separate image model",
+    ):
+      self.assertIn(requirement, workflow)
+
 
 if __name__ == "__main__":
   unittest.main()

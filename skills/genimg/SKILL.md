@@ -1,6 +1,6 @@
 ---
 name: genimg
-description: Generate, edit, and iterate on images with the genimg CLI (OpenAI gpt-image + Google Gemini/Imagen + Codex subscriptions). Use whenever the user wants to create, make, render, design, edit, or vary an image — logos, icons, favicons, app icons, posters, diagrams, illustrations, mockups, thumbnails, concept art, stickers, hero images, or image variations/grids. Load this BEFORE running genimg; it has the non-obvious patterns (how to get real variations, edit vs reference, model/quality choice, logo & favicon recipes) that `--help` alone does not make obvious.
+description: Generate, edit, and iterate on images with the genimg CLI (OpenAI GPT Image + Google Gemini Image + Codex subscriptions). Use whenever the user wants to create, make, render, design, edit, or vary an image — logos, icons, favicons, app icons, posters, diagrams, illustrations, mockups, thumbnails, concept art, stickers, hero images, or image variations/grids. Load this BEFORE running genimg; it has the non-obvious patterns (how to get real variations, edit vs reference, model/quality choice, logo & favicon recipes) that `--help` alone does not make obvious.
 ---
 
 # genimg
@@ -12,7 +12,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI g
 - **To get N variations, use `-n N` with a SINGLE-subject prompt.** `-n` runs N generations in parallel and writes `name_1.png … name_N.png`. Do NOT ask the prompt to "explore variations / show options / a few takes" — that makes the model pack a **contact-sheet/grid into one image**. Say "a SINGLE centered X, NOT a grid, not a montage" and let `-n` create the variety.
 - **For simple subjects (logo, icon, single object), add `-d`/`--diverse` to `-n`.** Plain `-n` relies on sampling temperature alone and converges on near-duplicates when the prompt is simple. `-d` appends a distinct curated style/composition delta to each generation (#1 keeps the base prompt as anchor); the delta each card used is shown in the grid and recorded in metadata, so a pick is reproducible. `-d` needs `-n >= 2` — alone it errors out. Long, complex prompts often diversify fine without it.
 - **YOU are the tailored-diversity engine — pass your own deltas with `--deltas`.** genimg does not call a text LLM to compose variations; the built-in `-d` pool is generic style/lighting/framing hints tuned for illustrations/logos — it transfers poorly to diagrams, photos, or technical subjects. Compose subject-appropriate deltas yourself and pass them in one call: `--deltas "blueprint schematic, hand-drawn whiteboard, isometric cutaway"` (comma-separated, applied in order to #2..#n; #1 keeps the base prompt) or `--deltas @styles.txt` (one per line, `#` comments allowed). `--deltas` implies `-d`. Bare `-d` = quick generic spread.
-- **`--mode batch` is Google-only** (orthogonal to `-d`): ONE n-image request — a Gemini multi-image response (model-discretionary, may return fewer than n; parallel guarantees n) or Imagen `number_of_images`. **On OpenAI it's rejected outright**: gpt-image n>1 returns near-duplicate independent samples of one prompt (verified live) — pure wasted spend. Default mode stays the provider's natural one (parallel everywhere except Imagen).
+- **`--mode batch` is Google-only** (orthogonal to `-d`): ONE Gemini multi-image request (model-discretionary, may return fewer than n; parallel guarantees n). **On OpenAI it's rejected outright**: GPT Image n>1 returns near-duplicate independent samples of one prompt (verified live) — pure wasted spend. Default mode runs requests in parallel.
 - **The two combos to reach for** — pick by intent, they're different tools not better/worse: (1) **`--deltas` (or bare `-d`) in parallel mode — works on ALL providers** = the most *controlled* spread (you name the axes); (2) **`-d --mode batch` on Gemini** — the model sees all n takes in one request and curates a deliberately different *set* (verified: distinct palettes AND techniques, e.g. line-art / block-print / brush-stroke / tangram from one call) = the most *coherent* varied set. Batch is Gemini-only and slower (~30s vs ~8s parallel).
 - **`-i FILE` edits that image (image-to-image); it stays CLOSE to the input.** Use it to iterate on a chosen result ("same icon, thicker strokes"). For *related but freely varied* results, pass the image as a **reference after the prompt** (`genimg "new layout, same palette" ref.png`) instead — it guides style, not composition.
 - **Review candidates with `-g --open`** (when `-n ≥ 2`): writes an HTML grid and opens it in the browser. Best way to let a human pick. The grid embeds generation metadata (collapsible prompt + a per-line panel: model, params, billing and theoretical API cost) and offers both a grid and a carousel view.
@@ -78,6 +78,18 @@ filename, and liked/rejected state; never renumber previously reviewed images.
   dates, misspellings, leaked instructions, wrong commands, and garbled labels. If publication-
   critical text is not reliable in the raster, add it deterministically after generation.
 - Verify commands and factual labels against current project/package metadata before delivery.
+
+## Multi-view edits without drift
+
+- Start every view from source: use each original camera angle as `-i` and pass the same
+  approved image as the locked appearance reference after the prompt.
+- Change one decision per call so any drift has one attributable cause.
+- Never feed a generated angle into the next angle. If a view visibly drifts, reset to the
+  originals and the approved reference rather than editing the drifted result again.
+- Keep failed variants as human reject examples, not model inputs.
+
+Genimg is the controlled front end for this workflow; it is not a separate image model. Record
+the provider/model actually used, such as GPT Image 2, with every result.
 
 ## Diagrams & infographics (multi-cell, arrows, layered figures)
 

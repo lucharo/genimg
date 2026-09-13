@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Release Please opens its PR with GITHUB_TOKEN, so the native pull_request run
+  # waits for human approval. release.yml dispatches this workflow on that exact
+  # branch instead; workflow_dispatch is the documented recursion-safe exception.
+  workflow_dispatch:
 
 permissions:
   contents: read

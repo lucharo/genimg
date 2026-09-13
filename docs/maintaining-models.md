@@ -12,7 +12,6 @@ dispatch is structural (by model-id shape), so most new models need **no code ch
 3. **Signature inference** (`registry._infer_spec`) — a well-formed but *unregistered* id
    is dispatched by its prefix:
    - `gpt-image-*` → OpenAI
-   - `imagen-*` → Google, region `us-central1`
    - `gemini-*…image…` → Google, region `global`
 
    (`dall-e-*` is intentionally not inferred — the OpenAI provider only speaks the
@@ -84,7 +83,7 @@ from genimg.registry import all_canonical
 registered = {s.model_id for s in all_canonical().values()}
 for name, client in [("openai", ao.get_client()), ("google", ag.get_client())]:
     listed = _listed_model_ids(client.models.list())
-    imageish = {m for m in listed if "image" in m.lower() or "imagen" in m.lower()}
+    imageish = {m for m in listed if "image" in m.lower()}
     print(name, "unregistered:", sorted(imageish - registered))
 ```
 

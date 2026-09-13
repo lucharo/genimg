@@ -52,13 +52,11 @@ _GEMINI_31_FLASH_ASPECTS = [
 
 
 def _studio_models() -> list[dict]:
-  """Every image-editable model in the registry (excludes text-to-image Imagen, which can't take
-  -i), as dropdown entries. Built from the registry so the studio never drifts out of sync with
+  """Every image-editable model in the registry, as dropdown entries.
+  Built from the registry so the studio never drifts out of sync with
   what genimg supports. Ordered google→openai→codex, best quality first."""
   out: list[dict] = []
   for alias, spec in registry.all_canonical().items():
-    if spec.model_id.startswith("imagen-"):
-      continue
     is_flash_31 = spec.model_id.startswith("gemini-3.1-flash-image")
     is_flash_lite_31 = spec.model_id.startswith("gemini-3.1-flash-lite-image")
     is_gemini_3_pro = spec.model_id.startswith("gemini-3-pro-image")

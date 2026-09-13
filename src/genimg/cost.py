@@ -21,7 +21,7 @@ _OPENAI_BASE_PER_IMAGE = {
 # Resolution scaling for OpenAI: rough multipliers (2K ≈ 2x, 4K ≈ 4x token-metered)
 _OPENAI_RESOLUTION_MULT = {None: 1.0, "1K": 1.0, "2K": 2.5, "4K": 6.0}
 
-# Google flat per-image (Gemini Image / Imagen) keyed by max-edge resolution.
+# Google flat per-image (Gemini Image) keyed by max-edge resolution.
 # Rough public rates (Vertex pricing + cloudprice.net); refine as pricing changes.
 # Keyed by the stable model id; estimate() also normalizes legacy "-preview" callers.
 _GOOGLE_PER_IMAGE = {
@@ -29,9 +29,6 @@ _GOOGLE_PER_IMAGE = {
   "gemini-3.1-flash-image":         {None: 0.067, "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151},
   "gemini-3.1-flash-lite-image":    {None: 0.034, "1K": 0.034, "2K": 0.05, "4K": 0.076},
   "gemini-2.5-flash-image":         {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
-  "imagen-4.0-generate-001":        {None: 0.04, "1K": 0.04, "2K": 0.04, "4K": 0.04},
-  "imagen-4.0-fast-generate-001":   {None: 0.02, "1K": 0.02, "2K": 0.02, "4K": 0.02},
-  "imagen-4.0-ultra-generate-001":  {None: 0.06, "1K": 0.06, "2K": 0.06, "4K": 0.06},
 }
 
 
