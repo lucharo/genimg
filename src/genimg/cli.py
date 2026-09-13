@@ -503,7 +503,14 @@ def models_set_default(alias: Annotated[str, typer.Argument(help="Alias or canon
 def models_get_default():
   user_default = config.get_default_model()
   if user_default:
-    canonical, spec = registry.resolve(user_default)
+    try:
+      canonical, spec = registry.resolve(user_default)
+    except ValueError as e:
+      _die(
+        f"{_rich_escape(str(e))} Replace the saved default with "
+        "`genimg models set-default gdm:nb2`, or remove it with "
+        "`genimg models clear-default`."
+      )
     console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]")
   else:
     console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")

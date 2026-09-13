@@ -12,6 +12,24 @@ from genimg import cli, metadata
 from genimg.interfaces import GenerateResult
 
 
+class ModelDefaultTests(unittest.TestCase):
+  def test_retired_default_explains_recovery_without_changing_config(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      config_path = Path(td) / "config.json"
+      saved = {"default_model": "gdm:imagen4", "default_quality": "high"}
+      config_path.write_text(json.dumps(saved))
+      with patch.object(cli.config, "CONFIG_PATH", config_path):
+        result = CliRunner().invoke(cli._app, ["models", "get-default"])
+
+      self.assertEqual(result.exit_code, 1)
+      self.assertNotIsInstance(result.exception, ValueError)
+      output = " ".join(result.output.split())
+      self.assertIn("Imagen 4 was retired", output)
+      self.assertIn("genimg models set-default gdm:nb2", output)
+      self.assertIn("genimg models clear-default", output)
+      self.assertEqual(json.loads(config_path.read_text()), saved)
+
+
 class GenerationMetadataTests(unittest.TestCase):
   def test_grid_failure_keeps_image_metadata(self) -> None:
     runner = CliRunner()
