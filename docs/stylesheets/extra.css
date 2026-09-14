@@ -18,3 +18,9 @@
   height: 34px; width: 34px;
   background: #fbf7ee; border-radius: 9px; padding: 3px; box-sizing: border-box;
 }
+/* Header text and icons must be light on the dark header regardless of the primary colour. */
+.md-header, .md-tabs {
+  --md-primary-bg-color: #f5efe6;
+  --md-primary-bg-color--light: #cfc8bc;
+  color: #f5efe6;
+}
