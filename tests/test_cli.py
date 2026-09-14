@@ -115,3 +115,22 @@ class GenerationMetadataTests(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
+
+class ProfileFlagTests(unittest.TestCase):
+  def test_unknown_profile_fails_before_dry_run_banner(self) -> None:
+    with patch.object(cli.config, "load", return_value={"profiles": {"work": {"provider": "openai", "auth": "native"}}}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "nope", "--dry-run"])
+    self.assertEqual(result.exit_code, 1, result.output)
+    output = " ".join(result.output.split())
+    self.assertIn("no profile 'nope'", output)
+    self.assertIn("Known: work", output)
+    self.assertNotIn("genimg openai", output)
+
+  def test_named_profile_shows_in_banner(self) -> None:
+    cfg = {"profiles": {"work": {"provider": "openai", "auth": "azure", "endpoint": "https://x.openai.azure.com"}}}
+    with patch.object(cli.config, "load", return_value=cfg), \
+         patch.dict("os.environ", {"AZURE_OPENAI_API_KEY": "k"}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "work", "--dry-run"])
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertIn("openai/azure@work", result.output)

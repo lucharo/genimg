@@ -228,6 +228,11 @@ def _run(
     resolution=resolution, aspect_ratio=aspect_ratio, refs=refs, input=input,
     model_id=spec.model_id, mode=mode, diverse=diverse, thinking_level=thinking_level,
   )
+  if profile is not None:
+    try:  # a misspelt profile is a user error: fail before any banner, even on --dry-run
+      auth_resolve.resolve(spec.provider, profile_name=profile, force_mode=auth, cfg=user_cfg)
+    except RuntimeError as e:
+      _die(str(e))
   auth_info = auth_resolve.info(spec.provider, profile_name=profile, force_mode=auth, cfg=user_cfg)  # display only
 
   gen_id = metadata.make_id(prompt, spec.model_id)
@@ -615,7 +620,7 @@ def _print_auth_modes(json_out: bool) -> None:
     import json as _json
     typer.echo(_json.dumps(entries, indent=2))
     return
-  table = Table(title="auth modes  •  config.toml: [profiles.NAME] provider = ..., auth = ...")
+  table = Table(title=_rich_escape("auth modes  •  config.toml: [profiles.NAME] provider = ..., auth = ..."))
   table.add_column("provider", style="cyan")
   table.add_column("auth", style="magenta")
   table.add_column("what it is")
