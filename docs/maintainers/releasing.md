@@ -19,8 +19,11 @@ and PyPI Trusted Publishing (OIDC, no tokens). The workflow is `.github/workflow
 - PyPI: a pending publisher on `pypi.org/manage/account/publishing/` with project `genimg`,
   owner `lucharo`, repository `genimg`, workflow `release.yml`, environment `pypi`. The first
   publish creates the project.
-- GitHub: a `pypi` environment on the repository; Pages enabled with "GitHub Actions" as the
-  source for the docs site.
+- GitHub: a `pypi` environment on the repository.
+- Pages: enable it with "GitHub Actions" as the source. On a free plan this needs the repository
+  to be public. Until then the Docs workflow still builds the site with `--strict` on every pull
+  request; only its `deploy` job is skipped, and it starts publishing on the first push after the
+  repository goes public.
 
 ## Before merging a Release PR
 

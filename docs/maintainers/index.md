@@ -8,7 +8,7 @@ How genimg is built, tested, distributed and released. Users do not need this se
 | Tests | `uv sync --group dev` then `uv run pytest`. `tests/test_provider_contract.py` parametrises over every registered provider. |
 | Lint | `uv run ruff check .` (pyflakes and import order only). |
 | Build | `uv build` produces the wheel and sdist; CI installs the wheel in a clean environment. |
-| Docs | `uv sync --group docs` then `uv run zensical serve`; `zensical build --strict` in CI deploys to GitHub Pages on every push to `main` that touches `docs/`. |
+| Docs | `uv sync --group docs` then `uv run zensical serve`. CI runs `zensical build --strict` on every pull request that touches the docs, and publishes to GitHub Pages on pushes to `main` once the repository is public. |
 | Release | [Releasing](releasing.md): release-please and PyPI Trusted Publishing. |
 | Models | [Maintaining the model list](maintaining-models.md): when to edit the registry, capability tables and prices. |
 | Decisions | ADRs: [no built-in default model](adr/0001-no-built-in-default-model.md), [no org-internal defaults](adr/0002-no-org-internal-defaults.md), [providers as plugins, auth profiles](adr/0003-providers-and-auth-profiles.md). |
