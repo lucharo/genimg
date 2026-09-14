@@ -5,7 +5,34 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI G
 
 # genimg
 
-`genimg "PROMPT" [REF_PATHS...] [OPTIONS]` — multi-provider image generation. Outputs a PNG (`-o path`, else archived under `~/.genimg/`). `genimg` with no args prints help; `genimg --help` lists every flag; `genimg auth` / `genimg setup` for credentials.
+`genimg "PROMPT" [REF_PATHS...] [OPTIONS]` — multi-provider image generation. Outputs a PNG (`-o path`, else archived under `~/.genimg/`). `genimg` with no args prints help; `genimg auth` / `genimg setup` for credentials. The flag table below is complete for generation; do not parse `--help` to find a flag.
+
+## Flags (generation)
+
+| Flag | Short | Values | Constraints |
+| --- | --- | --- | --- |
+| `--model` | `-m` | alias or canonical id (`gdm:nb2`, `oai:gi2`, `codex:image`, `gpt-image-2`) | required unless a default is saved (`genimg models get-default`) |
+| `--output` | `-o` | PNG path | `n>1` writes `stem_1.png … stem_n.png`; default `~/.genimg/generations/<id>.png` |
+| `--num` | `-n` | 1–10 | runs in parallel; pair with `-d`/`--deltas` for real variety |
+| `--diverse` | `-d` | flag | needs `-n >= 2`; curated deltas for #2..#n (#1 = base prompt) |
+| `--deltas` | | `"a, b, c"` or `@file` | your own deltas for #2..#n, implies `-d`; parallel mode only |
+| `--mode` | | `parallel` (default) \| `batch` | `batch` = ONE n-image request, Gemini only; rejected on OpenAI |
+| `--input` | `-i` | image path | image-to-image edit; stays close to the input |
+| `REF_PATHS` | | paths after the prompt | references for style/layout, order preserved, never edited |
+| `--aspect-ratio` | `-a` | `1:1 4:3 3:4 16:9 9:16 3:2 2:3 4:5 5:4 21:9`; `gdm:nb2`/`nb2-lite` add `1:4 1:8 4:1 8:1` | OpenAI: `16:9`/`9:16` need `-r 2K` or `4K`; `4:3`/`3:4` need `1K` or `2K` |
+| `--resolution` | `-r` | `512 1K 2K 4K` | `gdm:nb2`: all four; `gdm:nbp`: `1K 2K 4K`; `gdm:nb2-lite`: `1K`; `gdm:nb`: none; OpenAI: `1K 2K 4K` per the aspect rule; `codex:image`: none |
+| `--quality` | `-q` | `low medium high auto`; `oai:gi2.5`/`gi2.5-flare` add `xhigh max` | OpenAI only; default `medium`; `high` is 30–90 s/image |
+| `--thinking` | | `minimal` \| `high` | `gdm:nb2` only |
+| `--profile` | | `[profiles.NAME]` from `~/.config/genimg/config.toml` | must match the model's provider; default = provider's first profile, else env detection |
+| `--auth` | | `azure` \| `native` | OpenAI only; forces a mode for one run |
+| `--region` | | e.g. `global`, `us-central1` | Google only |
+| `--project` | | GCP project id | Google Vertex only |
+| `--name` | | one-line label | recorded in history |
+| `--grid` | `-g` | flag | with `-n >= 2`, also writes an HTML grid |
+| `--open` | | flag | opens the grid (or the single image) in the browser; steals focus on macOS |
+| `--dry-run` | | flag | prints model, resolved size, cost and planned paths; no API call |
+
+`codex:image` accepts none of `-q -r --thinking --auth --region --project --mode batch`; `-a` becomes a prompt request.
 
 ## The patterns that aren't obvious (read these)
 
@@ -29,7 +56,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI G
 - **Benchmarking:** never label one-shot CLI wall time as provider generation latency. Record local
   setup or cold-start time and provider-call time separately, and state which clock each comparison
   uses.
-- **Agent-friendly plumbing:** `--json` on `models`, `auth`, `history`, and `cost` emits machine-readable output; `history -n 50` widens the window; `models --refresh` re-probes availability (`--aliases` shows alias mappings); `auth --check` does a tiny live probe for Google/OpenAI and a login-only check for Codex; `genimg config show|path|edit` inspects the saved config.
+- **Agent-friendly plumbing:** `--json` on `models`, `auth`, `history`, and `cost` emits machine-readable output; `history -n 50` widens the window; `models --refresh` re-probes availability (`--aliases` shows alias mappings); `auth --check` does a tiny live probe for Google/OpenAI and a login-only check for Codex; `auth --modes` lists every auth mode and the env vars it auto-detects; `genimg config show|path|edit` inspects `~/.config/genimg/config.toml`, where `[profiles.NAME]` tables pin a provider's auth mode and non-secret settings (`--profile NAME` picks one).
 
 ## Diverse exploration across providers
 
