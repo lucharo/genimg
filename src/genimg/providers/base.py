@@ -85,6 +85,9 @@ class Provider(ABC):
   flags: ClassVar[frozenset[str]] = frozenset()   # {"quality", "auth", "thinking", "region", "project"}
   billing: ClassVar[str] = "api"           # "api" | "subscription"
   runtime_selects_model: ClassVar[bool] = False
+  # True when the provider's list endpoint enumerates every servable model, so "missing"
+  # means unavailable. False when listing can under-report (Vertex Model Garden).
+  listing_is_exhaustive: ClassVar[bool] = True
   order: ClassVar[int] = 50                # display order across providers
 
   # ── contract ──
@@ -129,6 +132,11 @@ class Provider(ABC):
   def probe_default(self) -> tuple[str, str | None]:
     """(model_id, region) for `genimg auth --check`'s tiny live probe."""
     raise NotImplementedError
+
+  def size_error(self, resolution: str | None, aspect: str | None) -> str:
+    """Explain a (resolution, aspect) pair outside the explicit size table."""
+    supported = ", ".join(f"{r}+{a}" for r, a in sorted(self.capabilities("").sizes))
+    return f"{self.label}: unsupported ({resolution or '-'}, {aspect or '-'}) size combo. Supported: {supported}."
 
   # ── auth helpers ──
   @property

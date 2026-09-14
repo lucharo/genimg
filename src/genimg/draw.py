@@ -107,17 +107,17 @@ def available_models(cache: dict | None, provider_auth: dict | None = None) -> l
     if not enabled:
       availability = "unavailable"
       reason = str(auth.get("hint") or f"{m['provider']} auth is not configured")
-    elif m["provider"] == "openai" and status == "missing":
+    elif status == "missing" and providers.get(m["provider"]).listing_is_exhaustive:
       enabled = False
       availability = "unavailable"
-      reason = "not available on this OpenAI endpoint"
+      reason = f"not available on this {providers.get(m['provider']).label} endpoint"
     elif status in _UNREACHABLE:
       enabled = False
       availability = "unavailable"
       reason = str(probe.get("detail") or f"provider probe failed ({status})")
-    elif m["provider"] == "google" and status == "missing":
+    elif status == "missing":
       availability = "unconfirmed"
-      reason = "not listed by Vertex; Model Garden models may still work"
+      reason = "not listed by the provider; it may still generate"
     elif status is None:
       reason = "not probed yet"
     out.append({**m, "enabled": enabled, "availability": availability,
@@ -955,6 +955,7 @@ const BOOT = /*__BOOT__*/;
     const valid=byAspect[selectedAspect()]||[];
     return valid.includes(S.resolution)?S.resolution:"2K";
   }
+  const providerLabel=(p)=>((BOOT.providers||{})[p]||{}).label;
   function costEstimate(){
     const meta=MM[S.model]||{};
     if (meta.subscription) return (providerLabel(meta.provider)||"Subscription")+" · model/size automatic";
@@ -965,7 +966,6 @@ const BOOT = /*__BOOT__*/;
     if(usd==null) return "cost unknown";
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
-  const providerLabel=(p)=>((BOOT.providers||{})[p]||{}).label;
 
   // ---------- canvas world ----------
   function sizeCanvas(){

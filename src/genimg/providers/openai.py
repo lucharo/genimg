@@ -213,3 +213,6 @@ class OpenAIProvider(Provider):
 
   def probe_default(self) -> tuple[str, str | None]:
     return "gpt-image-2", None
+
+  def size_error(self, resolution: str | None, aspect: str | None) -> str:
+    return size_error(resolution, aspect)

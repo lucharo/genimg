@@ -241,12 +241,3 @@ def get_client(region: str = DEFAULT_REGION, project: str | None = None, *,
   p = profile or resolve("google")
   return p.client(project=project, region=region)
 
-
-def auth_info() -> dict[str, object]:
-  from .resolve import info
-  return info("google").as_dict()
-
-
-def auth_mode() -> str:
-  i = auth_info()
-  return f"{i['mode']} ({i['credential']})" if i["mode"] != "unset" else "unset"

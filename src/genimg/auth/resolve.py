@@ -19,15 +19,15 @@ def _provider(name: str):
 
 
 def candidates(provider_name: str, cfg: dict[str, Any] | None = None) -> list[AuthProfile]:
-  """Configured profiles for a provider, in declaration order."""
+  """Configured profiles for a provider, in declaration order. A table with an unknown auth
+  mode is a config error and raises rather than being skipped, so a typo can never make a
+  run silently fall through to whatever key happens to be in the environment."""
   provider = _provider(provider_name)
-  out: list[AuthProfile] = []
-  for name, table in _cfg.profiles_for(provider_name, cfg).items():
-    try:
-      out.append(profile_from_table(provider.modes, name, table))
-    except ValueError:
-      continue
-  return out
+  try:
+    return [profile_from_table(provider.modes, name, table)
+            for name, table in _cfg.profiles_for(provider_name, cfg).items()]
+  except ValueError as e:
+    raise RuntimeError(f"{e} (edit {_cfg.CONFIG_PATH} or re-run `genimg setup`)") from e
 
 
 def resolve(provider_name: str, *, profile_name: str | None = None, force_mode: str | None = None,
@@ -46,7 +46,10 @@ def resolve(provider_name: str, *, profile_name: str | None = None, force_mode: 
         f"profile {profile_name!r} is for provider {table.get('provider')!r}, "
         f"but the selected model needs {provider_name!r}."
       )
-    return profile_from_table(provider.modes, profile_name, table)
+    try:
+      return profile_from_table(provider.modes, profile_name, table)
+    except ValueError as e:
+      raise RuntimeError(f"{e} (edit {_cfg.CONFIG_PATH} or re-run `genimg setup`)") from e
 
   if force_mode is not None:
     cls = provider.modes.get(force_mode)

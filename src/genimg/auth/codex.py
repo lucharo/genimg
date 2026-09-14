@@ -63,7 +63,8 @@ class CodexSubscription(AuthProfile):
 
   def info(self) -> AuthInfo:
     ok, hint = login_status()
-    return AuthInfo(mode=self.mode if ok else "unset", source="codex login", endpoint="Codex CLI",
+    return AuthInfo(mode=self.mode if ok else "unset", source=self.source if self.name else "codex login",
+                    endpoint="Codex CLI",
                     credential="ChatGPT login" if ok else "-", ok=ok, profile=self.name,
                     hint="" if ok else hint)
 

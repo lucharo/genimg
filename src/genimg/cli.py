@@ -1114,8 +1114,7 @@ def _validate_provider_flags(
 
   if caps.sizes:
     if not caps.supports_size(resolution, aspect_ratio):
-      from .providers.openai import size_error
-      _die(size_error(resolution, aspect_ratio))
+      _die(provider.size_error(resolution, aspect_ratio))
   else:
     if resolution is not None and resolution not in caps.resolutions:
       shown = ", ".join(sorted(caps.resolutions, key=providers.base._res_order)) or "provider default only"
@@ -1182,7 +1181,11 @@ def _rm_tree(p: Path) -> None:
 
 
 def app() -> None:
-  _app()
+  try:
+    _app()
+  except config.ConfigError as e:
+    console.print(f"[red]error:[/red] {_rich_escape(str(e))}")
+    raise SystemExit(1)
 
 
 if __name__ == "__main__":

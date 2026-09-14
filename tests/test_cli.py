@@ -134,3 +134,14 @@ class ProfileFlagTests(unittest.TestCase):
       result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "work", "--dry-run"])
     self.assertEqual(result.exit_code, 0, result.output)
     self.assertIn("openai/azure@work", result.output)
+
+
+class CorruptConfigTests(unittest.TestCase):
+  def test_corrupt_config_toml_is_reported_not_clobbered(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      config_path = Path(td) / "config.toml"
+      config_path.write_text("default_model = ")
+      with patch.object(cli.config, "CONFIG_PATH", config_path):
+        result = CliRunner().invoke(cli._app, ["models", "set-default", "gdm:nb2"], catch_exceptions=True)
+      self.assertIsInstance(result.exception, cli.config.ConfigError)
+      self.assertEqual(config_path.read_text(), "default_model = ")

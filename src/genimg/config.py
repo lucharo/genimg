@@ -50,12 +50,13 @@ def migrate_legacy(data: dict[str, Any]) -> dict[str, Any]:
   for key in ("default_model", "default_quality", "default_aspect_ratio", "default_resolution"):
     if data.get(key) is not None:
       out[key] = data[key]
+  entries = [e for e in (data.get("enabled_providers", []) or []) if e in _LEGACY_MODES]
+  per_provider: dict[str, int] = {}
+  for e in entries:
+    per_provider[_LEGACY_MODES[e][0]] = per_provider.get(_LEGACY_MODES[e][0], 0) + 1
   profiles: dict[str, dict[str, Any]] = {}
-  for entry in data.get("enabled_providers", []) or []:
-    spec = _LEGACY_MODES.get(entry)
-    if spec is None:
-      continue
-    provider, mode = spec
+  for entry in entries:
+    provider, mode = _LEGACY_MODES[entry]
     table: dict[str, Any] = {"provider": provider, "auth": mode}
     if provider == "google" and mode != "direct":
       if data.get("gcp_project"):
@@ -67,17 +68,24 @@ def migrate_legacy(data: dict[str, Any]) -> dict[str, Any]:
         table["endpoint"] = data["openai_base_url"]
       if data.get("azure_api_version"):
         table["api_version"] = data["azure_api_version"]
-    profiles[provider] = table
+    # One mode per provider keeps the short name; several keep the legacy entry name.
+    profiles[provider if per_provider[provider] == 1 else entry] = table
   if profiles:
     out["profiles"] = profiles
   return out
 
 
+class ConfigError(RuntimeError):
+  """config.toml exists but cannot be parsed; genimg refuses to read or overwrite it."""
+
+
 def _read_toml(path: Path) -> dict[str, Any]:
   try:
     return tomllib.loads(path.read_text())
-  except (tomllib.TOMLDecodeError, OSError):
+  except OSError:
     return {}
+  except tomllib.TOMLDecodeError as e:
+    raise ConfigError(f"{path} is not valid TOML ({e}). Fix it or move it aside; genimg will not overwrite it.") from e
 
 
 def load() -> dict[str, Any]:
@@ -100,9 +108,14 @@ def load() -> dict[str, Any]:
 
 
 def save(data: dict[str, Any]) -> None:
+  """Atomic write. A config that currently fails to parse is never overwritten (see load)."""
+  if CONFIG_PATH.exists():
+    _read_toml(CONFIG_PATH)  # raises ConfigError on a corrupt file instead of clobbering it
   CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
   clean = {k: v for k, v in data.items() if v is not None}
-  CONFIG_PATH.write_text(tomli_w.dumps(clean))
+  tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
+  tmp.write_text(tomli_w.dumps(clean))
+  os.replace(tmp, CONFIG_PATH)
 
 
 def dumps(data: dict[str, Any]) -> str:

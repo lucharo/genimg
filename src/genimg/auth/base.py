@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 
@@ -98,18 +98,8 @@ class AuthProfile(ABC):
         return var
     return None
 
-  @property
-  def qualified(self) -> str:
-    return f"{self.provider}_{self.mode}"
-
   def __repr__(self) -> str:
     return f"<{type(self).__name__} name={self.name!r} source={self.source!r}>"
-
-
-@dataclass
-class ResolvedProfile:
-  profile: AuthProfile
-  source: str
 
 
 def _mask(value: str | None, n: int = 3) -> str:
@@ -131,5 +121,4 @@ def profile_from_table(modes: dict[str, type[AuthProfile]], name: str, table: di
   return cls(settings, name=name, source=f"profile:{name}")
 
 
-__all__ = ["AuthInfo", "AuthProfile", "ResolvedProfile", "SecretSpec", "SettingSpec",
-           "profile_from_table", "field"]
+__all__ = ["AuthInfo", "AuthProfile", "SecretSpec", "SettingSpec", "profile_from_table"]

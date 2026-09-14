@@ -158,12 +158,3 @@ def get_client(*, force: str | None = None, profile: AuthProfile | None = None) 
     profile = resolve("openai", force_mode={"direct": "native"}.get(force, force))
   return profile.client()
 
-
-def auth_info() -> dict[str, object]:
-  from .resolve import info
-  return info("openai").as_dict()
-
-
-def auth_mode() -> str:
-  i = auth_info()
-  return f"{i['mode']} ({i['credential']})" if i["mode"] != "unset" else "unset"

@@ -77,9 +77,26 @@ class OpenAIResolutionTests(_CleanEnv):
     with self.assertRaisesRegex(RuntimeError, "no profile 'nope'"):
       resolve.resolve("openai", profile_name="nope", cfg=cfg)
 
-  def test_unknown_mode_in_profile_is_rejected(self) -> None:
-    with self.assertRaisesRegex(RuntimeError, "No openai auth detected"):
-      resolve.resolve("openai", cfg=_cfg(bad={"provider": "openai", "auth": "magic"}))
+  def test_unknown_mode_in_profile_is_an_error_not_a_fallback(self) -> None:
+    os.environ["OPENAI_API_KEY"] = "k"  # env would work; a broken profile must not fall through to it
+    cfg = _cfg(bad={"provider": "openai", "auth": "magic"})
+    with self.assertRaisesRegex(RuntimeError, "unknown auth mode 'magic'.*genimg setup"):
+      resolve.resolve("openai", cfg=cfg)
+    with self.assertRaisesRegex(RuntimeError, "unknown auth mode 'magic'"):
+      resolve.resolve("openai", profile_name="bad", cfg=cfg)
+    info = resolve.info("openai", cfg=cfg)  # never raises
+    self.assertEqual((info.mode, info.ok), ("unset", False))
+    self.assertIn("magic", info.hint)
+
+  def test_profile_flag_wins_over_auth_flag(self) -> None:
+    cfg = _cfg(az={"provider": "openai", "auth": "azure", "endpoint": "https://x.openai.azure.com"})
+    p = resolve.resolve("openai", profile_name="az", force_mode="native", cfg=cfg)
+    self.assertEqual((p.mode, p.source), ("azure", "profile:az"))
+
+  def test_codex_without_login_reports_its_own_hint(self) -> None:
+    with patch("genimg.auth.codex.login_status", return_value=(False, "Run `codex login` with ChatGPT")):
+      with self.assertRaisesRegex(RuntimeError, "codex login"):
+        resolve.resolve("codex", cfg={})
 
   def test_no_auth_raises_with_env_hint(self) -> None:
     with self.assertRaisesRegex(RuntimeError, "AZURE_OPENAI_API_KEY / OPENAI_API_KEY"):

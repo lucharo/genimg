@@ -166,6 +166,7 @@ class GoogleProvider(Provider):
   alias_prefix = "gdm"
   auth_modes = auth_google.MODES
   flags = frozenset({"thinking", "region", "project"})
+  listing_is_exhaustive = False  # Vertex models.list() omits Model Garden publisher models
   order = 10
 
   def capabilities(self, model_id: str) -> Capabilities:

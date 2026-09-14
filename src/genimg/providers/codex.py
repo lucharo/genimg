@@ -104,8 +104,11 @@ class CodexImageGen(IImageGen):
   def __init__(self, profile: AuthProfile | None = None):
     self.profile = profile
 
+  def _info(self):
+    return (self.profile or auth_codex.CodexSubscription()).info().as_dict()
+
   def probe(self, model: str, region: str | None = None) -> ProbeResult:
-    info = auth_codex.auth_info()
+    info = self._info()
     return ProbeResult(model=model, status="ready" if info["ok"] else "auth",
                        detail="ChatGPT login ready; native image generation not probed" if info["ok"] else str(info["hint"]))
 
@@ -114,7 +117,7 @@ class CodexImageGen(IImageGen):
                    if getattr(req, name) is not None]
     if unsupported or req.mode == "batch":
       raise RuntimeError("codex:image does not support quality, resolution, thinking, region, project or batch controls; Codex selects the image model.")
-    info = auth_codex.auth_info()
+    info = self._info()
     if not info["ok"]:
       raise RuntimeError(str(info["hint"]))
     return super().generate(req)

@@ -84,11 +84,16 @@ def test_priced_models_price_every_declared_option(alias, spec):
 def test_inferred_models_round_trip_through_the_registry(provider):
   """A structural id the provider claims must resolve to that provider, and no provider may
   claim another's registry ids."""
+  assert provider.infer_model("not-a-model-id") is None
+  claimed = 0
   for alias, spec in MODELS:
     inferred = provider.infer_model(spec.model_id)
     if inferred is not None:
+      claimed += 1
       assert inferred.provider == provider.name == spec.provider
       assert registry.resolve(spec.model_id)[1].provider == provider.name
+  if not provider.runtime_selects_model:
+    assert claimed, f"{provider.name} should recognise the shape of its own registry ids"
 
 
 @pytest.mark.parametrize("provider", PROVIDERS, ids=lambda p: p.name)

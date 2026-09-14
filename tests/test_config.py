@@ -77,6 +77,24 @@ def test_migrate_legacy_skips_unknown_entries_and_missing_settings():
     "default_aspect_ratio": "16:9"}
 
 
-def test_unparseable_toml_reads_as_empty(config_dir):
+def test_unparseable_toml_is_an_error_and_is_never_overwritten(config_dir):
   config.CONFIG_PATH.write_text("this is = not = toml")
-  assert config.load() == {}
+  with pytest.raises(config.ConfigError, match="not valid TOML"):
+    config.load()
+  with pytest.raises(config.ConfigError):
+    config.save({"default_model": "gdm:nb2"})
+  assert config.CONFIG_PATH.read_text() == "this is = not = toml"
+  assert not config.CONFIG_PATH.with_name("config.toml.tmp").exists()
+
+
+def test_save_is_atomic_and_leaves_no_temp_file(config_dir):
+  config.save({"default_model": "gdm:nb2"})
+  assert sorted(p.name for p in config_dir.iterdir()) == ["config.toml"]
+
+
+def test_migrate_legacy_keeps_two_modes_for_one_provider():
+  migrated = config.migrate_legacy({"enabled_providers": ["google_direct", "google_vertex"], "gcp_project": "p"})
+  assert migrated == {"profiles": {
+    "google_direct": {"provider": "google", "auth": "direct"},
+    "google_vertex": {"provider": "google", "auth": "vertex", "project": "p"},
+  }}
