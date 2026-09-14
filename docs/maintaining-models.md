@@ -55,7 +55,7 @@ id independently, so you can price any id (registered or inferred) by adding a c
 
 3. Add a resolve test in `tests/test_registry.py`.
 
-For model-specific capabilities, update `quality_options()` in the OpenAI provider;
+For model-specific capabilities, update the provider's `capabilities()` (and `quality_options()` for OpenAI);
 the CLI and Draw Studio share it. GPT Image 2.5 Sunburst and Flare (including dated
 snapshots) add `xhigh` and `max`; older GPT Image models stop at `high`.
 Their [token rates](https://developers.openai.com/api/docs/pricing) do not establish
