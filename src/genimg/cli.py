@@ -21,13 +21,12 @@ from . import (
   history,
   metadata,
   provenance,
+  providers,
   registry,
 )
 from . import grid as grid_module
 from . import setup as setup_module
-from .auth import codex as auth_codex
-from .auth import google as auth_google
-from .auth import openai as auth_openai
+from .auth import resolve as auth_resolve
 from .generate import generate as run_generate
 from .interfaces import GenerateRequest, IImageGen
 
@@ -87,7 +86,7 @@ _ROOT_HELP = """Multi-provider image gen.
 Usage: genimg "PROMPT" [REF_PATHS...] [OPTIONS]
        genimg <subcommand> [...]
 
-First-time setup: `genimg setup`. Subcommands: auth, models, setup, skills."""
+First-time setup: `genimg setup`. Subcommands: auth, models, setup, skills, config."""
 
 
 def _version_callback(value: bool):
@@ -127,6 +126,8 @@ def _run(
   refs: Annotated[list[Path] | None, typer.Argument(help="Reference image paths (space-separated, after PROMPT).")] = None,
   model: Annotated[str | None, typer.Option("-m", "--model", rich_help_panel=_PANEL_CORE,
     help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to the user-set default; if none, pass -m or run `genimg setup`.")] = None,
+  profile: Annotated[str | None, typer.Option("--profile", rich_help_panel=_PANEL_CORE,
+    help="Auth profile name from config.toml ([profiles.NAME]). Default: the provider's configured profile, else env auto-detection.")] = None,
   name: Annotated[str | None, typer.Option("--name", rich_help_panel=_PANEL_CORE,
     help="Optional human-readable generation name (duplicates allowed).")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
@@ -163,7 +164,7 @@ def _run(
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
     help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
-    help="azure | direct (default: auto-detect from OPENAI_BASE_URL).")] = None,
+    help="azure | native — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
     help="Override registry region (e.g. global, us-central1).")] = None,
   project: Annotated[str | None, typer.Option("--project", rich_help_panel=_PANEL_GOOGLE,
@@ -206,26 +207,33 @@ def _run(
     _list_models(refresh=False, show_aliases=True)
     raise typer.Exit(1)
 
+  provider = providers.get(spec.provider)
+  caps = provider.capabilities(spec.model_id)
+  if auth == "direct":
+    auth = "native"  # pre-profile spelling
+
   # Apply config defaults for generation params (flag → config → built-in).
   resolution_was_explicit = resolution is not None
   aspect_was_explicit = aspect_ratio is not None
   quality_was_explicit = quality is not None
   resolution, aspect_ratio = _compatible_size_defaults(
-    spec.provider,
-    spec.model_id,
-    resolution,
-    aspect_ratio,
-    user_cfg.get("default_resolution"),
-    user_cfg.get("default_aspect_ratio"),
+    caps, resolution, aspect_ratio,
+    user_cfg.get("default_resolution"), user_cfg.get("default_aspect_ratio"),
   )
-  if spec.provider == "openai":
+  if caps.qualities:
     quality = quality or user_cfg.get("default_quality")
 
   _validate_provider_flags(
-    spec.provider, quality=quality, region=region, project=project, auth=auth,
+    provider, caps, quality=quality, region=region, project=project, auth=auth,
     resolution=resolution, aspect_ratio=aspect_ratio, refs=refs, input=input,
     model_id=spec.model_id, mode=mode, diverse=diverse, thinking_level=thinking_level,
   )
+  if profile is not None:
+    try:  # a misspelt profile is a user error: fail before any banner, even on --dry-run
+      auth_resolve.resolve(spec.provider, profile_name=profile, force_mode=auth, cfg=user_cfg)
+    except RuntimeError as e:
+      _die(str(e))
+  auth_info = auth_resolve.info(spec.provider, profile_name=profile, force_mode=auth, cfg=user_cfg)  # display only
 
   gen_id = metadata.make_id(prompt, spec.model_id)
   out_path = output if output is not None else metadata.auto_output_path(gen_id)
@@ -244,7 +252,7 @@ def _run(
     deltas = None
   variants = [diversify.apply(prompt, d) for d in deltas] if deltas else None
 
-  effective_q = (quality or "medium") if spec.provider == "openai" else None
+  effective_q = (quality or "medium") if caps.qualities else None
   params = [f"n={n}"]
   if mode:
     params.append(f"mode={mode}")
@@ -259,15 +267,12 @@ def _run(
   if thinking_level:
     params.append(f"thinking={thinking_level}")
 
-  resolved_size = _resolved_openai_size(spec.provider, resolution, aspect_ratio)
+  resolved_size = caps.resolved_size(resolution, aspect_ratio)
   est_cost = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
                            quality=effective_q, resolution=resolution)
-  auth_mode_str = (
-    auth_openai.auth_info()["mode"] if spec.provider == "openai"
-    else auth_codex.auth_info()["mode"] if spec.provider == "codex"
-    else auth_google.auth_info()["mode"]
-  )
-  cost_label = "Codex subscription (usage limits apply)" if spec.provider == "codex" else f"{cost.format_usd(est_cost)} (estimate)"
+  auth_mode_str = auth_info.mode + (f"@{auth_info.profile}" if auth_info.profile else "")
+  cost_label = (f"{provider.label} (usage limits apply)" if provider.billing == "subscription"
+                else f"{cost.format_usd(est_cost)} (estimate)")
   default_marker = "" if model_was_explicit else " [dim](default)[/dim]"
 
   console.print(
@@ -292,8 +297,8 @@ def _run(
   size_note = f" → {resolved_size}" if resolved_size else ""
   console.print(f"  [dim]params[/dim]   {' '.join(params)}{size_note}")
   console.print(f"  [dim]cost[/dim]     {cost_label}  [dim]id={gen_id}[/dim]")
-  if spec.provider == "codex":
-    console.print("  [dim]runtime[/dim]  Codex selects the image model and size; aspect ratio is a prompt request.")
+  if provider.runtime_selects_model:
+    console.print(f"  [dim]runtime[/dim]  {provider.label} selects the image model and size; aspect ratio is a prompt request.")
   _print_planned_paths(planned_paths)
   if deltas:
     for i, d in enumerate(deltas):
@@ -335,7 +340,7 @@ def _run(
     ) as progress:
       label = _progress_label(n, grid, mode)
       progress.add_task(label, total=None)
-      result = run_generate(req, force_openai_auth=auth)
+      result = run_generate(req, profile=profile, auth_mode=auth)
   except RuntimeError as e:
     console.print(f"[red]error:[/red] {e}")
     raise typer.Exit(2)
@@ -438,7 +443,7 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
         f"refreshing {n_models} model probe(s) in parallel...[/dim]"
       )
     else:
-      console.print(f"[dim]google: {auth_google.auth_mode()} | openai: {auth_openai.auth_mode()}[/dim]")
+      console.print("[dim]" + " | ".join(f"{name}: {_auth_summary(i)}" for name, i in auth_resolve.all_info().items()) + "[/dim]")
       console.print("[dim]loading cache (--refresh to re-probe)...[/dim]")
   probes, age = discovery.get_or_probe(refresh=refresh, cached=cached)
 
@@ -531,21 +536,26 @@ def setup_cmd():
 
 # ────────────────────── auth command ──────────────────────
 
-@_app.command("auth", help="Show auth status for both providers.")
+@_app.command("auth", help="Show auth status for every provider and profile.")
 def auth_cmd(
-  check: Annotated[bool, typer.Option("--check", help="Run a tiny Google/OpenAI generation probe; check Codex login only.")] = False,
+  check: Annotated[bool, typer.Option("--check", help="Run a tiny live generation probe per provider (Codex: login only).")] = False,
   json_out: Annotated[bool, typer.Option("--json", help="Emit JSON instead of a Rich table (agent-friendly).")] = False,
+  modes: Annotated[bool, typer.Option("--modes", help="List every auth mode and the env vars it auto-detects.")] = False,
 ):
+  if modes:
+    _print_auth_modes(json_out)
+    return
   cached = discovery.load_fresh_cache()
   probes = {a: p["status"] for a, p in (cached or {}).get("probes", {}).items()}
-
-  rows = [("google", auth_google.auth_info(), "gdm:"), ("openai", auth_openai.auth_info(), "oai:"),
-          ("codex", auth_codex.auth_info(), "codex:")]
+  infos = auth_resolve.all_info()
+  rows = [(p, infos[p.name], f"{p.alias_prefix}:") for p in providers.all_providers()]
 
   if json_out:
     import json as _json
-    payload = {name: {**info, "models_listed": sum(1 for a, s in probes.items() if a.startswith(prefix) and _status_counts_as_available(s)),
-                      "models_total":  sum(1 for a in probes if a.startswith(prefix))} for name, info, prefix in rows}
+    payload = {p.name: {**info.as_dict(),
+                        "models_listed": sum(1 for a, s in probes.items() if a.startswith(prefix) and _status_counts_as_available(s)),
+                        "models_total": sum(1 for a in probes if a.startswith(prefix))}
+               for p, info, prefix in rows}
     typer.echo(_json.dumps(payload, indent=2))
     return
 
@@ -558,32 +568,24 @@ def auth_cmd(
   table.add_column("ready", justify="center")
   table.add_column("models", justify="right")
 
-  for name, info, prefix in rows:
+  for p, info, prefix in rows:
     cohort = [s for a, s in probes.items() if a.startswith(prefix)]
     ok_probes = sum(1 for s in cohort if _status_counts_as_available(s))
     summary = f"{ok_probes}/{len(cohort)} listed" if cohort else "[yellow]no cache[/yellow]"
-    if name == "codex":
+    if p.runtime_selects_model:
       summary = "runtime-selected"
-    cred_cell = (
-      f"[green]✓[/green] {info['credential']}" if info["credential"] != "-"
-      else "[red]✗ unset[/red]"
-    )
-    endpoint_cell = (
-      info["endpoint"] if info["endpoint"] != "-"
-      else "[red]✗ not set[/red]" if info["mode"] == "azure"
-      else "-"
-    )
-    ready_cell = "[green]✓[/green]" if info["ok"] else "[red]✗[/red]"
-    table.add_row(name, info["mode"], info.get("source", "-"),
-                  endpoint_cell, cred_cell, ready_cell, summary)
+    cred_cell = f"[green]✓[/green] {info.credential}" if info.credential != "-" else "[red]✗ unset[/red]"
+    endpoint_cell = (info.endpoint if info.endpoint != "-"
+                     else "[red]✗ not set[/red]" if info.mode == "azure" else "-")
+    ready_cell = "[green]✓[/green]" if info.ok else "[red]✗[/red]"
+    table.add_row(p.name, info.mode, info.source, endpoint_cell, cred_cell, ready_cell, summary)
 
   console.print(table)
-  for name, info, _ in rows:
-    if not info["ok"] and info.get("hint"):
-      console.print(f"  [yellow]{name}[/yellow] · {info['hint']}")
+  for p, info, _ in rows:
+    if not info.ok and info.hint:
+      console.print(f"  [yellow]{p.name}[/yellow] · {_rich_escape(info.hint)}")
 
-  unset_count = sum(1 for _, info, _ in rows if info["mode"] == "unset")
-  if unset_count == len(rows):
+  if all(info.mode == "unset" for _, info, _ in rows):
     console.print("[yellow]no providers configured.[/yellow] Run [bold]genimg setup[/bold] to get started.")
   if not cached:
     console.print("[dim]run `genimg models` to populate the probe cache.[/dim]")
@@ -592,13 +594,41 @@ def auth_cmd(
 
   if check:
     console.print("\n[dim]live probe...[/dim]")
-    from .providers import CodexImageGen, GeminiImageGen, OpenAIImageGen
-    g = GeminiImageGen().probe("gemini-2.5-flash-image", region="us-central1")
-    o = OpenAIImageGen().probe("gpt-image-2")
-    console.print(f"  google → gemini-2.5-flash-image  {_color_status(g.status)}")
-    console.print(f"  openai → gpt-image-2             {_color_status(o.status)}")
-    c = CodexImageGen().probe("codex:image")
-    console.print(f"  codex → image_gen               {_color_status(c.status)} (login only)")
+    for p, info, _ in rows:
+      model_id, region = p.probe_default()
+      try:
+        r = p.make(auth_resolve.resolve(p.name) if info.ok else None).probe(model_id, region)
+        status = _color_status(r.status)
+      except RuntimeError as e:
+        status = f"[red]{_rich_escape(str(e))}[/red]"
+      note = " (login only)" if p.runtime_selects_model else ""
+      console.print(f"  {p.name} → {model_id:<24} {status}{note}")
+
+
+def _auth_summary(info) -> str:
+  return f"{info.mode} ({info.credential})" if info.mode != "unset" else "unset"
+
+
+def _print_auth_modes(json_out: bool) -> None:
+  """Every provider's auth modes with the env vars each auto-detects."""
+  entries = [
+    {"provider": p.name, "mode": cls.mode, "label": cls.label, "env": list(cls.env_vars),
+     "settings": [sp.key for sp in cls.settings_spec]}
+    for p in providers.all_providers() for cls in p.auth_modes
+  ]
+  if json_out:
+    import json as _json
+    typer.echo(_json.dumps(entries, indent=2))
+    return
+  table = Table(title=_rich_escape("auth modes  •  config.toml: [profiles.NAME] provider = ..., auth = ..."))
+  table.add_column("provider", style="cyan")
+  table.add_column("auth", style="magenta")
+  table.add_column("what it is")
+  table.add_column("env vars auto-detected", style="dim")
+  table.add_column("profile settings", style="dim")
+  for e in entries:
+    table.add_row(e["provider"], e["mode"], e["label"], ", ".join(e["env"]) or "-", ", ".join(e["settings"]) or "-")
+  console.print(table)
 
 
 # ────────────────────── history commands ─────────────────────
@@ -772,7 +802,7 @@ def draw_cmd(
 # ────────────────────── config sub-typer ──────────────────────
 
 config_app = typer.Typer(
-  help="Inspect / edit the saved config (~/.config/genimg/config.json).",
+  help="Inspect / edit the saved config (~/.config/genimg/config.toml).",
   context_settings={"help_option_names": ["-h", "--help"]},
   invoke_without_command=True,
   no_args_is_help=False,
@@ -786,14 +816,13 @@ def _config_root(ctx: typer.Context):
     config_show()
 
 
-@config_app.command("show", help="Print current saved config as JSON.")
+@config_app.command("show", help="Print the current saved config (TOML).")
 def config_show():
   data = config.load()
   if not data:
     console.print(f"[dim]no config yet at {config.CONFIG_PATH}. Run `genimg setup` to create one.[/dim]")
     return
-  import json as _json
-  console.print(_json.dumps(data, indent=2))
+  console.print(config.dumps(data).rstrip(), markup=False, highlight=False)
   console.print(f"[dim]{config.CONFIG_PATH}[/dim]")
 
 
@@ -973,57 +1002,22 @@ def skills_list():
 
 # ────────────────────── helpers ──────────────────────
 
-_RESOLUTION_VALUES = {"512", "1K", "2K", "4K"}
-_ASPECT_VALUES = {
-  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
-  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
-}
-_GEMINI_ASPECT_VALUES = {"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"}
-_GEMINI_31_FLASH_ASPECT_VALUES = _ASPECT_VALUES
-_OPENAI_INPUT_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
-_OPENAI_MAX_INPUT_MB = 50
-_OPENAI_MAX_INPUTS = 16
+_RESOLUTION_VALUES = set(providers.base.ALL_RESOLUTIONS)
+_ASPECT_VALUES = set(providers.base.ALL_ASPECTS)
 
 
-def _size_params_supported(
-  provider: str,
-  model_id: str,
-  resolution: str | None,
-  aspect_ratio: str | None,
-) -> bool:
+def _size_params_supported(caps: providers.Capabilities, resolution: str | None,
+                           aspect_ratio: str | None) -> bool:
   """Return whether a resolution/aspect pair is valid without printing or exiting."""
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     return False
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
     return False
-  if provider == "openai":
-    from .providers.openai import _SIZE_MAP
-    return (resolution or "1K", aspect_ratio or "1:1") in _SIZE_MAP
-  if provider == "codex":
-    return resolution is None
-  if provider == "google" and model_id.startswith("gemini-"):
-    if model_id.startswith("gemini-3.1-flash-image"):
-      allowed_resolutions = {"512", "1K", "2K", "4K"}
-    elif model_id.startswith("gemini-3.1-flash-lite-image"):
-      allowed_resolutions = {"1K"}
-    elif model_id.startswith("gemini-3-pro-image"):
-      allowed_resolutions = {"1K", "2K", "4K"}
-    else:
-      allowed_resolutions = set()
-    if resolution is not None and resolution not in allowed_resolutions:
-      return False
-    allowed_aspects = (
-      _GEMINI_31_FLASH_ASPECT_VALUES
-      if model_id.startswith(("gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"))
-      else _GEMINI_ASPECT_VALUES
-    )
-    return aspect_ratio is None or aspect_ratio in allowed_aspects
-  return True
+  return caps.supports_size(resolution, aspect_ratio)
 
 
 def _compatible_size_defaults(
-  provider: str,
-  model_id: str,
+  caps: providers.Capabilities,
   resolution: str | None,
   aspect_ratio: str | None,
   configured_resolution: str | None,
@@ -1036,27 +1030,14 @@ def _compatible_size_defaults(
   """
   resolution_defaults = [configured_resolution, None] if resolution is None else [None]
   aspect_defaults = [configured_aspect, None] if aspect_ratio is None else [None]
-  candidates = [
-    (r, a)
-    for r in resolution_defaults
-    for a in aspect_defaults
-  ]
+  candidates = [(r, a) for r in resolution_defaults for a in aspect_defaults]
   candidates.sort(key=lambda pair: (pair[0] is None) + (pair[1] is None))
   for default_resolution, default_aspect in candidates:
     candidate_resolution = resolution if resolution is not None else default_resolution
     candidate_aspect = aspect_ratio if aspect_ratio is not None else default_aspect
-    if _size_params_supported(provider, model_id, candidate_resolution, candidate_aspect):
+    if _size_params_supported(caps, candidate_resolution, candidate_aspect):
       return candidate_resolution, candidate_aspect
   return resolution, aspect_ratio
-
-
-def _resolved_openai_size(provider: str, resolution: str | None, aspect_ratio: str | None) -> str | None:
-  """Look up the WxH OpenAI gpt-image-2 will use, for the preflight display.
-  Returns None for non-OpenAI providers or unknown combos."""
-  if provider != "openai":
-    return None
-  from .providers.openai import _SIZE_MAP
-  return _SIZE_MAP.get((resolution or "1K", aspect_ratio or "1:1"))
 
 
 def _short_path(p: Path) -> str:
@@ -1086,41 +1067,41 @@ def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
 
 
 def _validate_provider_flags(
-  provider: str, *, quality, region, project, auth, resolution, aspect_ratio, refs, input,
-  model_id: str | None = None, mode: str | None = None, diverse: bool = False,
-  thinking_level: str | None = None,
+  provider: providers.Provider, caps: providers.Capabilities, *, quality, region, project, auth,
+  resolution, aspect_ratio, refs, input, model_id: str | None = None, mode: str | None = None,
+  diverse: bool = False, thinking_level: str | None = None,
 ) -> None:
-  """Reject incompatible provider/flag combinations early with clear errors."""
+  """Reject incompatible provider/flag combinations early with clear errors, using the
+  provider's declared capabilities rather than provider-name branches."""
   refs = refs or []
+  name = provider.name
 
-  # Provider-neutral: every input/reference path must exist. Without this, Google refs
-  # only failed deep inside the provider as a generic error (OpenAI pre-checked, Google didn't).
+  # Provider-neutral: every input/reference path must exist.
   for p in ([input] if input else []) + refs:
     if not p.exists():
       _die(f"input not found: {p}")
 
-  if provider == "codex" and (resolution is not None or mode == "batch"):
-    _die("codex:image does not support --resolution or --mode batch; Codex selects the image size.")
-
-  if mode == "batch" and provider == "openai":
-    _die(
-      "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
-      "samples of one prompt (verified live). Use the default parallel mode — add -d or "
-      '--deltas "..." for variety — or switch to a Gemini model (-m gdm:nb2) for batch.'
-    )
+  if mode == "batch" and not caps.batch:
+    if name == "openai":
+      _die(
+        "--mode batch on OpenAI is wasted spend: gpt-image n>1 returns near-duplicate independent "
+        "samples of one prompt (verified live). Use the default parallel mode — add -d or "
+        '--deltas "..." for variety — or switch to a Gemini model (-m gdm:nb2) for batch.'
+      )
+    _die(f"{model_id} does not support --resolution or --mode batch; {provider.label} selects the image size."
+         if provider.runtime_selects_model else
+         f"{model_id} does not support --mode batch; use the default parallel mode.")
 
   if quality is not None:
-    if provider != "openai":
-      _die(f"--quality is OpenAI-only; ignored on provider={provider!r}. Drop the flag or use -m oai:gi2.")
-    from .providers.openai import quality_options
-    allowed_quality = quality_options(model_id or "")
-    if quality not in allowed_quality:
-      _die(f"--quality for {model_id} must be one of {allowed_quality}, got {quality!r}")
+    if "quality" not in provider.flags:
+      _die(f"--quality is OpenAI-only; ignored on provider={name!r}. Drop the flag or use -m oai:gi2.")
+    if quality not in caps.qualities:
+      _die(f"--quality for {model_id} must be one of {list(caps.qualities)}, got {quality!r}")
 
   if thinking_level is not None:
     if thinking_level not in {"minimal", "high"}:
       _die(f"--thinking must be minimal or high, got {thinking_level!r}")
-    if provider != "google" or not (model_id or "").startswith("gemini-3.1-flash-image"):
+    if not caps.thinking_levels:
       _die("--thinking is supported only by Gemini 3.1 Flash Image (-m gdm:nb2).")
 
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
@@ -1128,60 +1109,38 @@ def _validate_provider_flags(
   if aspect_ratio is not None and aspect_ratio not in _ASPECT_VALUES:
     _die(f"--aspect-ratio must be one of {sorted(_ASPECT_VALUES)}, got {aspect_ratio!r}")
 
-  if provider == "google" and model_id and model_id.startswith("gemini-"):
-    is_flash_31 = model_id.startswith("gemini-3.1-flash-image")
-    is_flash_lite_31 = model_id.startswith("gemini-3.1-flash-lite-image")
-    is_pro_3 = model_id.startswith("gemini-3-pro-image")
-    if resolution is not None:
-      if is_flash_31:
-        allowed_resolutions = {"512", "1K", "2K", "4K"}
-      elif is_flash_lite_31:
-        allowed_resolutions = {"1K"}
-      elif is_pro_3:
-        allowed_resolutions = {"1K", "2K", "4K"}
-      else:
-        allowed_resolutions = set()
-      if resolution not in allowed_resolutions:
-        shown = ", ".join(sorted(allowed_resolutions)) or "provider default only"
-        _die(f"{model_id} supports image sizes: {shown}.")
-    allowed_aspects = (
-      _GEMINI_31_FLASH_ASPECT_VALUES
-      if is_flash_31 or is_flash_lite_31
-      else _GEMINI_ASPECT_VALUES
-    )
-    if aspect_ratio is not None and aspect_ratio not in allowed_aspects:
+  if provider.runtime_selects_model and resolution is not None:
+    _die(f"{model_id} does not support --resolution or --mode batch; {provider.label} selects the image size.")
+
+  if caps.sizes:
+    if not caps.supports_size(resolution, aspect_ratio):
+      _die(provider.size_error(resolution, aspect_ratio))
+  else:
+    if resolution is not None and resolution not in caps.resolutions:
+      shown = ", ".join(sorted(caps.resolutions, key=providers.base._res_order)) or "provider default only"
+      _die(f"{model_id} supports image sizes: {shown}.")
+    if aspect_ratio is not None and caps.aspect_ratios and aspect_ratio not in caps.aspect_ratios:
       _die(f"{model_id} does not support aspect ratio {aspect_ratio}.")
 
-  if provider == "openai":
-    # Validate the (resolution, aspect) pair against the provider's real size table so this
-    # can't drift from _size_for. Mirror its implicit defaults (1K square when unset).
-    from .providers.openai import _SIZE_MAP
-    effective_res = resolution or "1K"
-    effective_ar = aspect_ratio or "1:1"
-    if (effective_res, effective_ar) not in _SIZE_MAP:
-      if effective_res == "4K" and effective_ar in ("4:3", "3:4"):
-        _die("OpenAI: 4K + 4:3/3:4 exceeds the total pixel cap (8.3M). Use 2K + 4:3/3:4, or 4K + 16:9/9:16.")
-      if effective_res == "1K" and effective_ar in ("16:9", "9:16"):
-        _die("OpenAI: 16:9/9:16 at 1K falls below the 655k pixel min. Pass -r 2K (→ 2048x1152 / 1152x2048), or drop --aspect-ratio for the 1K square default.")
-      supported = ", ".join(f"{r}+{a}" for r, a in sorted(_SIZE_MAP))
-      _die(f"OpenAI: unsupported ({effective_res}, {effective_ar}) size combo. Supported: {supported}.")
+  if (region is not None or project is not None) and not {"region", "project"} <= provider.flags:
+    _die(f"--region/--project are Google-only; ignored on provider={name!r}.")
 
-  if provider != "google" and (region is not None or project is not None):
-    _die(f"--region/--project are Google-only; ignored on provider={provider!r}.")
+  if auth is not None:
+    if "auth" not in provider.flags:
+      _die(f"--auth is OpenAI-only; ignored on provider={name!r}.")
+    if auth not in provider.modes:
+      _die(f"--auth must be one of {', '.join(provider.modes)}, got {auth!r}")
 
-  if provider != "openai" and auth is not None:
-    _die(f"--auth is OpenAI-only; ignored on provider={provider!r}.")
-
-  if provider == "openai":
-    inputs = ([input] if input else []) + refs
-    if len(inputs) > _OPENAI_MAX_INPUTS:
-      _die(f"OpenAI accepts max {_OPENAI_MAX_INPUTS} input images, got {len(inputs)}")
-    for p in inputs:
-      if p.suffix.lower() not in _OPENAI_INPUT_EXTS:
-        _die(f"OpenAI inputs must be {sorted(_OPENAI_INPUT_EXTS)}, got {p.suffix} ({p.name})")
+  inputs = ([input] if input else []) + refs
+  if caps.max_inputs is not None and len(inputs) > caps.max_inputs:
+    _die(f"{provider.label} accepts max {caps.max_inputs} input images, got {len(inputs)}")
+  for p in inputs:
+    if caps.input_exts is not None and p.suffix.lower() not in caps.input_exts:
+      _die(f"{provider.label} inputs must be {sorted(caps.input_exts)}, got {p.suffix} ({p.name})")
+    if caps.max_input_mb is not None:
       mb = p.stat().st_size / 1_048_576
-      if mb > _OPENAI_MAX_INPUT_MB:
-        _die(f"input {p.name} is {mb:.1f}MB, exceeds OpenAI cap {_OPENAI_MAX_INPUT_MB}MB")
+      if mb > caps.max_input_mb:
+        _die(f"input {p.name} is {mb:.1f}MB, exceeds {provider.label} cap {caps.max_input_mb}MB")
 
 
 def _die(msg: str) -> NoReturn:
@@ -1222,7 +1181,11 @@ def _rm_tree(p: Path) -> None:
 
 
 def app() -> None:
-  _app()
+  try:
+    _app()
+  except config.ConfigError as e:
+    console.print(f"[red]error:[/red] {_rich_escape(str(e))}")
+    raise SystemExit(1)
 
 
 if __name__ == "__main__":

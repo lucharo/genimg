@@ -8,6 +8,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from genimg import cli
+from genimg.auth.base import AuthInfo
 from genimg.interfaces import GenerateRequest, IImageGen, ProbeResult
 
 
@@ -27,7 +28,7 @@ class NoDefaultModelTests(unittest.TestCase):
     }
     with (
       patch.object(cli.config, "load", return_value=config),
-      patch.object(cli.auth_google, "auth_info", return_value={"mode": "vertex"}),
+      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True)),
     ):
       result = runner.invoke(cli._app, ["a prompt", "-m", "gdm:nb", "--dry-run"])
 
@@ -57,7 +58,7 @@ class DryRunProvenanceTests(unittest.TestCase):
 
     with (
       patch.object(cli.config, "load", return_value={}),
-      patch.object(cli.auth_google, "auth_info", return_value={"mode": "vertex"}),
+      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True)),
     ):
       result = CliRunner().invoke(cli._app, [
         "preserve the room", str(first_ref), str(second_ref),

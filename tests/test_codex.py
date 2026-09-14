@@ -16,8 +16,9 @@ import pytest
 from PIL import Image
 from typer.testing import CliRunner
 
-from genimg import cli, discovery, draw, metadata, registry, setup
+from genimg import cli, discovery, draw, metadata, providers, registry, setup
 from genimg.auth import codex as auth
+from genimg.auth import google as auth_google
 from genimg.generate import generate
 from genimg.interfaces import GenerateRequest
 from genimg.providers import codex
@@ -195,7 +196,8 @@ def test_login_requires_chatgpt_without_exposing_status(login, code, ok):
     info = auth.auth_info()
   assert info == {"mode": "subscription" if ok else "unset", "source": "codex login", "endpoint": "Codex CLI",
                   "credential": "ChatGPT login" if ok else "-", "ok": ok,
-                  "hint": "" if ok else "Run `codex login` with ChatGPT; codex:image requires a subscription login."}
+                  "hint": "" if ok else "Run `codex login` with ChatGPT; codex:image requires a subscription login.",
+                  "profile": None}
   assert "secret" not in json.dumps(info)
 
 
@@ -224,37 +226,42 @@ def test_auth_discovery_and_studio_use_login_without_generation(fake_codex):
   assert not (fake_codex / "calls.jsonl").exists()
 
 
+_CODEX_PROFILE = {"provider": "codex", "auth": "subscription"}
+
+
 @pytest.mark.parametrize("use", [True, False])
 def test_setup_codex_choice(fake_codex, use):
-  cfg = {"enabled_providers": [] if use else ["codex"]}
+  cfg = {} if use else {"profiles": {"codex": dict(_CODEX_PROFILE)}}
   with patch.object(setup.questionary, "confirm") as confirm:
     confirm.return_value.ask.return_value = use
-    assert setup._setup_codex(cfg) is use
-  assert cfg == {"enabled_providers": ["codex"] if use else []}
+    assert setup._setup_provider(providers.get("codex"), cfg) is use
+  assert cfg == ({"profiles": {"codex": _CODEX_PROFILE}} if use else {})
 
 
 def test_setup_drops_unavailable_codex_and_its_default():
-  cfg = {"enabled_providers": ["openai_native", "codex"], "default_model": "codex:image"}
-  with patch.object(auth, "auth_info", return_value={"ok": False, "hint": "Log in"}), \
+  cfg = {"profiles": {"openai": {"provider": "openai", "auth": "native"}, "codex": dict(_CODEX_PROFILE)},
+         "default_model": "codex:image"}
+  with patch.object(auth, "login_status", return_value=(False, "Log in")), \
        patch.object(setup.questionary, "confirm") as confirm:
-    assert setup._setup_codex(cfg) is False
+    assert setup._setup_provider(providers.get("codex"), cfg) is False
   confirm.assert_not_called()
-  assert cfg == {"enabled_providers": ["openai_native"]}
+  assert cfg == {"profiles": {"openai": {"provider": "openai", "auth": "native"}}}
 
 
 @pytest.mark.parametrize("available", [False, True])
 def test_setup_persists_cleanup_when_codex_was_the_only_provider(tmp_path, monkeypatch, available):
-  monkeypatch.setattr(setup.config, "CONFIG_PATH", tmp_path / "config.json")
-  setup.config.save({"enabled_providers": ["codex"], "default_model": "codex:image"})
-  with patch.object(auth, "auth_info", return_value={"ok": available, "hint": "Log in"}), \
-       patch.object(setup.auth_google, "adc_token_present", return_value=False), \
+  monkeypatch.setattr(setup.config, "CONFIG_PATH", tmp_path / "config.toml")
+  monkeypatch.setattr(setup.config, "LEGACY_JSON_PATH", tmp_path / "config.json")
+  setup.config.save({"profiles": {"codex": dict(_CODEX_PROFILE)}, "default_model": "codex:image"})
+  with patch.object(auth, "login_status", return_value=(available, "Log in")), \
+       patch.object(auth_google, "adc_token_present", return_value=False), \
        patch.object(setup.questionary, "select") as select, \
        patch.object(setup.questionary, "confirm") as confirm:
     select.return_value.ask.return_value = "skip"
     confirm.return_value.ask.return_value = False
     result = CliRunner().invoke(cli._app, ["setup"])
   assert result.exit_code == 0, result.output
-  assert setup.config.load() == {"enabled_providers": []}
+  assert setup.config.load() == {}
 
 
 @pytest.mark.parametrize("kill_error", [None, subprocess.TimeoutExpired("taskkill", 5)])

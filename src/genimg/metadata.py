@@ -178,7 +178,12 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
       entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])
     return entry
 
-  billing = "subscription" if spec.provider == "codex" else "api"
+  from .providers import get as _get_provider
+  try:
+    _provider = _get_provider(spec.provider)
+    billing, runtime_model = _provider.billing, _provider.runtime_selects_model
+  except ValueError:
+    billing, runtime_model = "api", False
   meta = {
     "id": gen_id,
     "time": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -204,7 +209,7 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     "workdir": str(workdir),
   }
   meta["api_equivalent_cost"] = cost.sum_equivalents([out["api_equivalent_cost"] for out in meta["outputs"]])
-  if spec.provider == "codex":
+  if runtime_model:
     meta.update(model_selection="runtime", aspect_ratio_mode="prompt")
   if grid_path is not None:
     absolute_grid = grid_path.expanduser().resolve(strict=False)

@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
-
-Provider = Literal["google", "openai", "codex"]
 
 
 @dataclass(frozen=True)
 class ModelSpec:
-  provider: Provider
+  provider: str              # a registered provider name (see providers.names())
   model_id: str
   region: str | None = None  # google only
   quality_rank: int = 5      # higher = better, used for auto-select
@@ -58,20 +55,16 @@ def _retired_imagen_error() -> ValueError:
 def _infer_spec(model_id: str) -> ModelSpec | None:
   """Infer a spec for a well-formed but unregistered model id from its shape.
 
-  Provider dispatch is structural — the id prefix already tells us the provider and code
-  path — so a new same-signature model works via `-m <full-id>` with no code change. The
-  registry stays a pure curation layer (short aliases, quality_rank, region pins);
-  inferred specs get quality_rank=0 (never auto-ranked) and a sane default region.
-
-  Only the gpt-image request shape is inferred for OpenAI. `dall-e-*` is intentionally
-  excluded: the OpenAI provider always sends gpt-image-style size/quality params that
-  DALL-E rejects, so inferring it would resolve then fail at generation.
+  Each provider recognises its own id shapes (`Provider.infer_model`), so a new
+  same-signature model works via `-m <full-id>` with no code change. The registry stays a
+  pure curation layer (short aliases, quality_rank, region pins); inferred specs get
+  quality_rank=0 (never auto-ranked) and the provider's default region.
   """
-  mid = model_id.lower()
-  if mid.startswith("gpt-image"):
-    return ModelSpec("openai", model_id, region=None, quality_rank=0)
-  if mid.startswith("gemini-") and "image" in mid:
-    return ModelSpec("google", model_id, region="global", quality_rank=0)
+  from .providers import all_providers
+  for provider in all_providers():
+    spec = provider.infer_model(model_id)
+    if spec is not None:
+      return spec
   return None
 
 

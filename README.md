@@ -104,15 +104,40 @@ Skills install as symlinks into each agent's skills dir. If you reinstall/upgrad
 ## Auth
 
 Run `genimg setup` for the guided flow (detect → fetch missing → live preflight → save).
+`genimg auth` shows what resolved; `genimg auth --modes` lists every mode and the env vars it
+auto-detects.
 
-Modes:
-- **Google**: `google_direct` (`GEMINI_API_KEY`/`GOOGLE_API_KEY`), `google_vertex` (service-account JSON via `GOOGLE_APPLICATION_CREDENTIALS`), or `google_vertex_adc` (`gcloud auth application-default login`).
-- **OpenAI**: `openai_native` (`OPENAI_API_KEY` → api.openai.com) or `openai_azure` (`AZURE_OPENAI_API_KEY` + endpoint URL).
-- **Codex**: `codex` uses the locally installed CLI and your own `codex login` with ChatGPT. No API key; normal Codex subscription limits apply. See [subscription generation](docs/codex-subscription.md).
+| Provider | Auth mode | Env vars auto-detected | Profile settings |
+| --- | --- | --- | --- |
+| google | `direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | – |
+| google | `vertex` | `GOOGLE_APPLICATION_CREDENTIALS` (service-account JSON) | `project`, `region` |
+| google | `vertex_adc` | none: `gcloud auth application-default login` | `project`, `region` |
+| openai | `native` | `OPENAI_API_KEY` | – |
+| openai | `azure` | `AZURE_OPENAI_API_KEY` (or `OPENAI_API_KEY`) + `AZURE_OPENAI_ENDPOINT` | `endpoint`, `api_version` |
+| codex | `subscription` | none: `codex login` with ChatGPT | – |
 
-Saved config wins over env-var auto-detection. Secrets stay in env / shell rc; non-secret values (Azure endpoint, GCP project) live in `~/.config/genimg/config.json`.
+With no config, the first mode whose env vars are present wins. A saved profile pins the
+choice; several profiles per provider are fine (`--profile NAME` picks one):
 
-The Vertex project is resolved from `--project` → `config.gcp_project` → `GOOGLE_CLOUD_PROJECT` → the service-account JSON's `project_id` → `gcloud`'s active project (there is no hardcoded fallback).
+```toml
+# ~/.config/genimg/config.toml
+default_model = "gdm:nb2"
+
+[profiles.google]
+provider = "google"
+auth = "vertex_adc"
+project = "my-gcp-project"
+
+[profiles.work]
+provider = "openai"
+auth = "azure"
+endpoint = "https://myres.openai.azure.com"
+```
+
+Secrets stay in env / shell rc; only non-secret settings live in the profile. The Vertex
+project resolves from `--project` → profile `project` → `GOOGLE_CLOUD_PROJECT` → the
+service-account JSON's `project_id` → `gcloud`'s active project (no hardcoded fallback).
+A pre-0.1 `config.json` is migrated to `config.toml` on first run.
 
 ## Models (`-m`)
 

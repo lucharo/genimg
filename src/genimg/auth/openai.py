@@ -1,152 +1,160 @@
-"""OpenAI client factory. Config wins (`genimg setup`), env is fallback.
+"""OpenAI auth profiles.
 
-Two modes:
-  openai_native — OPENAI_API_KEY → api.openai.com  (was: openai_direct, auto-migrated)
-  openai_azure  — Azure resource: api key + endpoint (OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT)
+  native — OPENAI_API_KEY → api.openai.com (an OPENAI_BASE_URL proxy is honoured only when
+           the profile came from env auto-detection; a configured native profile pins
+           api.openai.com so a stray proxy URL cannot hijack it)
+  azure  — AZURE_OPENAI_API_KEY (or OPENAI_API_KEY) + resource endpoint
+
+Profile settings: `endpoint` (Azure resource URL), `api_version` (Azure api-version).
 """
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from openai import AzureOpenAI, OpenAI
 
-from .. import config as _cfg
+from .base import AuthInfo, AuthProfile, SecretSpec, SettingSpec
 
 DEFAULT_AZURE_API_VERSION = "2025-04-01-preview"
+NATIVE_BASE_URL = "https://api.openai.com/v1"
+
+
+def _env_azure_endpoint() -> str | None:
+  base = os.getenv("OPENAI_BASE_URL", "")
+  if os.getenv("AZURE_OPENAI_ENDPOINT"):
+    return os.getenv("AZURE_OPENAI_ENDPOINT")
+  return base if "azure.com" in base.lower() else None
 
 
 def is_azure() -> bool:
-  base = os.getenv("OPENAI_BASE_URL", "")
-  return "azure.com" in base.lower() or os.getenv("AZURE_OPENAI_ENDPOINT") is not None
+  return _env_azure_endpoint() is not None
 
 
-def _azure() -> AzureOpenAI:
-  cfg = _cfg.load()
-  endpoint = cfg.get("openai_base_url") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL")
-  if not endpoint:
-    raise RuntimeError(
-      "Azure mode requires an endpoint. Set OPENAI_BASE_URL / AZURE_OPENAI_ENDPOINT, "
-      "or save it via `genimg setup`."
-    )
-  api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-  if not api_key:
-    raise RuntimeError("Azure mode requires OPENAI_API_KEY (or AZURE_OPENAI_API_KEY).")
-  api_version = cfg.get("azure_api_version") or os.getenv("OPENAI_API_VERSION", DEFAULT_AZURE_API_VERSION)
-  return AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
-
-
-def _direct(*, ignore_base_url: bool = False) -> OpenAI:
-  """Direct OpenAI client. With ignore_base_url=True, force api.openai.com (used by --auth direct
-  to guarantee bypass of any Azure/proxy URL set in OPENAI_BASE_URL)."""
-  api_key = os.getenv("OPENAI_API_KEY")
-  if not api_key:
-    raise RuntimeError("Direct OpenAI mode requires OPENAI_API_KEY.")
-  if ignore_base_url:
-    return OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
-  return OpenAI()  # honors OPENAI_BASE_URL for non-Azure proxies (LiteLLM, OpenRouter, ...)
-
-
-def get_client(*, force: str | None = None) -> OpenAI | AzureOpenAI:
-  """Return OpenAI or AzureOpenAI client. Resolution: --auth flag → saved config → env."""
-  if force == "azure":
-    return _azure()
-  if force == "direct":
-    return _direct(ignore_base_url=True)
-
-  enabled = _cfg.load().get("enabled_providers", [])
-  if "openai_azure" in enabled:
-    return _azure()
-  if "openai_native" in enabled:
-    # User explicitly chose api.openai.com — bypass any OPENAI_BASE_URL proxy.
-    return _direct(ignore_base_url=True)
-
-  return _azure() if is_azure() else _direct()
-
-
-def validate(mode: str, *, endpoint: str | None = None) -> tuple[bool, str]:
-  """Live preflight via `client.models.list()` — free, no image generated.
-
-  Returns (ok, error_msg). `mode` ∈ {openai_native, openai_azure}. `endpoint` overrides
-  the saved/env endpoint — used by the setup wizard to preview a not-yet-saved value.
-  """
+def _preflight(client: OpenAI | AzureOpenAI) -> tuple[bool, str]:
   try:
-    if mode == "openai_native":
-      if not os.getenv("OPENAI_API_KEY"):
-        return False, "OPENAI_API_KEY not in env"
-      client = _direct(ignore_base_url=True)
-    elif mode == "openai_azure":
-      cfg = _cfg.load()
-      ep = endpoint or cfg.get("openai_base_url") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL")
-      if not ep:
-        return False, "no endpoint (OPENAI_BASE_URL / AZURE_OPENAI_ENDPOINT / config.openai_base_url)"
-      api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-      if not api_key:
-        return False, "no api key (AZURE_OPENAI_API_KEY / OPENAI_API_KEY)"
-      api_version = cfg.get("azure_api_version") or os.getenv("OPENAI_API_VERSION", DEFAULT_AZURE_API_VERSION)
-      client = AzureOpenAI(api_key=api_key, azure_endpoint=ep, api_version=api_version)
-    else:
-      return False, f"unknown mode: {mode}"
     next(iter(client.models.list()), None)
     return True, ""
   except Exception as e:
     return False, f"{type(e).__name__}: {str(e)[:300]}"
 
 
-def auth_info() -> dict[str, object]:
-  """Structured auth status: {mode, source, endpoint, credential, ok, hint}.
+class OpenAINative(AuthProfile):
+  provider = "openai"
+  mode = "native"
+  label = "OpenAI native (api.openai.com)"
+  env_vars = ("OPENAI_API_KEY",)
+  secret = SecretSpec("OPENAI_API_KEY", "OpenAI API key", "https://platform.openai.com/api-keys")
 
-  Azure mode requires BOTH an endpoint (config or env) and an api key. `ok` is False
-  when either is missing — surfaces the failure at audit time instead of at request time.
-  """
-  cfg = _cfg.load()
-  enabled = cfg.get("enabled_providers", [])
-  in_config = "openai_azure" in enabled or "openai_native" in enabled
-  source = "config" if in_config else "env"
+  def detect(self) -> bool:
+    # A key plus an Azure-looking base URL is an Azure setup, not a native one.
+    return bool(os.getenv("OPENAI_API_KEY")) and not is_azure()
 
-  if "openai_azure" in enabled or (not in_config and is_azure()):
-    endpoint = cfg.get("openai_base_url") or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL")
-    has_key = bool(os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY"))
-    cred = (
-      "AZURE_OPENAI_API_KEY" if os.getenv("AZURE_OPENAI_API_KEY")
-      else "OPENAI_API_KEY" if os.getenv("OPENAI_API_KEY")
-      else "-"
-    )
-    ok = bool(endpoint) and has_key
+  def base_url(self) -> str:
+    if self.source == "env":
+      return os.getenv("OPENAI_BASE_URL") or NATIVE_BASE_URL  # LiteLLM / OpenRouter proxies
+    return NATIVE_BASE_URL
+
+  def client(self, **kw: Any) -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+      raise RuntimeError(f"{self.source}: openai native mode needs OPENAI_API_KEY in env.")
+    return OpenAI(api_key=api_key, base_url=self.base_url())
+
+  def validate(self) -> tuple[bool, str]:
+    if not os.getenv("OPENAI_API_KEY"):
+      return False, "OPENAI_API_KEY not in env"
+    return _preflight(self.client())
+
+  def info(self) -> AuthInfo:
+    ok = bool(os.getenv("OPENAI_API_KEY"))
+    return AuthInfo(mode=self.mode, source=self.source, endpoint=self.base_url().removesuffix("/v1"),
+                    credential="OPENAI_API_KEY" if ok else "-", ok=ok, profile=self.name,
+                    hint="" if ok else "Native mode needs OPENAI_API_KEY in env.")
+
+
+class OpenAIAzure(AuthProfile):
+  provider = "openai"
+  mode = "azure"
+  label = "OpenAI via Azure"
+  env_vars = ("AZURE_OPENAI_API_KEY", "OPENAI_API_KEY")
+  secret = SecretSpec("AZURE_OPENAI_API_KEY", "Azure OpenAI API key",
+                      "https://portal.azure.com/#create/Microsoft.CognitiveServicesOpenAI")
+  settings_spec = (
+    SettingSpec("endpoint", "Azure resource endpoint URL (https://<resource>.openai.azure.com):",
+                required=True, detect=_env_azure_endpoint),
+  )
+
+  def endpoint(self) -> str | None:
+    return self.settings.get("endpoint") or _env_azure_endpoint()
+
+  def api_key_var(self) -> str | None:
+    return self.present_env_var()
+
+  def detect(self) -> bool:
+    return bool(self.api_key_var()) and bool(self.endpoint())
+
+  def client(self, **kw: Any) -> AzureOpenAI:
+    endpoint = self.endpoint()
+    if not endpoint:
+      raise RuntimeError(
+        f"{self.source}: azure mode needs an endpoint. Set the profile's `endpoint`, "
+        "AZURE_OPENAI_ENDPOINT or OPENAI_BASE_URL, or run `genimg setup`."
+      )
+    var = self.api_key_var()
+    if not var:
+      raise RuntimeError(f"{self.source}: azure mode needs AZURE_OPENAI_API_KEY (or OPENAI_API_KEY).")
+    api_version = self.settings.get("api_version") or os.getenv("OPENAI_API_VERSION", DEFAULT_AZURE_API_VERSION)
+    return AzureOpenAI(api_key=os.getenv(var), azure_endpoint=endpoint, api_version=api_version)
+
+  def validate(self) -> tuple[bool, str]:
+    if not self.endpoint():
+      return False, "no endpoint (profile `endpoint`, AZURE_OPENAI_ENDPOINT or OPENAI_BASE_URL)"
+    if not self.api_key_var():
+      return False, "no api key (AZURE_OPENAI_API_KEY / OPENAI_API_KEY)"
+    return _preflight(self.client())
+
+  def detail(self) -> str:
+    var, endpoint = self.api_key_var(), self.endpoint()
+    from .base import _mask
+    if var and endpoint:
+      return f"{var}={_mask(os.getenv(var))}, endpoint {_host(endpoint)}"
+    if var:
+      return f"key {var}={_mask(os.getenv(var))} OK, endpoint missing"
+    if endpoint:
+      return f"endpoint {_host(endpoint)} OK, key missing"
+    return "needs api key + resource endpoint"
+
+  def info(self) -> AuthInfo:
+    endpoint, var = self.endpoint(), self.api_key_var()
     missing = []
     if not endpoint:
-      missing.append("endpoint (OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT)")
-    if not has_key:
+      missing.append("endpoint (profile `endpoint`, OPENAI_BASE_URL or AZURE_OPENAI_ENDPOINT)")
+    if not var:
       missing.append("api key (AZURE_OPENAI_API_KEY or OPENAI_API_KEY)")
-    hint = "" if ok else (
-      "Azure mode needs " + " and ".join(missing)
-      + ". Run `genimg setup` to fix, or set in env."
-    )
-    return {
-      "mode": "azure", "source": source,
-      "endpoint": endpoint or "-",
-      "credential": cred,
-      "ok": ok, "hint": hint,
-    }
-  if "openai_native" in enabled or (not in_config and os.getenv("OPENAI_API_KEY")):
-    ok = bool(os.getenv("OPENAI_API_KEY"))
-    # Config path forces api.openai.com (ignore_base_url=True); only env-detected
-    # native mode honors OPENAI_BASE_URL (for LiteLLM/OpenRouter proxies).
-    endpoint = "https://api.openai.com" if "openai_native" in enabled \
-      else (os.getenv("OPENAI_BASE_URL") or "https://api.openai.com")
-    return {
-      "mode": "native", "source": source,
-      "endpoint": endpoint,
-      "credential": "OPENAI_API_KEY" if ok else "-",
-      "ok": ok,
-      "hint": "" if ok else "Native mode needs OPENAI_API_KEY in env.",
-    }
-  return {
-    "mode": "unset", "source": "-", "endpoint": "-", "credential": "-",
-    "ok": False,
-    "hint": "Run `genimg setup` or set OPENAI_API_KEY (native) or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY (Azure).",
-  }
+    ok = not missing
+    return AuthInfo(mode=self.mode, source=self.source, endpoint=endpoint or "-",
+                    credential=var or "-", ok=ok, profile=self.name,
+                    hint="" if ok else "Azure mode needs " + " and ".join(missing) + ". Run `genimg setup` to fix, or set in env.")
 
 
-def auth_mode() -> str:
-  i = auth_info()
-  return f"{i['mode']} ({i['credential']})" if i["mode"] != "unset" else "unset"
+def _host(url: str | None) -> str:
+  if not url:
+    return ""
+  from urllib.parse import urlparse
+  return urlparse(url).netloc or url
+
+
+# Azure first: a key plus an Azure endpoint in env is an Azure setup.
+MODES: tuple[type[AuthProfile], ...] = (OpenAIAzure, OpenAINative)
+
+
+# ── compatibility wrappers ──
+
+def get_client(*, force: str | None = None, profile: AuthProfile | None = None) -> OpenAI | AzureOpenAI:
+  """--auth flag → configured profile → env. `force` accepts azure | direct (alias of native)."""
+  from .resolve import resolve
+  if profile is None:
+    profile = resolve("openai", force_mode={"direct": "native"}.get(force, force))
+  return profile.client()
+
