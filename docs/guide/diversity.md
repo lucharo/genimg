@@ -19,7 +19,7 @@ You explicitly define the directions. Take `#1` keeps the base prompt as the anc
 takes `#2..#n` each get one of your deltas in order, so supply `n-1` of them:
 
 ```bash
-genimg "a minimal fox logo, NOT a grid" -m oai:gi2 -n 4 \
+genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
   --deltas "line art, block print, brush stroke" -g --open
 genimg "…" -n 5 --deltas @styles.txt      # one delta per line
 ```

@@ -13,16 +13,15 @@ permissions:
   pages: write
   id-token: write
 
-# Per-ref, so a pull-request build never cancels a deployment already running on main.
-concurrency:
-  group: docs-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   # Always runs: --strict fails the build on a broken link or a missing nav page,
   # so the docs are checked on every PR even when they are not published yet.
   build:
     runs-on: ubuntu-latest
+    # Superseded builds of the same ref are cancellable; deployments are not (see deploy).
+    concurrency:
+      group: docs-build-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

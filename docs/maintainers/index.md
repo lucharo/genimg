@@ -7,7 +7,7 @@ How genimg is built, tested, distributed and released. Users do not need this se
 | Source layout | `src/genimg/`: `cli.py` (Typer app), `providers/` (one plugin per backend), `auth/` (profiles and resolver), `registry.py` (aliases), `config.py`, `discovery.py` (model probes), `metadata.py` / `history.py` / `provenance.py` (sidecars), `grid.py`, `draw.py` (Studio), `setup.py` (wizard). Skills live in `skills/` and are packaged as `genimg/_skills`. |
 | Tests | `uv sync --group dev` then `uv run pytest`. `tests/test_provider_contract.py` parametrises over every registered provider. |
 | Lint | `uv run ruff check .` (pyflakes and import order only). |
-| Build | `uv build` produces the wheel and sdist; CI installs the wheel in a clean environment. |
+| Build | `uv build` produces the wheel and sdist. CI runs lint and tests from the checkout; installing the built wheel in a clean environment is a manual pre-release check (see [Releasing](releasing.md)). |
 | Docs | `uv sync --group docs` then `uv run zensical serve`. CI runs `zensical build --strict` on every pull request that touches the docs, and publishes to GitHub Pages on pushes to `main` once the repository is public. |
 | Release | [Releasing](releasing.md): release-please and PyPI Trusted Publishing. |
 | Models | [Maintaining the model list](maintaining-models.md): when to edit the registry, capability tables and prices. |
