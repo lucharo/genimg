@@ -31,11 +31,11 @@ version.
 
 | Provider | Auth mode | Environment variables | Profile settings |
 | --- | --- | --- | --- |
-| google | `vertex` | `GOOGLE_APPLICATION_CREDENTIALS` — path to a service-account JSON (`CLAUDE_GCP_CRED` also accepted) | `project`, `region` |
-| google | `direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` — Gemini Developer API / Google AI Studio key | – |
+| google | `vertex` | `GOOGLE_APPLICATION_CREDENTIALS`, the path to a service-account JSON (`CLAUDE_GCP_CRED` also accepted) | `project`, `region` |
+| google | `direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY`, a Gemini Developer API (Google AI Studio) key | – |
 | google | `vertex_adc` | none: `gcloud auth application-default login` | `project`, `region` |
 | openai | `azure` | `AZURE_OPENAI_API_KEY` (or `OPENAI_API_KEY`) plus `AZURE_OPENAI_ENDPOINT` | `endpoint`, `api_version` |
-| openai | `native` | `OPENAI_API_KEY` — api.openai.com; `OPENAI_BASE_URL` is honoured for proxies | – |
+| openai | `native` | `OPENAI_API_KEY` for api.openai.com; `OPENAI_BASE_URL` is honoured for proxies | – |
 | codex | `subscription` | none: `codex login` with ChatGPT | – |
 
 Other variables that matter: `GOOGLE_CLOUD_PROJECT` (Vertex project when the profile has

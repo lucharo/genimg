@@ -16,15 +16,15 @@ genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 
 ## Why genimg
 
-- **One CLI, three providers.** `gdm:` Gemini Image (API key, Vertex, ADC), `oai:` GPT Image
+- One CLI, three providers. `gdm:` Gemini Image (API key, Vertex, ADC), `oai:` GPT Image
   (api.openai.com or Azure), `codex:image` on a ChatGPT subscription. Aliases and full model
   ids both work; there is deliberately no built-in default model.
-- **Real variety, on purpose.** `-n 4 -d` or your own `--deltas` for named directions;
+- Real variety, on purpose. `-n 4 -d` or your own `--deltas` for named directions;
   Gemini `--mode batch` lets the model differentiate a set itself.
-- **Edit or steer.** `-i` edits an image; positional paths are references for style and layout.
-- **Review surfaces.** `-g --open` renders a self-contained HTML grid with a carousel and copy
+- Edit or steer. `-i` edits an image; positional paths are references for style and layout.
+- Review surfaces. `-g --open` renders a self-contained HTML grid with a carousel and copy
   buttons; `genimg draw` opens a local pen-friendly canvas.
-- **Agent friendly.** `genimg skills install` gives Claude Code, Codex, Cursor or OpenCode the
+- Agent friendly. `genimg skills install` gives Claude Code, Codex, Cursor or OpenCode the
   `genimg` skill plus infographic, refinement and image-to-app workflows. Every verb has
   `--json`; every generation leaves a metadata sidecar.
 

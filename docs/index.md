@@ -20,17 +20,17 @@ genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 
 <div class="grid cards" markdown>
 
-- **[Getting started](getting-started/install.md)** — install, authenticate, check what models
+- **[Getting started](getting-started/install.md)**: install, authenticate, check what models
   your credentials can reach, generate a first image.
-- **[For agents](agents.md)** — install the `genimg` skill so Claude Code, Codex, Cursor or
+- **[For agents](agents.md)**: install the `genimg` skill so Claude Code, Codex, Cursor or
   OpenCode can generate images for you.
-- **[Diverse images](guide/diversity.md)** — why `-n` alone converges, and the two ways to get
+- **[Diverse images](guide/diversity.md)**: why `-n` alone converges, and the two ways to get
   real variety.
-- **[Input and reference images](guide/input-images.md)** — edit an image or steer style from
+- **[Input and reference images](guide/input-images.md)**: edit an image or steer style from
   references.
-- **[Specialised surfaces](surfaces/grid.md)** — the HTML grid and carousel, and the local Draw
+- **[Specialised surfaces](surfaces/grid.md)**: the HTML grid and carousel, and the local Draw
   Studio canvas.
-- **[Workflow skills](skills/index.md)** — infographics, refinement loops, image-to-app.
+- **[Workflow skills](skills/index.md)**: infographics, refinement loops, image-to-app.
 
 </div>
 

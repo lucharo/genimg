@@ -11,12 +11,12 @@ genimg grid a.png b.png c.png -o review.html --open         # any existing files
 
 ## What is on the page
 
-- **Grid view**: all images at once, each card with its number, filename, the prompt delta
+- Grid view: all images at once, each card with its number, filename, the prompt delta
   (in diverse mode) and a *copy* button that puts `I choose #3 (fox_3.png)` on the clipboard,
   ready to paste back to an agent.
-- **Carousel view**: one image at a time, keyboard-navigable, for close comparison.
-- **Prompt panel**: the full prompt, collapsible.
-- **Metadata panel**: model, parameters, input and ordered references, per-image cost, the
+- Carousel view: one image at a time, keyboard-navigable, for close comparison.
+- Prompt panel: the full prompt, collapsible.
+- Metadata panel: model, parameters, input and ordered references, per-image cost, the
   reported C2PA generator when an image carries content credentials.
 
 View, prompt visibility and carousel index persist in the URL, so a link to `#carousel-2`

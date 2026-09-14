@@ -7,19 +7,19 @@ responsive layout, real data and application state are resolved in code.
 
 ## The staged workflow
 
-1. **Freeze the product contract.** Outcome and non-goals, the views and states the app must
+1. Freeze the product contract. Outcome and non-goals, the views and states the app must
    have, what data is authoritative versus derived, the delivery surface, the reference images
    and what each contributes. Behaviour stays constant across visual variants.
-2. **Generate coherent directions.** One design system at a time, the same fixed view set
+2. Generate coherent directions. One design system at a time, the same fixed view set
    per direction, stable filenames (`quiet-ledger-01-kanban.png`), `--diverse` or tailored
    `--deltas` for genuinely different systems. Prompts, model, quality and references are
    retained.
-3. **Review and choose.** Every candidate at full resolution in one `genimg grid`; each
+3. Review and choose. Every candidate at full resolution in one `genimg grid`; each
    departure from the contract labelled Preserve, Reinterpret or Reject; a synthesis written
    out explicitly when the answer combines directions.
-4. **Record answered decisions.** Chosen system and rejected alternatives, navigation, data
+4. Record answered decisions. Chosen system and rejected alternatives, navigation, data
    ownership, responsive and theme behaviour, integration contract.
-5. **Hand off implementation precisely** and **verify visual parity** in a browser against
+5. Hand off implementation precisely and **verify visual parity** in a browser against
    the reference images, with the evidence ladder from visual direction to fixture-backed
    prototype to live integration to installed runtime.
 
