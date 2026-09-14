@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: ["docs/**", "zensical.toml", "pyproject.toml", "uv.lock", ".github/workflows/docs.yml"]
   pull_request:
-    paths: ["docs/**", "zensical.toml", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "zensical.toml", "pyproject.toml", "uv.lock", ".github/workflows/docs.yml"]
   workflow_dispatch:
 
 permissions:
@@ -13,8 +13,9 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref, so a pull-request build never cancels a deployment already running on main.
 concurrency:
-  group: pages
+  group: docs-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -38,6 +39,10 @@ jobs:
   # after the repository goes public publishes the site with no workflow edit.
   deploy:
     needs: build
+    # Pages allows one deployment at a time; queue rather than cancel.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     if: github.event_name != 'pull_request' && github.event.repository.visibility == 'public'
     environment:
       name: github-pages
