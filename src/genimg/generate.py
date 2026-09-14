@@ -1,28 +1,31 @@
-"""High-level dispatch: registry lookup → correct IImageGen impl → generate."""
+"""High-level dispatch: registry lookup → provider → auth profile → generate."""
 from __future__ import annotations
 
-from .interfaces import GenerateRequest, GenerateResult, IImageGen
-from .providers import CodexImageGen, GeminiImageGen, OpenAIImageGen
+from .auth.base import AuthProfile
+from .auth.resolve import resolve as resolve_profile
+from .interfaces import GenerateRequest, GenerateResult
+from .providers import get as get_provider
 from .registry import resolve
 
 
-def _provider_for(provider: str, force_openai_auth: str | None = None) -> IImageGen:
-  if provider == "codex":
-    if force_openai_auth is not None:
-      raise ValueError("codex:image uses ChatGPT login, not --auth")
-    return CodexImageGen()
-  if provider == "google":
-    return GeminiImageGen()
-  if provider == "openai":
-    return OpenAIImageGen(force_auth=force_openai_auth)
-  raise ValueError(f"unknown provider {provider!r}")
+def generate(req: GenerateRequest, *, profile: str | None = None, auth_mode: str | None = None,
+             force_openai_auth: str | None = None) -> GenerateResult:
+  """Resolve req.model (alias or canonical), pick the auth profile, dispatch to the provider.
 
-
-def generate(req: GenerateRequest, force_openai_auth: str | None = None) -> GenerateResult:
-  """Resolve req.model (alias or canonical) and dispatch to the right IImageGen impl."""
+  `profile` names a `[profiles.NAME]` table; `auth_mode` forces one of the provider's modes
+  (the CLI's `--auth`). `force_openai_auth` is the pre-profile spelling of `auth_mode`.
+  """
   _, spec = resolve(req.model)
+  provider = get_provider(spec.provider)
+  mode = auth_mode or {"direct": "native"}.get(force_openai_auth or "", force_openai_auth)
+  if mode is not None and mode not in provider.modes:
+    raise ValueError(f"{spec.provider} has no auth mode {mode!r}; choose {', '.join(provider.modes)}")
+  # Resolve eagerly only when the caller pinned a profile or mode; otherwise the provider's
+  # client factory resolves lazily (config profile → env) at the first API call.
+  auth: AuthProfile | None = (resolve_profile(spec.provider, profile_name=profile, force_mode=mode)
+                              if profile is not None or mode is not None else None)
   resolved_req = req.model_copy(update={
     "model": spec.model_id,
     "region": req.region or spec.region,
   })
-  return _provider_for(spec.provider, force_openai_auth).generate(resolved_req)
+  return provider.make(auth).generate(resolved_req)

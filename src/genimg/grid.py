@@ -19,23 +19,30 @@ from typing import Any
 
 from PIL import Image
 
-# Per-image cost map (rough). Google Gemini by resolution; OpenAI gpt-image by quality+size.
-_GOOGLE_COST_BY_EDGE = {1024: 0.04, 2048: 0.13, 4096: 0.24}
-_OPENAI_COST_BY_QUALITY = {"low": 0.006, "medium": 0.053, "high": 0.211, "auto": 0.053}
+# Fallback per-image estimate for files of unknown provenance (`genimg grid *.png`), keyed by
+# the image's long edge. Known generations carry `cost_usd_estimated` in their metadata.
+_COST_BY_EDGE = {1024: 0.04, 2048: 0.13, 4096: 0.24}
 
 
-def estimate_cost(img_path: Path, provider: str | None = None, quality: str | None = None) -> float:
-  if provider == "openai":
-    return _OPENAI_COST_BY_QUALITY.get(quality or "high", 0.053)
+def estimate_cost(img_path: Path, provider: str | None = None, quality: str | None = None,
+                  model_id: str | None = None, resolution: str | None = None) -> float:
+  if provider and model_id:
+    from .providers import get
+    try:
+      priced = get(provider).price(model_id, quality, resolution)
+    except ValueError:
+      priced = None
+    if priced is not None:
+      return priced
   try:
     with Image.open(img_path) as img:
       max_dim = max(img.size)
-      for edge, cost in sorted(_GOOGLE_COST_BY_EDGE.items()):
+      for edge, cost in sorted(_COST_BY_EDGE.items()):
         if max_dim <= edge:
           return cost
-      return _GOOGLE_COST_BY_EDGE[4096]
+      return _COST_BY_EDGE[4096]
   except Exception:
-    return _GOOGLE_COST_BY_EDGE[1024]
+    return _COST_BY_EDGE[1024]
 
 
 _HTML = '''<!DOCTYPE html>
@@ -284,7 +291,8 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
     text = copy_format.format(label=label, filename=p.name, path=str(p.absolute()))
     items.append({"src": src, "label": label, "filename": p.name, "copyText": text,
                   "delta": deltas_by_name.get(p.name, "")})
-    costs.append(estimate_cost(p, provider=provider, quality=quality))
+    costs.append(estimate_cost(p, provider=provider, quality=quality,
+                               model_id=(meta or {}).get("model_id"), resolution=(meta or {}).get("resolution")))
 
   # Single source of truth for cost: prefer the CLI's size/quality-aware estimate.
   meta_cost = (meta or {}).get("cost_usd_estimated")

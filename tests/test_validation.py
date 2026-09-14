@@ -9,7 +9,7 @@ from unittest.mock import patch
 import typer
 from rich.console import Console
 
-from genimg import cli
+from genimg import cli, providers
 
 
 def _validate(**overrides) -> None:
@@ -18,7 +18,9 @@ def _validate(**overrides) -> None:
     resolution=None, aspect_ratio=None, refs=[], input=None, model_id="gpt-image-2",
   )
   defaults.update(overrides)
-  cli._validate_provider_flags(**defaults)
+  provider = providers.get(defaults.pop("provider"))
+  caps = provider.capabilities(defaults["model_id"])
+  cli._validate_provider_flags(provider, caps, **defaults)
 
 
 class ValidationMatrixTests(unittest.TestCase):

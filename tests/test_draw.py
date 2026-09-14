@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from genimg import cli, draw, metadata
+from genimg.auth.base import AuthInfo
 
 _IMG_DATAURL = "data:image/png;base64," + base64.b64encode(b"not-a-real-png").decode()
 
@@ -209,8 +210,10 @@ class GenerateHttpTests(unittest.TestCase):
       patch.object(metadata, "GENIMG_HOME", self.tmp),
       patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
       patch.object(draw.discovery, "load_fresh_cache", return_value=None),
-      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
-      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
+      patch.object(draw.auth_resolve, "all_info", return_value={
+        "google": AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True),
+        "openai": AuthInfo("azure", "env", "-", "AZURE_OPENAI_API_KEY", True),
+        "codex": AuthInfo("unset", "-", "-", "-", False, "Run `codex login`")}),
     ]
     for p in self._patches:
       p.start()
@@ -482,8 +485,10 @@ class BootDataModelFilterTests(unittest.TestCase):
       patch.object(metadata, "GENIMG_HOME", tmp),
       patch.object(metadata, "GEN_DIR", tmp / "generations"),
       patch.object(draw.discovery, "load_fresh_cache", return_value=fresh_cache),
-      patch.object(draw.auth_google, "auth_info", return_value={"ok": True, "mode": "vertex", "hint": ""}),
-      patch.object(draw.auth_openai, "auth_info", return_value={"ok": True, "mode": "azure", "hint": ""}),
+      patch.object(draw.auth_resolve, "all_info", return_value={
+        "google": AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True),
+        "openai": AuthInfo("azure", "env", "-", "AZURE_OPENAI_API_KEY", True),
+        "codex": AuthInfo("unset", "-", "-", "-", False, "Run `codex login`")}),
     ):
       return draw.Studio([], "gdm:nb2").boot_data()["models"]
 

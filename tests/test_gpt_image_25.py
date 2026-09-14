@@ -9,7 +9,17 @@ import pytest
 from PIL import Image
 from typer.testing import CliRunner
 
-from genimg import cli, cost, discovery, draw, grid, history, metadata, registry
+from genimg import (
+  cli,
+  cost,
+  discovery,
+  draw,
+  grid,
+  history,
+  metadata,
+  providers,
+  registry,
+)
 from genimg.generate import generate
 from genimg.interfaces import GenerateRequest
 from genimg.providers import openai
@@ -96,8 +106,9 @@ def test_models_and_studio_discover_both_variants():
   ids = [f"gpt-image-2.5-{v}" for v in ("sunburst", "flare")]
   client = MagicMock()
   client.models.list.return_value = [SimpleNamespace(id=model) for model in ids]
-  with patch.object(discovery.auth_openai, "get_client", return_value=client):
-    probes = discovery._probe_openai_from_model_list(list(registry.all_canonical().items()))
+  with patch.object(openai, "get_client", return_value=client):
+    probes = providers.get("openai").probe_listed(
+      [(a, s) for a, s in registry.all_canonical().items() if s.provider == "openai"])
   with patch.object(discovery, "get_or_probe", return_value=(probes, 0)):
     result = CliRunner().invoke(cli._app, ["models", "--json"])
   assert result.exit_code == 0, result.output

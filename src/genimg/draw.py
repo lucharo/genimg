@@ -27,68 +27,48 @@ from http import server as _http_server
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
-from . import cost, discovery, metadata, registry
-from .auth import codex as auth_codex
-from .auth import google as auth_google
-from .auth import openai as auth_openai
-from .providers.openai import quality_options
+from . import discovery, metadata, providers, registry
+from .auth import resolve as auth_resolve
+from .providers.base import ALL_ASPECTS, _res_order
 
 # Extensions we treat as loadable source images.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
-_OPENAI_RESOLUTIONS = {
-  "1:1": ["1K", "2K", "4K"],
-  "4:3": ["1K", "2K"],
-  "3:4": ["1K", "2K"],
-  "16:9": ["2K", "4K"],
-  "9:16": ["2K", "4K"],
-}
-_OPENAI_ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16"]
-_GEMINI_ASPECTS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
-_GEMINI_31_FLASH_ASPECTS = [
-  "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1",
-  "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
-]
+
+def _aspect_sort(aspects) -> list[str]:
+  """Wide → square → tall, the order the studio's aspect picker expects."""
+  def ratio(a: str) -> float:
+    w, h = a.split(":")
+    return int(w) / int(h)
+  return sorted(aspects, key=ratio, reverse=True)
 
 
 def _studio_models() -> list[dict]:
   """Every image-editable model in the registry, as dropdown entries.
-  Built from the registry so the studio never drifts out of sync with
-  what genimg supports. Ordered google→openai→codex, best quality first."""
+  Built from the registry and each provider's declared capabilities so the studio never
+  drifts out of sync with what genimg supports. Ordered by provider, best quality first."""
   out: list[dict] = []
+  order = {p.name: p.order for p in providers.all_providers()}
   for alias, spec in registry.all_canonical().items():
-    is_flash_31 = spec.model_id.startswith("gemini-3.1-flash-image")
-    is_flash_lite_31 = spec.model_id.startswith("gemini-3.1-flash-lite-image")
-    is_gemini_3_pro = spec.model_id.startswith("gemini-3-pro-image")
-    if spec.provider == "openai":
-      resolution_options = ["1K", "2K", "4K"]
-      aspect_options = _OPENAI_ASPECTS
-    elif is_flash_31:
-      resolution_options = ["512", "1K", "2K", "4K"]
-      aspect_options = _GEMINI_31_FLASH_ASPECTS
-    elif is_flash_lite_31:
-      resolution_options = ["1K"]
-      aspect_options = _GEMINI_31_FLASH_ASPECTS
-    elif is_gemini_3_pro:
-      resolution_options = ["1K", "2K", "4K"]
-      aspect_options = _GEMINI_ASPECTS
-    else:
-      resolution_options = []
-      aspect_options = _GEMINI_ASPECTS
+    provider = providers.get(spec.provider)
+    caps = provider.capabilities(spec.model_id)
+    label = (f"{alias} · {provider.label}" if provider.runtime_selects_model
+             else f"{alias} · {spec.model_id.replace('-preview', '')}")
     out.append({
       "alias": alias,
-      "label": "codex:image · Codex subscription" if spec.provider == "codex" else f"{alias} · {spec.model_id.replace('-preview', '')}",
+      "label": label,
       "modelId": spec.model_id,
       "provider": spec.provider,
       "rank": spec.quality_rank,
-      "qualityOptions": quality_options(spec.model_id) if spec.provider == "openai" else [],
-      "resolutionOptions": resolution_options,
-      "resolutionOptionsByAspect": _OPENAI_RESOLUTIONS if spec.provider == "openai" else {},
-      "aspectOptions": aspect_options,
-      "thinkingOptions": ["minimal", "high"] if is_flash_31 else [],
+      "qualityOptions": list(caps.qualities),
+      "resolutionOptions": sorted(caps.resolutions, key=_res_order),
+      "resolutionOptionsByAspect": caps.resolution_options_by_aspect(),
+      "aspectOptions": _aspect_sort(caps.aspect_ratios),
+      "thinkingOptions": list(caps.thinking_levels),
+      "prices": provider.price_table(spec.model_id),
+      "subscription": provider.billing == "subscription",
     })
-  order = {"google": 0, "openai": 1, "codex": 2}
-  out.sort(key=lambda m: (order.get(m["provider"], 9), -m["rank"], m["alias"]))
+  out.sort(key=lambda m: (order.get(m["provider"], 99), -m["rank"], m["alias"]))
   return out
 
 
@@ -108,11 +88,7 @@ def available_models(cache: dict | None, provider_auth: dict | None = None) -> l
   "missing" is kept selectable. Provider/region request failures disable only affected entries.
   """
   probes = (cache or {}).get("probes") or {}
-  provider_auth = provider_auth or {
-    "google": auth_google.auth_info(),
-    "openai": auth_openai.auth_info(),
-    "codex": auth_codex.auth_info(),
-  }
+  provider_auth = provider_auth or {name: info.as_dict() for name, info in auth_resolve.all_info().items()}
   out: list[dict] = []
   for m in STUDIO_MODELS:
     probe = probes.get(m["alias"]) or {}
@@ -124,10 +100,10 @@ def available_models(cache: dict | None, provider_auth: dict | None = None) -> l
     if status == "listed":
       availability = "listed"
       reason = "listed by provider; generation not verified"
-    if m["provider"] == "codex" and enabled:
+    if m["subscription"] and enabled:
       status = "ready"  # Login is checked live; do not reuse an old logged-out cache.
       availability = "ready"
-      reason = "Codex selects the image model and size; aspect ratio is a prompt request"
+      reason = "the provider selects the image model and size; aspect ratio is a prompt request"
     if not enabled:
       availability = "unavailable"
       reason = str(auth.get("hint") or f"{m['provider']} auth is not configured")
@@ -202,9 +178,8 @@ def _nearest_aspect(w: int, h: int, aspect_options: list[str] | None = None) -> 
 
 
 def _provider_of(model: str) -> str:
-  """openai vs google for a studio model alias (offline; falls back to a prefix heuristic)."""
+  """Provider name for a studio model alias (offline; falls back to a prefix heuristic)."""
   try:
-    from . import registry
     return registry.resolve(model)[1].provider
   except Exception:
     return "openai" if ("oai" in model or "gpt-image" in model) else "google"
@@ -212,23 +187,32 @@ def _provider_of(model: str) -> str:
 
 def pick_size(provider: str, w: int, h: int, resolution: str | None,
               aspect: str | None = None,
-              aspect_options: list[str] | None = None) -> tuple[str, str | None]:
-  """Choose a valid (aspect, resolution) for the flattened composite.
+              aspect_options: list[str] | None = None,
+              model_id: str | None = None) -> tuple[str, str | None]:
+  """Choose a valid (aspect, resolution) for the flattened composite, from the provider's
+  declared capabilities.
 
-  - Google uses the selected image_size when that model exposes one; older models pass none.
-  - OpenAI has a constrained size table, so unsupported aspect/resolution combinations snap
-    to 2K. Quality is passed separately.
+  - Free-size providers (Gemini) pass the selected image_size when the model exposes one.
+  - Table-size providers (OpenAI) snap unsupported aspect/resolution pairs to 2K.
+  - Runtime-selected providers (Codex) pass only the aspect as a prompt request.
   """
-  if provider == "openai":
-    aspect = aspect if aspect in _OPENAI_RESOLUTIONS else _nearest_aspect(w, h)
-    valid = _OPENAI_RESOLUTIONS[aspect]
-    requested = resolution or "1K"
+  prov = providers.get(provider)
+  caps = prov.capabilities(model_id or "")
+  if caps.sizes:
+    by_aspect = caps.resolution_options_by_aspect()
+    aspect = aspect if aspect in by_aspect else _nearest_aspect(w, h, list(by_aspect))
+    valid = by_aspect[aspect]
+    requested = resolution or caps.default_resolution or "1K"
     if requested not in valid:
       requested = "2K"
     return aspect, requested
-  google_aspects = aspect_options or _GEMINI_31_FLASH_ASPECTS
-  aspect = aspect if aspect in google_aspects else _nearest_aspect(w, h, google_aspects)
-  return aspect, None if provider == "codex" else resolution or None
+  aspects = aspect_options or _aspect_sort(caps.aspect_ratios if model_id is not None else ALL_ASPECTS)
+  aspect = aspect if aspect in aspects else _nearest_aspect(w, h, aspects)
+  if prov.runtime_selects_model:
+    return aspect, None
+  if model_id is None:
+    return aspect, resolution or None  # unknown model: trust the caller's size
+  return aspect, resolution if resolution in caps.resolutions else None
 
 
 def _genimg_cmd() -> list[str]:
@@ -263,11 +247,9 @@ class Studio:
     self.lock = threading.Lock()
 
   def boot_data(self) -> dict:
-    drop_none = lambda tbl: {k: v for k, v in tbl.items() if k is not None}
     # load_fresh_cache() returns None once the probe cache is older than the refresh interval
     # (5 days). Stale/missing probe data is shown as unknown rather than hiding models.
-    provider_auth = {"google": auth_google.auth_info(), "openai": auth_openai.auth_info(),
-                     "codex": auth_codex.auth_info()}
+    provider_auth = {name: info.as_dict() for name, info in auth_resolve.all_info().items()}
     models = available_models(discovery.load_fresh_cache(), provider_auth)
     enabled = [m for m in models if m["enabled"]]
     default = self.default_model if any(
@@ -277,18 +259,13 @@ class Studio:
       "sources": [{"idx": i, "name": p.name} for i, p in enumerate(self.sources)],
       "models": models,
       "providers": {name: {"mode": info.get("mode"), "ok": info.get("ok"),
-                           "hint": info.get("hint", "")}
+                           "hint": info.get("hint", ""), "label": providers.get(name).label}
                     for name, info in provider_auth.items()},
+      "providerOrder": providers.names(),
       "defaultModel": default,
       "defaultPrompt": DEFAULT_PROMPT,
       "promptStarters": PROMPT_STARTERS,
       "genDir": str(self.gen_dir).replace(str(Path.home()), "~"),
-      # Real cost tables from cost.py so the client estimate is per-model accurate + stays in sync.
-      "costs": {
-        "openaiBase": cost._OPENAI_BASE_PER_IMAGE,
-        "openaiResMult": drop_none(cost._OPENAI_RESOLUTION_MULT),
-        "googlePerImage": {mid: drop_none(tbl) for mid, tbl in cost._GOOGLE_PER_IMAGE.items()},
-      },
     }
 
   def _meta_by_output(self) -> dict[str, dict]:
@@ -342,7 +319,8 @@ class Studio:
     provider = _provider_of(model)
     model_info = next((item for item in STUDIO_MODELS if item["alias"] == model), None)
     aspect_options = model_info.get("aspectOptions") if model_info else None
-    aspect, res = pick_size(provider, w, h, resolution, aspect, aspect_options)
+    aspect, res = pick_size(provider, w, h, resolution, aspect, aspect_options,
+                            model_id=(model_info or {}).get("modelId"))
     # Invoke the hidden `_run` command with OPTIONS FIRST, then `--`, then the prompt — so a
     # prompt beginning with "-" (the default prompt does) is parsed as a positional, not an
     # unknown option. `genimg "- text" ...` otherwise errors with "No such option: -".
@@ -352,9 +330,9 @@ class Studio:
     cmd += ["-a", aspect, "-o", str(out)]
     if res:
       cmd += ["-r", res]
-    if provider == "openai" and quality:
+    if quality and (model_info or {}).get("qualityOptions"):
       cmd += ["-q", quality]
-    if provider == "google" and thinking:
+    if thinking and (model_info or {}).get("thinkingOptions"):
       cmd += ["--thinking", thinking]
     cmd += ["--", prompt]
 
@@ -641,7 +619,7 @@ const BOOT = /*__BOOT__*/;
 
   // ---------- static shell ----------
   function shell(){
-    const providerNames={google:"Google · Gemini",openai:"OpenAI",codex:"Codex subscription"};
+    const providerNames={}; (BOOT.providerOrder||Object.keys(BOOT.providers||{})).forEach(p=>{providerNames[p]=(BOOT.providers[p]||{}).label||p;});
     const modelOpts = Object.keys(providerNames).map(provider=>{
       const opts=BOOT.models.filter(m=>m.provider===provider).map(m=>{
         const suffix=!m.enabled?" — unavailable":"";
@@ -709,8 +687,6 @@ const BOOT = /*__BOOT__*/;
     renderTopbar(); renderToolbar(); renderPrompt(); renderCost(); renderTray(); renderSrc(); renderGrid();
     sizeCanvas();
   }
-
-  const isOai = ()=> (MM[S.model]||{}).provider==="openai";
 
   // ---------- render pieces ----------
   function panelTopIcon(expanded){
@@ -974,24 +950,22 @@ const BOOT = /*__BOOT__*/;
     return options.includes("2K")?"2K":options[0];
   }
   function effectiveResolution(){
-    if(!isOai())return selectedResolution()||"1K";
-    const valid={"1:1":["1K","2K","4K"],"4:3":["1K","2K"],"3:4":["1K","2K"],"16:9":["2K","4K"],"9:16":["2K","4K"]}[selectedAspect()];
+    const meta=MM[S.model]||{}, byAspect=meta.resolutionOptionsByAspect||{};
+    if(!Object.keys(byAspect).length)return selectedResolution()||"1K";
+    const valid=byAspect[selectedAspect()]||[];
     return valid.includes(S.resolution)?S.resolution:"2K";
   }
   function costEstimate(){
-    const mid=(MM[S.model]||{}).modelId, C=BOOT.costs||{};
-    let usd;
-    if ((MM[S.model]||{}).provider === "codex") return "Codex subscription · model/size automatic";
-    if (isOai()){
-      usd = ((C.openaiBase||{})[mid]||{})[S.quality]; if(usd==null) return "cost unknown";
-      usd*=((C.openaiResMult||{})[effectiveResolution()]||1);
-    } else {
-      const key=(mid&&mid.endsWith("-preview"))?mid.slice(0,-8):mid; // google table keyed by GA id
-      const t=(C.googlePerImage||{})[key]||{};
-      usd=t[selectedResolution()||"1K"]; if(usd==null)usd=t["1K"]; if(usd==null)usd=0.067;
-    }
+    const meta=MM[S.model]||{};
+    if (meta.subscription) return (providerLabel(meta.provider)||"Subscription")+" · model/size automatic";
+    // prices: quality ("" when n/a) → resolution ("" when n/a) → USD, built server-side per model.
+    const byQ=meta.prices||{}, row=byQ[(meta.qualityOptions||[]).length?S.quality:""]||{};
+    const res=(meta.resolutionOptions||[]).length?effectiveResolution():"";
+    let usd=row[res]; if(usd==null) usd=row["1K"]; if(usd==null) usd=row[""];
+    if(usd==null) return "cost unknown";
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }
+  const providerLabel=(p)=>((BOOT.providers||{})[p]||{}).label;
 
   // ---------- canvas world ----------
   function sizeCanvas(){
