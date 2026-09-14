@@ -12,7 +12,7 @@
 
 ## Adding a provider or auth mode
 
-Providers are plugins (see `docs/adr/0003-providers-and-auth-profiles.md`). Subclass
+Providers are plugins (see `docs/maintainers/adr/0003-providers-and-auth-profiles.md`). Subclass
 `genimg.providers.base.Provider`, give it `AuthProfile` classes for its modes, register it in
 `genimg/providers/__init__.py`, add curated aliases in `registry.py`, and run
 `tests/test_provider_contract.py`: it parametrises over the registry, so the new provider is

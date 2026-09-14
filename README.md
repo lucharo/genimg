@@ -1,156 +1,48 @@
 # genimg
 
-Multi-provider image generation CLI. Single command for Gemini (Vertex/direct), OpenAI (Azure/direct), and Codex with your ChatGPT subscription.
+One command for image generation across OpenAI (GPT Image), Google DeepMind (Gemini Image) and
+Codex with your ChatGPT subscription. Built from the bottom up to be human and agent friendly.
 
-## Install
-
-```bash
-uv tool install --from . genimg
-```
-
-## Use
+**Docs: [lucharo.github.io/genimg](https://lucharo.github.io/genimg/)**
 
 ```bash
-genimg "a robot" -m gdm:nb -o robot.png          # pick a model (no built-in default)
-genimg "a robot" -m oai:gi2 -o robot.png         # OpenAI gpt-image-2
-genimg "a robot" -m codex:image -o robot.png     # Codex subscription
-genimg "a robot" -m oai:gi2.5 -o sunburst.png    # GPT Image 2.5 Sunburst
-genimg "a robot" -m oai:gi2.5-flare -o flare.png # GPT Image 2.5 Flare
-genimg "with refs" a.png b.png -m gdm:nbp -o out.png     # reference images (positional)
-genimg "edit this" -i input.png -m gdm:nb -o edited.png  # image-to-image
-genimg "X" -m oai:gi2 -n 4 -g --open             # batch + auto HTML grid
-genimg "X" -m oai:gi2 -n 4 -d -g --open          # diversified batch (curated per-gen prompt deltas)
-genimg "X" -m oai:gi2 -n 3 --deltas "iso, blueprint"  # your own deltas (or --deltas @file, one per line)
-genimg "X" -m gdm:nb2 -n 4 -d --mode batch       # ONE request, model curates a diverse set (Gemini image models only)
-genimg grid *.png -o g.html --open               # standalone grid from existing files
-genimg "X" -m oai:gi2 -n 6 -q high --dry-run     # preview model/params/cost, no API call
-genimg "X" -m gdm:nb2 --name deep-between         # optional history label (duplicates allowed)
-genimg history                                    # recent generations as a table
-genimg history view                               # interactive image/history browser
-genimg draw diagrams/                            # draw studio: annotate/sketch with image-editable models
-genimg models                                    # discover listed models
-genimg setup                                     # interactive auth wizard (also sets a default)
-genimg auth                                      # show ✓/✗ readiness per provider
-genimg config show                               # inspect saved config (config path|edit too)
+uv tool install genimg
+genimg setup                                          # detect creds → validate → save a profile
+genimg models                                         # what your credentials can reach, no spend
+genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 ```
 
-There is **no built-in default model** — pass `-m <alias>`, or run `genimg setup`
-(or `genimg models set-default <alias>`) to save one so you can omit `-m`.
+![Four candidates in a genimg grid](docs/assets/grid.svg)
 
-See the [Draw Studio guide](docs/draw-studio.md) for the local canvas workflow, iPad/Apple Pencil
-and remote-screen setup, security boundary, and the features that remain CLI-only. The
-[FAQ](docs/faq/README.md) covers recovery, model availability and provider-specific controls.
+## Why genimg
 
-`genimg history view` browses every recorded output image with arrow or Vim navigation, an
-in-terminal preview, the full prompt and absolute provenance paths. It uses the terminal's native
-image protocol when available and falls back to Unicode rendering. Press `yi` to copy the selected
-image, `yp` to copy its absolute path, or `?` for all keys. `genimg history --json` remains the
-non-interactive interface and always emits absolute paths, including when reading older sidecars
-that recorded paths relative to `workdir`.
+- **One CLI, three providers.** `gdm:` Gemini Image (API key, Vertex, ADC), `oai:` GPT Image
+  (api.openai.com or Azure), `codex:image` on a ChatGPT subscription. Aliases and full model
+  ids both work; there is deliberately no built-in default model.
+- **Real variety, on purpose.** `-n 4 -d` or your own `--deltas` for named directions;
+  Gemini `--mode batch` lets the model differentiate a set itself.
+- **Edit or steer.** `-i` edits an image; positional paths are references for style and layout.
+- **Review surfaces.** `-g --open` renders a self-contained HTML grid with a carousel and copy
+  buttons; `genimg draw` opens a local pen-friendly canvas.
+- **Agent friendly.** `genimg skills install` gives Claude Code, Codex, Cursor or OpenCode the
+  `genimg` skill plus infographic, refinement and image-to-app workflows. Every verb has
+  `--json`; every generation leaves a metadata sidecar.
 
-Images are added automatically to history when genimg creates them. History is read-only.
-For subscription generation, use `genimg "your prompt" -m codex:image`.
-Generation preserves content credentials and records the reported generator/version,
-subscription/API billing from the generation route, and a separate theoretical API-cost
-estimate or range where possible. See the
-[subscription, provenance and billing guide](docs/codex-subscription.md).
+## Guide
 
-## Getting the most variety
+| | |
+| --- | --- |
+| [Install](https://lucharo.github.io/genimg/getting-started/install/) · [Authentication](https://lucharo.github.io/genimg/getting-started/auth/) · [First image](https://lucharo.github.io/genimg/getting-started/first-image/) | getting started |
+| [For agents](https://lucharo.github.io/genimg/agents/) | the bundled skill and the agent contract |
+| [Diverse images](https://lucharo.github.io/genimg/guide/diversity/) · [Input and reference images](https://lucharo.github.io/genimg/guide/input-images/) · [Codex subscription](https://lucharo.github.io/genimg/guide/codex-subscription/) | the main workflows |
+| [Grid and carousel](https://lucharo.github.io/genimg/surfaces/grid/) · [Draw Studio](https://lucharo.github.io/genimg/surfaces/draw-studio/) | specialised surfaces |
+| [Workflow skills](https://lucharo.github.io/genimg/skills/) | infographic, refinement, image-to-app |
+| [CLI](https://lucharo.github.io/genimg/reference/cli/) · [Models](https://lucharo.github.io/genimg/reference/models/) · [config.toml](https://lucharo.github.io/genimg/reference/config/) · [FAQ](https://lucharo.github.io/genimg/faq/) | reference |
 
-Plain `-n` samples one prompt N times and converges on near-duplicates for simple
-subjects (logos, icons, single objects). Two ways to force real variety — pick by
-**intent**, they're different tools, not better/worse:
+The same pages live in [`docs/`](docs/) if you prefer reading source.
 
-- **Controlled spread — any provider.** You name the axes with `--deltas` (implies `-d`);
-  takes `#2..#N` each get one of your deltas in order while `#1` stays the un-perturbed
-  anchor, so supply `N-1` of them (three deltas for `-n 4`):
-  ```bash
-  genimg "a minimal fox logo, NOT a grid" -n 4 --deltas "line art, block print, brush stroke" -m oai:gi2 -g --open
-  ```
-  Best when you know *how* the takes should differ. Bare `-d` uses a generic built-in
-  pool — handy for logos/icons, weaker for diagrams/photos, so prefer your own deltas there.
+## Contributing
 
-- **Model-curated set — Gemini only.** `-d --mode batch` on `gdm:nb2`/`gdm:nbp` sends **one**
-  request and lets the model differentiate all N takes itself (distinct palettes *and*
-  techniques):
-  ```bash
-  genimg "a minimal fox logo, NOT a grid" -n 4 -d --mode batch -m gdm:nb2 -g --open
-  ```
-  Slower (~30s vs ~8s parallel) but the most *coherent* varied set. OpenAI rejects
-  `--mode batch` outright because GPT Image n>1 returns near-duplicate independent samples.
-
-Either needs `-n >= 2`. `-d`/`--deltas` work everywhere; `--mode batch` variety is Gemini-only.
-The two don't combine: `--deltas` is parallel-mode only — under `--mode batch` the model does
-its own differentiation, so pick one path or the other.
-
-## Skills
-
-```bash
-genimg skills list                              # show install state
-genimg skills install                           # install all bundled skills to Claude
-genimg skills install all                       # install all bundled skills to known agents
-genimg skills install codex genimg              # targeted install
-```
-
-Bundled skills:
-- `genimg`: lean CLI usage patterns.
-- `genimg-infographic`: Baoyu-derived 21-layout × 22-style infographic workflow using GenIMG.
-- `genimg-agent-refinement`: agent loop for inspecting outputs and removing obvious artifacts.
-- `image-to-app`: staged workflow from visual directions through implementation and browser QA.
-
-Skills install as symlinks into each agent's skills dir. If you reinstall/upgrade genimg
-(e.g. via `uv tool`), re-run `genimg skills update` to refresh the links.
-
-## Auth
-
-Run `genimg setup` for the guided flow (detect → fetch missing → live preflight → save).
-`genimg auth` shows what resolved; `genimg auth --modes` lists every mode and the env vars it
-auto-detects.
-
-| Provider | Auth mode | Env vars auto-detected | Profile settings |
-| --- | --- | --- | --- |
-| google | `direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | – |
-| google | `vertex` | `GOOGLE_APPLICATION_CREDENTIALS` (service-account JSON) | `project`, `region` |
-| google | `vertex_adc` | none: `gcloud auth application-default login` | `project`, `region` |
-| openai | `native` | `OPENAI_API_KEY` | – |
-| openai | `azure` | `AZURE_OPENAI_API_KEY` (or `OPENAI_API_KEY`) + `AZURE_OPENAI_ENDPOINT` | `endpoint`, `api_version` |
-| codex | `subscription` | none: `codex login` with ChatGPT | – |
-
-With no config, the first mode whose env vars are present wins. A saved profile pins the
-choice; several profiles per provider are fine (`--profile NAME` picks one):
-
-```toml
-# ~/.config/genimg/config.toml
-default_model = "gdm:nb2"
-
-[profiles.google]
-provider = "google"
-auth = "vertex_adc"
-project = "my-gcp-project"
-
-[profiles.work]
-provider = "openai"
-auth = "azure"
-endpoint = "https://myres.openai.azure.com"
-```
-
-Secrets stay in env / shell rc; only non-secret settings live in the profile. The Vertex
-project resolves from `--project` → profile `project` → `GOOGLE_CLOUD_PROJECT` → the
-service-account JSON's `project_id` → `gcloud`'s active project (no hardcoded fallback).
-A pre-0.1 `config.json` is migrated to `config.toml` on first run.
-
-## Models (`-m`)
-
-Aliases: `codex:image` (runtime-selected image model), `gdm:nbp` (Pro), `gdm:nb2` (Flash), `gdm:nb2-lite`, `gdm:nb`, `oai:gi2.5` (Sunburst), `oai:gi2.5-flare`, `oai:gi2`, `oai:gi1.5`, `oai:gi1`. Compatible bare Gemini Image and GPT Image model IDs are also accepted. Imagen 4 was retired by Google on August 17, 2026; use `gdm:nb2` instead. Availability varies by account and deployment: `genimg models --refresh` refreshes provider-listing status for curated models, while only an exact-model generation proves that it serves.
-
-GPT Image 2.5 uses the explicit IDs `gpt-image-2.5-sunburst` and
-`gpt-image-2.5-flare` for generation and editing. Both accept `-q xhigh` and
-`-q max` as well as the existing quality levels; genimg keeps its `medium` default.
-The existing OpenAI size options also apply. Dated provider IDs are accepted directly.
-See the [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation).
-
-GPT Image 2.5 per-image cost estimates are **unknown**: OpenAI publishes token rates,
-but says the GPT Image 2 calculator does not estimate 2.5 token consumption.
-Unknown estimates are saved as `null` and excluded from history spend totals and
-priced generation counts. See [Sunburst pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst)
-and [Flare pricing](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare).
+`uv sync` then `uv run pytest` and `uv run ruff check .`. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and the [maintainer docs](https://lucharo.github.io/genimg/maintainers/) for the release process
+and how to add a provider.
