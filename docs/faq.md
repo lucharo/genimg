@@ -102,9 +102,9 @@ Use the [release checklist](https://github.com/lucharo/genimg/issues/2) for scop
 Validate the candidate's tests, wheel and source distribution; require green checks on
 the exact release-PR head before merging. A green preparation workflow is not publication:
 verify the resulting tag, GitHub release and, when publishing to PyPI, indexed files and a
-clean install. See the [release workflow](../../.github/workflows/release.yml).
+clean install. See the [release workflow](https://github.com/lucharo/genimg/blob/main/.github/workflows/release.yml).
 
-_Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13 · Scope: release gates; consult the live tracker for completion_
+_Created: 2026-09-13 · Updated: 2026-09-14 · Verified: 2026-09-14 · Scope: release gates; consult the live tracker for completion_
 
 ## Why can a listed model still fail to generate?
 
