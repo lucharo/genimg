@@ -7,6 +7,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
+import click
+import typer
 from typer.testing import CliRunner
 
 from genimg import cli
@@ -130,6 +132,27 @@ class BundledSkillTests(unittest.TestCase):
       "not a separate image model",
     ):
       self.assertIn(requirement, workflow)
+
+  def test_genimg_skill_flag_table_lists_every_generation_option(self) -> None:
+    """The skill's flag table must name every option of the hidden generate command, so an
+    agent never has to run --help to discover a flag (issue #32)."""
+    text = cli._skill_sources()["genimg"].joinpath("SKILL.md").read_text()
+    table = text.split("## Flags (generation)", 1)[1].split("\n## ", 1)[0]
+    run = typer.main.get_command(cli._app).commands["_run"]
+    expected = {}
+    for param in run.params:
+      if not isinstance(param, click.Option) or "--help" in param.opts:
+        continue
+      long = next(o for o in param.opts if o.startswith("--"))
+      short = next((o for o in param.opts if not o.startswith("--")), "")
+      expected[long] = short
+    self.assertGreater(len(expected), 15)
+    rows = {}
+    for line in table.splitlines():
+      cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+      if len(cells) >= 2 and cells[0].startswith("--") and cells[0] != "---":
+        rows[cells[0]] = cells[1]
+    self.assertEqual(rows, expected)
 
 
 if __name__ == "__main__":
