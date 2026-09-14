@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 from genimg import discovery
 from genimg.interfaces import ProbeResult
+from genimg.providers import google as google_provider
+from genimg.providers import openai as openai_provider
 
 
 class DiscoveryCacheTests(unittest.TestCase):
@@ -69,15 +71,15 @@ class DiscoveryProbeTests(unittest.TestCase):
       def __init__(self, models: list[object]):
         self.models = FakeModels(models)
 
-    def fake_google_client(region: str = "global", project: str | None = None) -> FakeClient:
+    def fake_google_client(region: str = "global", project: str | None = None, profile=None) -> FakeClient:
       if region == "global":
         return FakeClient([{"name": "models/gemini-listed"}])
       return FakeClient([SimpleNamespace(name="publishers/google/models/gemini-regional-image")])
 
     with (
       patch.object(discovery, "all_canonical", return_value=entries),
-      patch.object(discovery.auth_openai, "get_client", return_value=FakeClient([SimpleNamespace(id="gpt-image-listed")])),
-      patch.object(discovery.auth_google, "get_client", side_effect=fake_google_client),
+      patch.object(openai_provider, "get_client", return_value=FakeClient([SimpleNamespace(id="gpt-image-listed")])),
+      patch.object(google_provider, "get_client", side_effect=fake_google_client),
     ):
       probes = discovery.probe_all()
 

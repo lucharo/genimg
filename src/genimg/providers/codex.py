@@ -15,11 +15,14 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
 from ..auth import codex as auth_codex
+from ..auth.base import AuthProfile
 from ..interfaces import GenerateRequest, IImageGen, ProbeResult
+from .base import Capabilities, Provider
 
 TIMEOUT_SECONDS = 300
 
@@ -98,8 +101,14 @@ def _run(cmd: list[str], prompt: str, workdir: str) -> tuple[int, str]:
 class CodexImageGen(IImageGen):
   max_parallel = 2
 
+  def __init__(self, profile: AuthProfile | None = None):
+    self.profile = profile
+
+  def _info(self):
+    return (self.profile or auth_codex.CodexSubscription()).info().as_dict()
+
   def probe(self, model: str, region: str | None = None) -> ProbeResult:
-    info = auth_codex.auth_info()
+    info = self._info()
     return ProbeResult(model=model, status="ready" if info["ok"] else "auth",
                        detail="ChatGPT login ready; native image generation not probed" if info["ok"] else str(info["hint"]))
 
@@ -108,7 +117,7 @@ class CodexImageGen(IImageGen):
                    if getattr(req, name) is not None]
     if unsupported or req.mode == "batch":
       raise RuntimeError("codex:image does not support quality, resolution, thinking, region, project or batch controls; Codex selects the image model.")
-    info = auth_codex.auth_info()
+    info = self._info()
     if not info["ok"]:
       raise RuntimeError(str(info["hint"]))
     return super().generate(req)
@@ -175,3 +184,30 @@ class CodexImageGen(IImageGen):
     out.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, out)
     return out
+
+
+_PROMPT_ASPECTS = frozenset({"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"})
+
+
+class CodexProvider(Provider):
+  name = "codex"
+  label = "Codex subscription"
+  alias_prefix = "codex"
+  auth_modes = auth_codex.MODES
+  flags = frozenset()
+  billing = "subscription"
+  runtime_selects_model = True
+  order = 30
+
+  def capabilities(self, model_id: str) -> Capabilities:
+    # Codex picks the image model and size; the aspect ratio is only a prompt request.
+    return Capabilities(resolutions=frozenset(), aspect_ratios=_PROMPT_ASPECTS, batch=False)
+
+  def infer_model(self, model_id: str):
+    return None
+
+  def make(self, profile: AuthProfile | None = None, **kw: Any) -> IImageGen:
+    return CodexImageGen(profile=profile)
+
+  def probe_default(self) -> tuple[str, str | None]:
+    return "codex:image", None

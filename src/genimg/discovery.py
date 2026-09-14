@@ -3,16 +3,10 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from google.genai.errors import ClientError, ServerError
-from openai import APIStatusError, AuthenticationError
-
-from .auth import google as auth_google
-from .auth import openai as auth_openai
 from .interfaces import ProbeResult
 from .registry import ModelSpec, all_canonical
 
@@ -75,95 +69,16 @@ def probe_all(parallel: int | None = None) -> dict[str, ProbeResult]:
 
 
 def _probe_groups(entries: list[tuple[str, ModelSpec]]):
-  google_entries_by_region: dict[str, list[tuple[str, ModelSpec]]] = {}
-  openai_entries: list[tuple[str, ModelSpec]] = []
-  codex_entries: list[tuple[str, ModelSpec]] = []
+  """One probe job per provider; each provider batches its own entries (e.g. per region)."""
+  from .providers import get
+  by_provider: dict[str, list[tuple[str, ModelSpec]]] = {}
   for alias, spec in entries:
-    if spec.provider == "google":
-      google_entries_by_region.setdefault(spec.region or "global", []).append((alias, spec))
-    elif spec.provider == "codex":
-      codex_entries.append((alias, spec))
-    elif spec.provider == "openai":
-      openai_entries.append((alias, spec))
-    else:
-      raise ValueError(f"unknown provider for {alias}: {spec.provider}")
-
+    by_provider.setdefault(spec.provider, []).append((alias, spec))
   groups = []
-  if codex_entries:
-    from .providers.codex import CodexImageGen
-    groups.append(lambda: {alias: CodexImageGen().probe(spec.model_id) for alias, spec in codex_entries})
-  if openai_entries:
-    groups.append(lambda entries=openai_entries: _probe_openai_from_model_list(entries))
-  for region, region_entries in google_entries_by_region.items():
-    groups.append(lambda region=region, entries=region_entries: _probe_google_from_model_list(region, entries))
+  for name, cohort in by_provider.items():
+    provider = get(name)  # raises ValueError for an unregistered provider
+    groups.append(lambda provider=provider, cohort=cohort: provider.probe_listed(cohort))
   return groups
-
-
-def _probe_openai_from_model_list(entries: list[tuple[str, ModelSpec]]) -> dict[str, ProbeResult]:
-  try:
-    client = auth_openai.get_client()
-    listed_ids = _listed_model_ids(client.models.list())
-    return _results_from_model_ids(entries, listed_ids)
-  except AuthenticationError as e:
-    return _error_results(entries, "auth", str(e))
-  except APIStatusError as e:
-    status = "403" if e.status_code == 403 else ("404" if e.status_code == 404 else "error")
-    return _error_results(entries, status, f"{e.status_code}: {str(e)}")
-  except Exception as e:
-    return _error_results(entries, "error", f"{type(e).__name__}: {e}")
-
-
-def _probe_google_from_model_list(region: str, entries: list[tuple[str, ModelSpec]]) -> dict[str, ProbeResult]:
-  try:
-    client = auth_google.get_client(region=region)
-    # NOTE (Vertex): models.list() may enumerate only the project's own/tuned models, not the
-    # Model Garden publisher catalog (publishers/google/models/*). A registry model can therefore
-    # read "missing" here yet still generate fine. Treat missing as "unconfirmed", not "absent".
-    listed_ids = _listed_model_ids(client.models.list())
-    return _results_from_model_ids(entries, listed_ids)
-  except ClientError as e:
-    code = getattr(e, "code", None)
-    status = str(code) if code in (403, 404) else "error"
-    return _error_results(entries, status, f"{code}: {str(e)}")
-  except ServerError as e:
-    return _error_results(entries, "error", str(e))
-  except Exception as e:
-    return _error_results(entries, "error", f"{type(e).__name__}: {e}")
-
-
-def _listed_model_ids(models: Iterable[Any]) -> set[str]:
-  ids: set[str] = set()
-  for model in models:
-    for attr in ("id", "name", "model", "display_name"):
-      value = _model_attr(model, attr)
-      if isinstance(value, str) and value:
-        ids.add(value)
-        ids.add(value.rsplit("/", 1)[-1])
-  return ids
-
-
-def _model_attr(model: Any, attr: str) -> Any:
-  if isinstance(model, dict):
-    return model.get(attr)
-  return getattr(model, attr, None)
-
-
-def _results_from_model_ids(entries: list[tuple[str, ModelSpec]], listed_ids: set[str]) -> dict[str, ProbeResult]:
-  return {
-    alias: ProbeResult(
-      model=spec.model_id,
-      status="listed" if spec.model_id in listed_ids else "missing",
-      detail="" if spec.model_id in listed_ids else "not enumerated by the provider list endpoint (may still be usable)",
-    )
-    for alias, spec in entries
-  }
-
-
-def _error_results(entries: list[tuple[str, ModelSpec]], status: str, detail: str) -> dict[str, ProbeResult]:
-  return {
-    alias: ProbeResult(model=spec.model_id, status=status, detail=detail[:200])
-    for alias, spec in entries
-  }
 
 
 def get_or_probe(refresh: bool = False, cached: dict[str, Any] | None = None) -> tuple[dict[str, ProbeResult], float]:

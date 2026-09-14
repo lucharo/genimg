@@ -9,15 +9,16 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from genimg import cli, metadata
+from genimg.auth.base import AuthInfo
 from genimg.interfaces import GenerateResult
 
 
 class ModelDefaultTests(unittest.TestCase):
   def test_retired_default_explains_recovery_without_changing_config(self) -> None:
     with tempfile.TemporaryDirectory() as td:
-      config_path = Path(td) / "config.json"
-      saved = {"default_model": "gdm:imagen4", "default_quality": "high"}
-      config_path.write_text(json.dumps(saved))
+      config_path = Path(td) / "config.toml"
+      saved = 'default_model = "gdm:imagen4"\ndefault_quality = "high"\n'
+      config_path.write_text(saved)
       with patch.object(cli.config, "CONFIG_PATH", config_path):
         result = CliRunner().invoke(cli._app, ["models", "get-default"])
 
@@ -27,7 +28,7 @@ class ModelDefaultTests(unittest.TestCase):
       self.assertIn("Imagen 4 was retired", output)
       self.assertIn("genimg models set-default gdm:nb2", output)
       self.assertIn("genimg models clear-default", output)
-      self.assertEqual(json.loads(config_path.read_text()), saved)
+      self.assertEqual(config_path.read_text(), saved)
 
 
 class GenerationMetadataTests(unittest.TestCase):
@@ -94,7 +95,7 @@ class GenerationMetadataTests(unittest.TestCase):
     runner = CliRunner()
     with (
       patch.object(cli.config, "load", return_value={}),
-      patch.object(cli.auth_openai, "auth_info", return_value={"mode": "direct"}),
+      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("native", "env", "-", "OPENAI_API_KEY", True)),
     ):
       result = runner.invoke(cli._app, [
         "prompt", "-m", "oai:gi2", "--name", "   ", "--dry-run",
@@ -114,3 +115,33 @@ class GenerationMetadataTests(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
+
+class ProfileFlagTests(unittest.TestCase):
+  def test_unknown_profile_fails_before_dry_run_banner(self) -> None:
+    with patch.object(cli.config, "load", return_value={"profiles": {"work": {"provider": "openai", "auth": "native"}}}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "nope", "--dry-run"])
+    self.assertEqual(result.exit_code, 1, result.output)
+    output = " ".join(result.output.split())
+    self.assertIn("no profile 'nope'", output)
+    self.assertIn("Known: work", output)
+    self.assertNotIn("genimg openai", output)
+
+  def test_named_profile_shows_in_banner(self) -> None:
+    cfg = {"profiles": {"work": {"provider": "openai", "auth": "azure", "endpoint": "https://x.openai.azure.com"}}}
+    with patch.object(cli.config, "load", return_value=cfg), \
+         patch.dict("os.environ", {"AZURE_OPENAI_API_KEY": "k"}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "work", "--dry-run"])
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertIn("openai/azure@work", result.output)
+
+
+class CorruptConfigTests(unittest.TestCase):
+  def test_corrupt_config_toml_is_reported_not_clobbered(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      config_path = Path(td) / "config.toml"
+      config_path.write_text("default_model = ")
+      with patch.object(cli.config, "CONFIG_PATH", config_path):
+        result = CliRunner().invoke(cli._app, ["models", "set-default", "gdm:nb2"], catch_exceptions=True)
+      self.assertIsInstance(result.exception, cli.config.ConfigError)
+      self.assertEqual(config_path.read_text(), "default_model = ")
