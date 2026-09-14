@@ -12,7 +12,7 @@ genimg models                                         # what your credentials ca
 genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 ```
 
-![Four candidates in a genimg grid](docs/assets/grid.svg)
+![A genimg grid of four fox logos, each labelled with the prompt delta that produced it](docs/assets/grid.webp)
 
 ## Why genimg
 

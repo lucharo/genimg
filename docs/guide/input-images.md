@@ -16,6 +16,15 @@ genimg "same scene, remove the text" -i poster.png -m oai:gi2 -o poster-clean.pn
 Chain edits by feeding the last output back in. Each step is recorded with its input path,
 so `genimg history` shows the lineage.
 
+<div class="grid" markdown>
+![The base fox logo on cream](../assets/fox-1.webp){ width="300" }
+![The same fox on indigo with an orange rim light](../assets/fox-dusk.webp){ width="300" }
+</div>
+
+Left, the input. Right, `genimg "same logo, same style, but at dusk: deep indigo background,
+warm orange rim light on the fox, keep everything else" -i fox_1.png -m oai:gi2.5-flare`.
+The mark, pose and cut-paper style survive; only what the prompt named changed.
+
 ## Steer with references: positional paths
 
 Paths after the prompt are references. They are not edited; the model uses them for style,
@@ -25,6 +34,15 @@ palette, character or layout guidance while producing a new image:
 genimg "the same character, now waving, same rendering style" hero.png -m gdm:nbp -o wave.png
 genimg "app icon in this visual language" brand-a.png brand-b.png -m oai:gi2 -o icon.png
 ```
+
+<div class="grid" markdown>
+![The fox logo used as a reference](../assets/fox-1.webp){ width="300" }
+![A raccoon in the same paper-cut style](../assets/raccoon-ref.webp){ width="300" }
+</div>
+
+Left, the reference. Right, `genimg "a raccoon character in exactly this paper-cut style and
+palette, one centred mark" fox_1.png -m oai:gi2.5-flare`: a new subject, the style and palette
+carried over, the fox itself untouched.
 
 Order matters and is preserved: `#1`, `#2`, … in the preview and the grid. Combine both roles
 in one call, edit one image with others as references:

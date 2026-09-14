@@ -12,8 +12,8 @@ genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 ```
 
 <figure markdown>
-  ![Four candidate images in a genimg grid](assets/grid.svg){ width="720" }
-  <figcaption>Ask for four takes, review them in a grid, pick one, iterate on it.</figcaption>
+  ![A genimg grid of four fox logos, each card labelled with the prompt delta that produced it](assets/grid.webp){ width="720" }
+  <figcaption>Four takes of one prompt (<code>-n 4 --deltas "line art, block print, brush stroke"</code>, GPT Image 2.5 Flare on Azure) in the review grid genimg writes with <code>-g</code>.</figcaption>
 </figure>
 
 ## Where to go

@@ -28,6 +28,11 @@ genimg "…" -n 5 --deltas @styles.txt      # one delta per line
 the takes should differ, or when the subject is a diagram or photo where the built-in pool
 would be a poor fit.
 
+<figure markdown>
+  ![Four fox logos: base prompt, line art, block print, brush stroke](../assets/fox-deltas.webp){ width="720" }
+  <figcaption>The four takes from the command above with <code>-m oai:gi2.5-flare</code>: #1 is the base prompt, #2 to #4 got one delta each.</figcaption>
+</figure>
+
 ## Let genimg or the model spread them: `-d`
 
 `-d` (`--diverse`) asks for deliberate variety without you naming it. It behaves differently

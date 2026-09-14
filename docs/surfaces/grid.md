@@ -9,6 +9,11 @@ genimg "a minimal fox logo" -m oai:gi2 -n 4 -d -g --open   # generate + grid
 genimg grid a.png b.png c.png -o review.html --open         # any existing files
 ```
 
+<figure markdown>
+  ![The grid page: four cards, each with its number, delta, filename and copy buttons](../assets/grid.webp){ width="720" }
+  <figcaption>A generation grid. Every card shows the prompt delta it was produced with and two copy buttons.</figcaption>
+</figure>
+
 ## What is on the page
 
 - Grid view: all images at once, each card with its number, filename, the prompt delta
