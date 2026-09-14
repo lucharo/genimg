@@ -1,0 +1,115 @@
+[project]
+site_url = "https://lucharo.github.io/genimg/"
+site_name = "genimg"
+site_description = "Multi-provider image generation CLI, built for humans and agents."
+site_author = "Luis Chaves Rodriguez"
+repo_url = "https://github.com/lucharo/genimg"
+repo_name = "lucharo/genimg"
+edit_uri = "edit/main/docs/"
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { "genimg" = "index.md" },
+  { "Getting started" = [
+    { "Install" = "getting-started/install.md" },
+    { "Authentication" = "getting-started/auth.md" },
+    { "Your first image" = "getting-started/first-image.md" },
+  ] },
+  { "For agents" = "agents.md" },
+  { "Guide" = [
+    { "Diverse images" = "guide/diversity.md" },
+    { "Input and reference images" = "guide/input-images.md" },
+    { "Codex subscription" = "guide/codex-subscription.md" },
+  ] },
+  { "Specialised surfaces" = [
+    { "Grid and carousel" = "surfaces/grid.md" },
+    { "Draw Studio" = "surfaces/draw-studio.md" },
+  ] },
+  { "Workflow skills" = [
+    { "Overview" = "skills/index.md" },
+    { "genimg-infographic" = "skills/genimg-infographic.md" },
+    { "genimg-agent-refinement" = "skills/genimg-agent-refinement.md" },
+    { "image-to-app" = "skills/image-to-app.md" },
+  ] },
+  { "Reference" = [
+    { "CLI" = "reference/cli.md" },
+    { "Models" = "reference/models.md" },
+    { "config.toml" = "reference/config.md" },
+  ] },
+  { "FAQ" = "faq.md" },
+  { "Maintainers" = [
+    { "Overview" = "maintainers/index.md" },
+    { "Maintaining the model list" = "maintainers/maintaining-models.md" },
+    { "Releasing" = "maintainers/releasing.md" },
+    { "ADR 0001: no built-in default model" = "maintainers/adr/0001-no-built-in-default-model.md" },
+    { "ADR 0002: no org-internal defaults" = "maintainers/adr/0002-no-org-internal-defaults.md" },
+    { "ADR 0003: providers and auth profiles" = "maintainers/adr/0003-providers-and-auth-profiles.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+logo = "assets/logo.png"
+favicon = "assets/favicon.png"
+features = [
+  "content.action.edit",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "deep orange"
+accent = "amber"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "deep orange"
+accent = "amber"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.theme.font]
+text = "Inter"
+code = "JetBrains Mono"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/lucharo/genimg"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+toc.permalink = true
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.keys = {}
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tasklist.custom_checkbox = true

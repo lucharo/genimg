@@ -10,7 +10,7 @@ Verified: 2026-09-13 (new and changed answers; older entries retain their origin
 
 Yes. Run `genimg "your prompt" -m codex:image` after signing in with `codex login`.
 Genimg starts the local Codex CLI and automatically saves the generated image's history
-record. Your normal Codex allowance applies. See [subscription generation](../codex-subscription.md).
+record. Your normal Codex allowance applies. See [subscription generation](guide/codex-subscription.md).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -20,7 +20,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 can call it directly in its conversation. Standalone genimg accesses it through the local
 Codex CLI; it does not expose a separate subscription image API. A host tool call made
 outside genimg does not create a genimg history record. See the
-[runtime contract](../codex-subscription.md#runtime-contract).
+[runtime contract](guide/codex-subscription.md#runtime-contract).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: Codex CLI 0.153.4 integration; recheck after runtime changes_
 
@@ -28,7 +28,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: Co
 
 No model/version selector is exposed through `codex:image`; Codex selects it. Use a named
 API model when explicit model, quality and size controls are needed. See
-[controls and billing](../codex-subscription.md#controls-and-billing).
+[controls and billing](guide/codex-subscription.md#controls-and-billing).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: current integration; recheck the host tool schema after upgrades_
 
@@ -38,8 +38,8 @@ Genimg supports `oai:gi2.5` (Sunburst) and `oai:gi2.5-flare` for explicit API re
 Availability still depends on the account and deployment; a successful generation with
 the exact model is the check. `codex:image` does not promise either variant. Embedded
 generator/version claims describe the returned image, and cannot establish which model
-the next native generation will use. See [model maintenance](../maintaining-models.md)
-and [provenance](../codex-subscription.md#provenance-and-theoretical-api-cost).
+the next native generation will use. See [model maintenance](maintainers/maintaining-models.md)
+and [provenance](guide/codex-subscription.md#provenance-and-theoretical-api-cost).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: genimg catalogue and routing; recheck serving with an exact-model generation_
 
@@ -50,7 +50,7 @@ version, actions and signing information alongside dimensions and SHA-256. Crede
 are extracted offline, not signature-verified. Subscription/API billing comes from the
 generation route; the theoretical API-cost comparison is separate and remains unknown
 when the model or pricing is unknown. See the
-[provenance and billing guide](../codex-subscription.md#provenance-and-theoretical-api-cost).
+[provenance and billing guide](guide/codex-subscription.md#provenance-and-theoretical-api-cost).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -59,7 +59,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 Images are added automatically to history when genimg creates them. History is read-only:
 `genimg history` lists saved generations, `genimg history view` opens the existing TUI
 picker, and `genimg history --json` reads the saved records. There is no manual recording
-step. See [generate, then browse](../codex-subscription.md#generate-then-browse).
+step. See [generate, then browse](guide/codex-subscription.md#generate-then-browse).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -67,7 +67,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
 Draw Studio is genimg's local browser canvas for sketching, annotating and iterating on
 images. Start it with `genimg draw`; the prompt-first CLI remains available separately.
-See the [Draw Studio guide](../draw-studio.md).
+See the [Draw Studio guide](surfaces/draw-studio.md).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -75,24 +75,24 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
 The CLI exposes prompt-first generation controls. The separate GUI concept is tracked in
 [issue #3](https://github.com/lucharo/genimg/issues/3); Draw Studio is the implemented,
-canvas-focused surface. See the [surface comparison](../draw-studio.md#draw-studio-and-the-full-cli-are-different-surfaces).
+canvas-focused surface. See the [surface comparison](surfaces/draw-studio.md#draw-studio-and-the-full-cli-are-different-surfaces).
 
 _Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13_
 
 ## Can I use Draw Studio from an iPad?
 
 Use the Mac browser through Sidecar or remote-screen control, not the Mac's localhost URL
-in iPad Safari. The [iPad guide](../draw-studio.md#draw-from-an-ipad) documents both routes;
+in iPad Safari. The [iPad guide](surfaces/draw-studio.md#draw-from-an-ipad) documents both routes;
 physical Apple Pencil and VNC behaviour still need a real-device check.
 
 _Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13 · Scope: documented setup, not physical-device validation_
 
 ## How do users access models, and can Draw Studio be hosted?
 
-Use local provider credentials or the [Codex subscription route](../codex-subscription.md).
+Use local provider credentials or the [Codex subscription route](guide/codex-subscription.md).
 The host sends prompts and image inputs to remote models: local Studio is not offline.
 A public multi-user service is not implemented; it would need a separate backend, not
-provider keys embedded in browser code. See the [security boundary](../draw-studio.md#security-boundary).
+provider keys embedded in browser code. See the [security boundary](surfaces/draw-studio.md#security-boundary).
 
 _Created: 2026-09-13 · Updated: 2026-09-13 · Verified: 2026-09-13_
 
@@ -132,7 +132,7 @@ accepts `--quality auto`.
 
 **Correction (2026-09-12):** an earlier version said Studio had no Auto control and listed
 only Low, Medium and High. Model-specific controls now include Auto, and GPT Image 2.5
-also supports `xhigh` and `max`. See [model controls](../draw-studio.md).
+also supports `xhigh` and `max`. See [model controls](surfaces/draw-studio.md).
 
 _Created: 2026-08-13 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -160,6 +160,6 @@ Generated images are saved under `~/.genimg/generations/`. The Generated panel s
 current session or the wider saved history, and metadata sidecars are stored under
 `~/.genimg/metadata/`.
 
-See also the [Draw Studio guide](../draw-studio.md),
-[Maintaining the model list](../maintaining-models.md) and
-[ADR-0001: No built-in default model](../adr/0001-no-built-in-default-model.md).
+See also the [Draw Studio guide](surfaces/draw-studio.md),
+[Maintaining the model list](maintainers/maintaining-models.md) and
+[ADR-0001: No built-in default model](maintainers/adr/0001-no-built-in-default-model.md).
