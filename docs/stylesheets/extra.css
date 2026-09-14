@@ -13,3 +13,8 @@
 .md-header__title { font-weight: 600; }
 .md-typeset h1, .md-typeset h2 { letter-spacing: -.01em; }
 .md-typeset figure img { border-radius: 10px; }
+/* The mark is charcoal + orange; give it a cream tile so it reads on the dark header. */
+.md-header__button.md-logo img {
+  height: 34px; width: 34px;
+  background: #fbf7ee; border-radius: 9px; padding: 3px; box-sizing: border-box;
+}
