@@ -8,17 +8,6 @@ preflight passes:
 genimg setup
 ```
 
-```text
-genimg setup — detect → fetch → validate → save
-
-Google · Gemini
-? Pick a Google · Gemini auth path (or skip):
-  ✓  Direct API (Gemini key)              ·  GEMINI_API_KEY=AIz… in env
-  ✗  Vertex (service account JSON)        ·  needs GOOGLE_APPLICATION_CREDENTIALS or CLAUDE_GCP_CRED
-  ✗  Vertex (gcloud user creds, ADC)      ·  run `gcloud auth application-default login`
-     Skip Google · Gemini
-```
-
 Secrets stay in your environment (the wizard offers to append an `export` line to your shell
 rc). Only non-secret settings such as an Azure endpoint or a GCP project are written to
 [config.toml](../reference/config.md).
@@ -48,16 +37,6 @@ none), `OPENAI_API_VERSION` (Azure api-version override), `CODEX_HOME` (Codex CL
 genimg auth            # one row per provider: mode, source, endpoint, credential, ready
 genimg auth --json     # the same for agents and scripts
 genimg auth --check    # plus one tiny live generation per provider (Codex: login only)
-```
-
-```text
-┏━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┓
-┃ provider ┃ mode         ┃ source         ┃ endpoint               ┃ credential          ┃ ready ┃      models ┃
-┡━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━┩
-│ google   │ direct       │ profile:google │ generativelanguage.…   │ ✓ GEMINI_API_KEY    │   ✓   │  4/4 listed │
-│ openai   │ azure        │ profile:work   │ https://myres.openai…  │ ✓ AZURE_OPENAI_API… │   ✓   │  4/6 listed │
-│ codex    │ subscription │ codex login    │ Codex CLI              │ ✓ ChatGPT login     │   ✓   │ runtime-sel…│
-└──────────┴──────────────┴────────────────┴────────────────────────┴─────────────────────┴───────┴─────────────┘
 ```
 
 `source` tells you where the choice came from: a named profile, a `--auth` flag, or plain

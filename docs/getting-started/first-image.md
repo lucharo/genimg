@@ -8,19 +8,6 @@ Before spending anything, ask each provider what it lists. No image is generated
 genimg models
 ```
 
-```text
-                 genimg models  •  cache age: 0s  •  default: (none — pass -m)
-  alias           model_id                    provider  region       status
-★ gdm:nb2         gemini-3.1-flash-image      google    global       listed
-  gdm:nbp         gemini-3-pro-image          google    global       listed
-  gdm:nb2-lite    gemini-3.1-flash-lite-image google    global       listed
-  gdm:nb          gemini-2.5-flash-image      google    us-central1  listed
-  oai:gi2.5       gpt-image-2.5-sunburst      openai    -            listed
-  oai:gi2         gpt-image-2                 openai    -            listed
-  oai:gi1.5       gpt-image-1.5               openai    -            missing
-  codex:image     codex:image                 codex     -            ready
-```
-
 `listed` means the provider's list endpoint advertises the model to your credentials;
 `missing` means it does not. Only a real generation proves a model serves, and on Vertex a
 `missing` can be a false negative (Model Garden models are often not enumerated). Results are
@@ -29,23 +16,31 @@ scripts.
 
 ## Generate
 
+Preview the request before making an API call:
+
 ```bash
-genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png
+genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png --dry-run
 ```
+
+Output captured from that command on 20 September 2026 with genimg 0.1.0 and a Google
+direct-API profile:
 
 ```text
 genimg google/direct@google gdm:nb2 → gemini-3.1-flash-image
   prompt   "a paper-cut fox in a birch forest, warm palette"
   params   n=1
-  cost     $0.0670 (estimate)  id=20260914_081205_3f2a9c
+  cost     $0.0670 (estimate)  id=20260920_191605_ed70a0
   output   fox.png
-  wrote fox.png (1,204,331B)
-  cost $0.0670 (estimate)  •  7.9s  •  meta ~/.genimg/metadata/20260914_081205_3f2a9c.json
+dry-run: no API call made.
 ```
 
 The first line names the provider, the auth mode that resolved (`direct`, from the profile
-called `google`), the alias and the canonical model id. Add `--dry-run` to see the same
-preview without calling the API, which is the cheapest way to check a flag combination.
+called `google`), the alias and the canonical model id. Your profile and run id will differ.
+Remove `--dry-run` to generate the image:
+
+```bash
+genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png
+```
 
 Useful flags for a first session:
 
