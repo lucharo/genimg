@@ -31,7 +31,8 @@ Trusted Publishing (OIDC, no tokens).
   lands on `main`, which overwrites an early edit. (Anything you commit to `CHANGELOG.md`
   yourself is safe — release-please only ever prepends new versions above existing content.)
 - Merging the Release PR tags the release and publishes to PyPI. The Friday 09:00 UTC cron
-  merges it automatically when CI is green; merge it yourself any time to ship sooner.
+  is paused until the PyPI pending publisher exists and the first release has been merged
+  by hand; see the [release checklist](docs/maintainers/releasing.md).
 - The version lives only in `pyproject.toml` (`genimg.__version__` reads it from installed
   metadata).
 
