@@ -1,0 +1,5 @@
+{
+  "slug": "studio",
+  "title": "The action falls below the window",
+  "prompt": "Create a landscape 16:9 diagnostic infographic, cream background charcoal outlines, large highly legible labels, restrained blue and burnt orange. Title 'P2 \u00b7 The action falls below the window'. Left labelled CURRENT: schematic laptop browser frame with '1024 \u00d7 769' label. Within it vertical stack: toolbar 'Controls', rectangle 'Canvas \u00b7 minimum 340px', expanded box 'Prompt'. Clearly draw browser bottom boundary as a thick dashed line, below it an outlined button labelled 'Generate' outside the visible window, arrow labelled 'Clipped'. Middle small mechanism 'Fixed canvas height + expanded prompt'. Right labelled PROPOSED: same browser frame same size, canvas somewhat shorter labelled 'Flexible canvas', prompt visible, Generate fully visible pinned within bottom boundary. Footer 'Conceptual mechanism \u00b7 proposed layout, not a screenshot'. Do not imply implemented fix. Need simple human-readable engineering diagnosis, no generic laptop glamour, no invented UI controls, no logos. Shape and labels carry meaning without relying on colour."
+}

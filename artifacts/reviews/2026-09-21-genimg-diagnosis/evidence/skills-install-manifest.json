@@ -1,0 +1,26 @@
+[
+  {
+    "skill": "genimg",
+    "source_files": 1,
+    "installed_files": 1,
+    "complete_tree_matches": true
+  },
+  {
+    "skill": "genimg-agent-refinement",
+    "source_files": 1,
+    "installed_files": 1,
+    "complete_tree_matches": true
+  },
+  {
+    "skill": "genimg-infographic",
+    "source_files": 51,
+    "installed_files": 51,
+    "complete_tree_matches": true
+  },
+  {
+    "skill": "image-to-app",
+    "source_files": 5,
+    "installed_files": 5,
+    "complete_tree_matches": true
+  }
+]

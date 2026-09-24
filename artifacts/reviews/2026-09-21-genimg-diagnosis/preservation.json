@@ -1,0 +1,11 @@
+{
+  "original_html_sha256": "8f2eb41fd19347d249404fb176e87c4303492e30c4d6561c1182f21f7c4df5c1",
+  "portable_changes": "Machine-local textual paths and private hosting URL redacted; image payloads unchanged. Original QA is dated evidence, not a claim about the portable hash.",
+  "selected_generated_images": 6,
+  "superseded_generated_images": [
+    "superseded/exec-6e0a4a9a-dba8-489f-836b-f3ee63ce9f21.png",
+    "superseded/exec-c0964133-d891-4cd4-b1db-8da386ea7c33.png",
+    "superseded/exec-dd065381-90cf-4b0f-889f-4c979a841699.png"
+  ],
+  "screenshots": 4
+}
