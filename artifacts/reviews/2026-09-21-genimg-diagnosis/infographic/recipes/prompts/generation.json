@@ -1,0 +1,5 @@
+{
+  "slug": "recipes",
+  "title": "Recipes must work cold",
+  "prompt": "Create landscape 16:9 explanatory infographic in cream and charcoal, calm precise editorial drawing, orange blocked marks, blue proposal marks plus text so no colour-only meaning. Title 'P2 \u00b7 Recipes must work cold'. Two horizontal miniature journeys. Top CURRENT: a command strip '16:9 \u00b7 OpenAI \u00b7 1K default' feeds into a landscape frame too small to pass a size gate, cross and word 'Rejected'. Directly beside it PROPOSED: command strip '+ -r 2K', landscape frame passes same gate, label 'Valid size'. Bottom CURRENT: command strip 'genimg \"PROMPT\" -n 4 -g' meets an empty model socket labelled 'No default model', cross and 'Rejected'. Directly beside it PROPOSED: command strip '+ -m gdm:nb2', socket filled with model tile, label 'Explicit model'. Both fixes show small edits to recipe tickets rather than rewriting tool machinery. Footer 'Clean config \u00b7 dry-run verified \u00b7 no generation needed'. No invented file trees, prices, hardware, logos, or extra commands. Ensure command text is fully accurate. Hypothetical proposed commands distinct from existing behaviour."
+}

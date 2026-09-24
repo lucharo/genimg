@@ -1,0 +1,4 @@
+# Generated self-contained review contains embedded image data; review its source notes and checksums.
+artifacts/reviews/2026-09-21-genimg-diagnosis/2026-09-21-genimg-diagnosis.html -diff
+# Preserve the exact generated terminal capture, including its original whitespace.
+artifacts/reviews/2026-09-21-genimg-diagnosis/evidence/history-review-fixture.svg -diff
