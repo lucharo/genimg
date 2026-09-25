@@ -34,7 +34,7 @@ genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
 - **[Getting started](getting-started.md)**: install, connect a provider, make a first image.
 - **[For agents](agents.md)**: add the genimg skills to your coding agent.
 - **[Diverse images](guide/diversity.md)**: get takes that really differ.
-- **[Grid and carousel](surfaces/grid.md)** and **[Draw Studio](surfaces/draw-studio.md)**:
+- **[Grid and carousel](visual-tools/grid.md)** and **[Draw Studio](visual-tools/draw-studio.md)**:
   review results and sketch prompts.
 
 </div>
