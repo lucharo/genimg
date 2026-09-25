@@ -28,11 +28,11 @@ def test_save_and_load_round_trip_profiles(config_dir):
 
 def test_set_and_remove_profile(config_dir):
   config.set_profile("g", {"provider": "google", "auth": "direct"})
-  config.set_profile("o", {"provider": "openai", "auth": "native"})
+  config.set_profile("o", {"provider": "openai", "auth": "direct"})
   assert sorted(config.profiles()) == ["g", "o"]
   assert config.remove_profile("g") is True
   assert config.remove_profile("g") is False
-  assert config.load() == {"profiles": {"o": {"provider": "openai", "auth": "native"}}}
+  assert config.load() == {"profiles": {"o": {"provider": "openai", "auth": "direct"}}}
   config.remove_profile("o")
   assert config.load() == {}
 
@@ -64,7 +64,7 @@ def test_legacy_json_is_migrated_once_and_renamed(config_dir):
 
 
 @pytest.mark.parametrize("entry,expected", [
-  ("openai_direct", {"provider": "openai", "auth": "native"}),   # pre-0.1 spelling
+  ("openai_direct", {"provider": "openai", "auth": "direct"}),
   ("google_direct", {"provider": "google", "auth": "direct"}),
 ])
 def test_migrate_legacy_maps_every_known_mode(entry, expected):

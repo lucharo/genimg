@@ -1,7 +1,7 @@
 """OpenAI auth profiles.
 
-  native — OPENAI_API_KEY → api.openai.com (an OPENAI_BASE_URL proxy is honoured only when
-           the profile came from env auto-detection; a configured native profile pins
+  direct — OPENAI_API_KEY → api.openai.com (an OPENAI_BASE_URL proxy is honoured only when
+           the profile came from env auto-detection; a configured direct profile pins
            api.openai.com so a stray proxy URL cannot hijack it)
   azure  — AZURE_OPENAI_API_KEY (or OPENAI_API_KEY) + resource endpoint
 
@@ -17,7 +17,7 @@ from openai import AzureOpenAI, OpenAI
 from .base import AuthInfo, AuthProfile, SecretSpec, SettingSpec
 
 DEFAULT_AZURE_API_VERSION = "2025-04-01-preview"
-NATIVE_BASE_URL = "https://api.openai.com/v1"
+DIRECT_BASE_URL = "https://api.openai.com/v1"
 
 
 def _env_azure_endpoint() -> str | None:
@@ -39,26 +39,26 @@ def _preflight(client: OpenAI | AzureOpenAI) -> tuple[bool, str]:
     return False, f"{type(e).__name__}: {str(e)[:300]}"
 
 
-class OpenAINative(AuthProfile):
+class OpenAIDirect(AuthProfile):
   provider = "openai"
-  mode = "native"
-  label = "OpenAI native (api.openai.com)"
+  mode = "direct"
+  label = "Direct API (OpenAI key)"
   env_vars = ("OPENAI_API_KEY",)
   secret = SecretSpec("OPENAI_API_KEY", "OpenAI API key", "https://platform.openai.com/api-keys")
 
   def detect(self) -> bool:
-    # A key plus an Azure-looking base URL is an Azure setup, not a native one.
+    # A key plus an Azure-looking base URL is an Azure setup, not a direct one.
     return bool(os.getenv("OPENAI_API_KEY")) and not is_azure()
 
   def base_url(self) -> str:
     if self.source == "env":
-      return os.getenv("OPENAI_BASE_URL") or NATIVE_BASE_URL  # LiteLLM / OpenRouter proxies
-    return NATIVE_BASE_URL
+      return os.getenv("OPENAI_BASE_URL") or DIRECT_BASE_URL  # LiteLLM / OpenRouter proxies
+    return DIRECT_BASE_URL
 
   def client(self, **kw: Any) -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-      raise RuntimeError(f"{self.source}: openai native mode needs OPENAI_API_KEY in env.")
+      raise RuntimeError(f"{self.source}: openai direct mode needs OPENAI_API_KEY in env.")
     return OpenAI(api_key=api_key, base_url=self.base_url())
 
   def validate(self) -> tuple[bool, str]:
@@ -70,7 +70,7 @@ class OpenAINative(AuthProfile):
     ok = bool(os.getenv("OPENAI_API_KEY"))
     return AuthInfo(mode=self.mode, source=self.source, endpoint=self.base_url().removesuffix("/v1"),
                     credential="OPENAI_API_KEY" if ok else "-", ok=ok, profile=self.name,
-                    hint="" if ok else "Native mode needs OPENAI_API_KEY in env.")
+                    hint="" if ok else "Direct mode needs OPENAI_API_KEY in env.")
 
 
 class OpenAIAzure(AuthProfile):
@@ -146,15 +146,15 @@ def _host(url: str | None) -> str:
 
 
 # Azure first: a key plus an Azure endpoint in env is an Azure setup.
-MODES: tuple[type[AuthProfile], ...] = (OpenAIAzure, OpenAINative)
+MODES: tuple[type[AuthProfile], ...] = (OpenAIAzure, OpenAIDirect)
 
 
 # ── compatibility wrappers ──
 
 def get_client(*, force: str | None = None, profile: AuthProfile | None = None) -> OpenAI | AzureOpenAI:
-  """--auth flag → configured profile → env. `force` accepts azure | direct (alias of native)."""
+  """--auth flag → configured profile → env. `force` is azure | direct."""
   from .resolve import resolve
   if profile is None:
-    profile = resolve("openai", force_mode={"direct": "native"}.get(force, force))
+    profile = resolve("openai", force_mode=force)
   return profile.client()
 

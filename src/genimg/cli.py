@@ -164,7 +164,7 @@ def _run(
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
     help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
-    help="azure | native — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
+    help="azure | direct — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
     help="Override registry region (e.g. global, us-central1).")] = None,
   project: Annotated[str | None, typer.Option("--project", rich_help_panel=_PANEL_GOOGLE,
@@ -209,8 +209,6 @@ def _run(
 
   provider = providers.get(spec.provider)
   caps = provider.capabilities(spec.model_id)
-  if auth == "direct":
-    auth = "native"  # pre-profile spelling
 
   # Apply config defaults for generation params (flag → config → built-in).
   resolution_was_explicit = resolution is not None

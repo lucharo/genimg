@@ -55,7 +55,7 @@ _MAX_INPUTS = 16
 # tokens, scaled by pixel count, see output_tokens(). Real `usage` fields measured against
 # api.openai.com on 2026-09-19 match it exactly for both families. The rate is
 # https://developers.openai.com/api/docs/pricing; text input ($5 per million tokens, a few
-# hundred per prompt) is not included. Azure is priced at the native rate: the Azure retail
+# hundred per prompt) is not included. Azure is priced at the direct rate: the Azure retail
 # price API listed no gpt-image-2/2.5 meters on 2026-09-24 and its gpt-image-1 meter matched.
 _TOKEN_GRID = {
   "gpt-image-2":   {"low": 16, "medium": 48, "high": 96},

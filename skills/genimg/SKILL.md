@@ -24,7 +24,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI G
 | `--quality` | `-q` | `low medium high auto`; `oai:gi2.5`/`gi2.5-flare` add `xhigh max` | OpenAI only; default `medium`; `high` is 30–90 s/image |
 | `--thinking` | | `minimal` \| `high` | `gdm:nb2` only |
 | `--profile` | | `[profiles.NAME]` from `~/.config/genimg/config.toml` | must match the model's provider; default = provider's first profile, else env detection |
-| `--auth` | | `azure` \| `native` | OpenAI only; forces a mode for one run |
+| `--auth` | | `azure` \| `direct` | OpenAI only; forces a mode for one run |
 | `--region` | | e.g. `global`, `us-central1` | Google only |
 | `--project` | | GCP project id | Google Vertex only |
 | `--name` | | one-line label | recorded in history |
