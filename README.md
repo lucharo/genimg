@@ -1,49 +1,36 @@
 # genimg
 
-One command for image generation across OpenAI (GPT Image), Google DeepMind (Gemini Image) and
-Codex with your ChatGPT subscription. Built from the bottom up to be human and agent friendly.
+[![CI](https://img.shields.io/github/actions/workflow/status/lucharo/genimg/ci.yml?branch=main&label=CI)](https://github.com/lucharo/genimg/actions/workflows/ci.yml)
+[![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![PyPI](https://img.shields.io/pypi/v/genimg)](https://pypi.org/project/genimg/)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
+One simple CLI, made with both humans and agents in mind. Generate images with OpenAI and
+Google DeepMind models in a unified interface, via API or via Codex with a ChatGPT
+subscription. It bundles one HTML grid artefact and a drawing sketchpad for image generation,
+as well as several skills for productive image generation workflows.
 
 **Docs: [lucharo.github.io/genimg](https://lucharo.github.io/genimg/)**
 
 ```bash
 uv tool install genimg
-genimg setup                                          # detect creds → validate → save a profile
-genimg models                                         # what your credentials can reach, no spend
-genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
+genimg setup                      # connect a provider and save a profile
+genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
+  --deltas "line art, block print, brush stroke" -o fox.png -g --open
 ```
 
-![A genimg grid of four fox logos, each labelled with the prompt delta that produced it](docs/assets/grid.webp)
+![The HTML grid genimg opened: four fox logos labelled base prompt, line art, block print and brush stroke](docs/assets/grid.webp)
 
-## Why genimg
+Add the skills to Claude Code, Codex, Cursor or OpenCode with `npx skills add lucharo/genimg`.
 
-- One CLI, three providers. `gdm:` Gemini Image (API key, Vertex, ADC), `oai:` GPT Image
-  (api.openai.com or Azure), `codex:image` on a ChatGPT subscription. Aliases and full model
-  ids both work; there is deliberately no built-in default model.
-- Real variety, on purpose. `-n 4 -d` or your own `--deltas` for named directions;
-  Gemini `--mode batch` lets the model differentiate a set itself.
-- Edit or steer. `-i` edits an image; positional paths are references for style and layout.
-- Review surfaces. `-g --open` renders a self-contained HTML grid with a carousel and copy
-  buttons; `genimg draw` opens a local pen-friendly canvas.
-- Agent friendly. `npx skills add lucharo/genimg` gives Claude Code, Codex, Cursor or
-  OpenCode the `genimg` skill plus infographic, refinement and image-to-app workflows.
-  `auth`, `models`, `history` and `cost` have `--json`; every generation leaves a metadata
-  sidecar.
+## Docs
 
-## Guide
-
-| | |
-| --- | --- |
-| [Install](https://lucharo.github.io/genimg/getting-started/install/) · [Authentication](https://lucharo.github.io/genimg/getting-started/auth/) · [First image](https://lucharo.github.io/genimg/getting-started/first-image/) | getting started |
-| [For agents](https://lucharo.github.io/genimg/agents/) | the bundled skill and the agent contract |
-| [Diverse images](https://lucharo.github.io/genimg/guide/diversity/) · [Input and reference images](https://lucharo.github.io/genimg/guide/input-images/) · [Codex subscription](https://lucharo.github.io/genimg/guide/codex-subscription/) | the main workflows |
-| [Grid and carousel](https://lucharo.github.io/genimg/surfaces/grid/) · [Draw Studio](https://lucharo.github.io/genimg/surfaces/draw-studio/) | specialised surfaces |
-| [Workflow skills](https://lucharo.github.io/genimg/skills/) | infographic, refinement, image-to-app |
-| [CLI](https://lucharo.github.io/genimg/reference/cli/) · [Models](https://lucharo.github.io/genimg/reference/models/) · [config.toml](https://lucharo.github.io/genimg/reference/config/) · [FAQ](https://lucharo.github.io/genimg/faq/) | reference |
-
-The same pages live in [`docs/`](docs/) if you prefer reading source.
+- [Getting started](https://lucharo.github.io/genimg/getting-started/): install, providers, first image
+- [For agents](https://lucharo.github.io/genimg/agents/): the skills and what an agent can read
+- [Guide](https://lucharo.github.io/genimg/guide/diversity/): diverse images, input images, Codex
+- [Reference](https://lucharo.github.io/genimg/reference/cli/): CLI, models, config.toml
 
 ## Contributing
 
-`uv sync` then `uv run pytest` and `uv run ruff check .`. See [CONTRIBUTING.md](CONTRIBUTING.md)
-and the [maintainer docs](https://lucharo.github.io/genimg/maintainers/) for the release process
-and how to add a provider.
+`uv sync`, then `uv run pytest` and `uv run ruff check .`. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and the [maintainer docs](https://lucharo.github.io/genimg/maintainers/).
