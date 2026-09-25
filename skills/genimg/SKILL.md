@@ -35,7 +35,7 @@ The skill belongs to the user. genimg never ships it, so updating genimg never o
 | `--input` | `-i` | image path | image-to-image edit; stays close to the input |
 | `REF_PATHS` | | paths after the prompt | references for style/layout, order preserved, never edited |
 | `--aspect-ratio` | `-a` | `1:1 4:3 3:4 16:9 9:16 3:2 2:3 4:5 5:4 21:9`; `gdm:nb2`/`nb2-lite` add `1:4 1:8 4:1 8:1` | OpenAI: `16:9`/`9:16` need `-r 2K` or `4K`; `4:3`/`3:4` need `1K` or `2K` |
-| `--resolution` | `-r` | `512 1K 2K 4K` | `gdm:nb2`: all four; `gdm:nbp`: `1K 2K 4K`; `gdm:nb2-lite`: `1K`; `gdm:nb`: none; OpenAI: `1K 2K 4K` per the aspect rule; `codex:image`: none |
+| `--resolution` | `-r` | `512 1K 2K 4K` | `gdm:nb2`: all four; `gdm:nbp`: `1K 2K 4K`; `gdm:nb2-lite`: `1K`; OpenAI: `1K 2K 4K` per the aspect rule; `codex:image`: none |
 | `--quality` | `-q` | `low medium high auto`; `oai:gi2.5`/`gi2.5-flare` add `xhigh max` | OpenAI only; default `medium`; `high` is 30–90 s/image |
 | `--thinking` | | `minimal` \| `high` | `gdm:nb2` only |
 | `--profile` | | `[profiles.NAME]` from `~/.config/genimg/config.toml` | must match the model's provider; default = provider's first profile, else env detection |

@@ -8,9 +8,9 @@ from genimg import registry
 
 class RegistryResolveTests(unittest.TestCase):
   def test_resolve_alias_chain_to_spec(self) -> None:
-    alias, spec = registry.resolve("gdm:nano-banana")  # → gdm:nb
-    self.assertEqual(alias, "gdm:nb")
-    self.assertEqual(spec.model_id, "gemini-2.5-flash-image")
+    alias, spec = registry.resolve("gdm:nano-banana-2")  # → gdm:nb2
+    self.assertEqual(alias, "gdm:nb2")
+    self.assertEqual(spec.model_id, "gemini-3.1-flash-image")
     self.assertEqual(spec.provider, "google")
 
   def test_resolve_canonical_alias(self) -> None:
@@ -84,10 +84,10 @@ class RegistryHelperTests(unittest.TestCase):
     canon = registry.all_canonical()
     self.assertTrue(all(isinstance(s, registry.ModelSpec) for s in canon.values()))
     self.assertIn("gdm:nb2", canon)
-    self.assertNotIn("gdm:nano-banana", canon)  # alias, not a canonical entry
+    self.assertNotIn("gdm:nano-banana-2", canon)  # alias, not a canonical entry
 
   def test_aliases_for(self) -> None:
-    self.assertIn("gdm:nano-banana", registry.aliases_for("gdm:nb"))
+    self.assertIn("gdm:nano-banana-2", registry.aliases_for("gdm:nb2"))
 
 
 if __name__ == "__main__":

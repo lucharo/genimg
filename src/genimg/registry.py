@@ -23,8 +23,6 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   "gdm:nano-banana-2":   "gdm:nb2",
   "gdm:nb2-lite":        ModelSpec("google", "gemini-3.1-flash-lite-image",    region="global", quality_rank=6),
   "gdm:nano-banana-2-lite": "gdm:nb2-lite",
-  "gdm:nb":              ModelSpec("google", "gemini-2.5-flash-image",         region="us-central1", quality_rank=6),
-  "gdm:nano-banana":     "gdm:nb",
   # OpenAI / Azure OpenAI.
   # Availability varies by account and Azure deployment — run `genimg models` to see
   # what your credentials can actually reach. Some ids (e.g. gpt-image-1.5) may be

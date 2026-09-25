@@ -25,7 +25,6 @@ _PER_IMAGE: dict[str, dict[str | None, float]] = {
   "gemini-3-pro-image":          {None: 0.134, "1K": 0.134, "2K": 0.134, "4K": 0.24},
   "gemini-3.1-flash-image":      {None: 0.067, "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151},
   "gemini-3.1-flash-lite-image": {None: 0.034, "1K": 0.034, "2K": 0.05, "4K": 0.076},
-  "gemini-2.5-flash-image":      {None: 0.04, "1K": 0.04, "2K": 0.13, "4K": 0.24},
 }
 
 
@@ -178,7 +177,7 @@ class GoogleProvider(Provider):
                           thinking_levels=("minimal", "high"), batch=True)
     if mid.startswith("gemini-3-pro-image"):
       return Capabilities(resolutions=frozenset({"1K", "2K", "4K"}), aspect_ratios=_GEMINI_ASPECTS, batch=True)
-    # Older Gemini Image models: provider default size, classic aspect set.
+    # Any other (inferred) Gemini Image id: provider default size, classic aspect set.
     return Capabilities(resolutions=frozenset(), aspect_ratios=_GEMINI_ASPECTS, batch=True)
 
   def infer_model(self, model_id: str):
@@ -225,4 +224,4 @@ class GoogleProvider(Provider):
     return out
 
   def probe_default(self) -> tuple[str, str | None]:
-    return "gemini-2.5-flash-image", "us-central1"
+    return "gemini-3.1-flash-image", "global"
