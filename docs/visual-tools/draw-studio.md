@@ -4,12 +4,12 @@ Sketch on an image, then have a model redraw it. Draw Studio is a browser canvas
 serves from your own computer.
 
 ```bash
-genimg draw -m gdm:nb2 fox-1.webp raccoon-ref.webp
+genimg draw -m gdm:nb2 fox-sketch.webp
 ```
 
 <figure markdown>
-  ![Draw Studio with the fox on the canvas and a moon sketched beside it](../assets/draw-studio.webp)
-  <figcaption>The command above, with a moon sketched in with the pen.</figcaption>
+  ![Draw Studio with a rough fox doodle on the canvas and a moon sketched beside it](../assets/draw-studio.webp)
+  <figcaption>The command above, with the doodle placed on the canvas and a moon added with the pen.</figcaption>
 </figure>
 
 1. Click a source image to put it on the canvas, or draw on a blank one.
@@ -23,12 +23,12 @@ of an API key. `--no-open` prints the URL instead of opening a browser.
 ## Draw from an iPad
 
 <figure markdown>
-  ![Draw Studio in Safari on an iPad](../assets/draw-studio-ipad.webp){ width="420" }
+  ![Draw Studio in Safari on an iPad, with the fox doodle on the canvas](../assets/draw-studio-ipad.webp){ width="420" }
   <figcaption>The iPad Pro 13-inch simulator, which shares the Mac's localhost. The moon was drawn by touch.</figcaption>
 </figure>
 
-The Studio listens only on the Mac's loopback address, so Safari on a separate iPad cannot open the Mac's `localhost`.
-Put the Mac's screen on the iPad instead:
+The Studio listens only on the Mac's loopback address, so Safari on a separate iPad cannot open
+the Mac's `localhost`. Put the Mac's screen on the iPad instead:
 
 - [Sidecar](https://support.apple.com/en-gb/102597) makes the iPad a second display. Drag the
   browser across and draw with Apple Pencil; the Studio ignores pressure.
