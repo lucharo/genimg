@@ -97,7 +97,7 @@ _HTML = '''<!DOCTYPE html>
   .viewbar{flex-wrap:wrap;align-items:center}
   .t-entry{margin-left:auto;display:flex;align-items:center;gap:6px;position:relative}
   .viewbar .t-open{border-color:#4CAF50;color:#cfe8d0}
-  .t-info{width:26px;height:26px;border-radius:50%;background:#2a2a2a;border:1px solid #555;color:#aaa;font:600 13px/1 Georgia,serif;cursor:help}
+  .viewbar .t-info{width:28px;height:28px;padding:0;border-radius:50%;background:#2a2a2a;border:1px solid #555;color:#aaa;font:italic 600 14px/1 Georgia,serif;cursor:help}
   .t-tip{position:absolute;right:0;top:calc(100% + 8px);width:min(300px,calc(100vw - 40px));background:#2f2f2f;border:1px solid #444;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.45;color:#ddd;box-shadow:0 12px 28px rgba(0,0,0,.45);z-index:20;opacity:0;transform:translateY(-4px) scale(.97);transform-origin:top right;pointer-events:none;transition:opacity 150ms cubic-bezier(.23,1,.32,1),transform 150ms cubic-bezier(.23,1,.32,1)}
   .t-info:hover+.t-tip,.t-info:focus-visible+.t-tip,.t-info:focus+.t-tip{opacity:1;transform:none}
   .card .rank{position:absolute;top:12px;right:12px;background:#4CAF50;color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;pointer-events:none;z-index:2}
@@ -130,6 +130,7 @@ _HTML = '''<!DOCTYPE html>
   .t-cap .t-model{color:#8bc34a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
   .t-vs{align-self:center;color:#666;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
   .t-hint{max-width:1400px;margin:12px auto 0;color:#666;font-size:12px;text-align:center}
+  .t-result:not([hidden])~.t-hint{display:none}
   @media (hover:hover) and (pointer:fine){.t-pick:hover{border-color:#4CAF50}}
   @media (hover:none){.t-cap kbd{display:none}}
   .t-result{max-width:1100px;margin:0 auto}
