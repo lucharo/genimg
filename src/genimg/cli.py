@@ -765,6 +765,9 @@ def draw_cmd(
   paths: Annotated[list[Path] | None, typer.Argument(
     help="Image files and/or directories to load into the studio (optional).")] = None,
   port: Annotated[int, typer.Option("--port", help="Port to serve on (auto-bumps if busy).")] = 8788,
+  host: Annotated[str, typer.Option("--host",
+    help="IPv4 address to serve on, e.g. your Tailscale or LAN IP for an iPad. "
+         "Anyone who can reach it can generate with your credentials.")] = "127.0.0.1",
   model: Annotated[str | None, typer.Option("-m", "--model",
     help="Initial model alias (default: your set default → gdm:nb2).")] = None,
   no_open: Annotated[bool, typer.Option("--no-open", help="Don't auto-open the browser.")] = False,
@@ -792,7 +795,8 @@ def draw_cmd(
     default_model = "gdm:nb2"
 
   try:
-    draw_module.serve(sources, port=port, model=default_model, open_browser=not no_open)
+    draw_module.serve(sources, port=port, model=default_model, open_browser=not no_open,
+                      host=host)
   except RuntimeError as e:
     _die(str(e))
 

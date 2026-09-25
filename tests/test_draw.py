@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import errno
 import http.client
+import io
 import json
 import os
 import tempfile
@@ -285,6 +288,137 @@ class HostGuardTests(unittest.TestCase):
     self.assertFalse(draw._host_allowed("attacker.example:8788"))
     self.assertFalse(draw._host_allowed(None))
 
+  def test_bound_address_allows_exactly_that_address_and_port(self) -> None:
+    bound = ("100.101.102.103", 8788)
+    verdicts = {h: draw._host_allowed(h, bound) for h in (
+      "100.101.102.103:8788", "localhost:8788", "100.101.102.103:9999", "100.101.102.103",
+      "attacker.example:8788")}
+
+    self.assertEqual(verdicts, {
+      "100.101.102.103:8788": True, "localhost:8788": True, "100.101.102.103:9999": False,
+      "100.101.102.103": False, "attacker.example:8788": False})
+
+
+class BoundHostHttpTests(unittest.TestCase):
+  """A studio started with `--host ADDR` serves Host: ADDR:port and nothing foreign.
+
+  The socket binds to loopback so the test runs anywhere; `server_address` is then set to a
+  Tailscale-style address, which is what the handler reads as the bound address."""
+
+  def setUp(self) -> None:
+    for p in (
+      patch.object(draw.discovery, "load_fresh_cache", return_value=None),
+      patch.object(draw.auth_resolve, "all_info", return_value={
+        "google": AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True),
+        "openai": AuthInfo("azure", "env", "-", "AZURE_OPENAI_API_KEY", True),
+        "codex": AuthInfo("unset", "-", "-", "-", False, "Run `codex login`")}),
+    ):
+      p.start()
+      self.addCleanup(p.stop)
+    self.studio = draw.Studio([], "gdm:nb2")
+    self.studio.start_job = MagicMock(return_value="draw123")
+    self.httpd = draw._Server(("127.0.0.1", 0), draw._make_handler(self.studio))
+    self.port = self.httpd.server_port
+    self.httpd.server_address = ("100.101.102.103", self.port)
+    self.addr = f"100.101.102.103:{self.port}"
+    thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+    thread.start()
+    self.addCleanup(self.httpd.server_close)
+    self.addCleanup(self.httpd.shutdown)
+
+  def _request(self, method: str, headers: dict[str, str], body: str | None = None) -> int:
+    conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
+    self.addCleanup(conn.close)
+    conn.putrequest(method, "/" if method == "GET" else "/generate", skip_host=True)
+    for name, value in {**headers, "Content-Length": str(len(body or ""))}.items():
+      conn.putheader(name, value)
+    conn.endheaders((body or "").encode())
+    response = conn.getresponse()
+    response.read()
+    return response.status
+
+  def test_page_served_to_bound_address_and_refused_to_foreign_host(self) -> None:
+    statuses = {
+      "bound": self._request("GET", {"Host": self.addr}),
+      "foreign": self._request("GET", {"Host": f"attacker.example:{self.port}"}),
+    }
+
+    self.assertEqual(statuses, {"bound": 200, "foreign": 403})
+
+  def test_generate_with_mismatched_origin_is_refused(self) -> None:
+    body = json.dumps({"prompt": "a clean diagram", "model": "gdm:nb2"})
+
+    status = self._request(
+      "POST", {"Host": self.addr, "Origin": "http://attacker.example"}, body)
+
+    self.assertEqual(status, 403)
+    self.studio.start_job.assert_not_called()
+
+  def test_generate_with_matching_origin_starts_job(self) -> None:
+    body = json.dumps({"prompt": "a clean diagram", "model": "gdm:nb2"})
+
+    status = self._request("POST", {"Host": self.addr, "Origin": f"http://{self.addr}"}, body)
+
+    self.assertEqual(status, 200)
+    self.studio.start_job.assert_called_once()
+
+
+class ServeBindTests(unittest.TestCase):
+  """`serve()` binds where `--host` says, warns off loopback, and refuses what it can't guard."""
+
+  def _serve(self, host: str) -> tuple[MagicMock, str]:
+    server = MagicMock()
+    out = io.StringIO()
+    with (
+      patch.object(draw, "Studio"),
+      patch.object(draw, "_make_handler", return_value="handler"),
+      patch.object(draw, "_Server", return_value=server) as server_cls,
+      contextlib.redirect_stdout(out),
+    ):
+      draw.serve([], port=8788, open_browser=False, host=host)
+    return server_cls, out.getvalue()
+
+  def test_default_binds_loopback_without_warning(self) -> None:
+    server_cls, out = self._serve("127.0.0.1")
+
+    server_cls.assert_called_once_with(("127.0.0.1", 8788), "handler")
+    self.assertEqual(out.splitlines()[:2], [
+      "genimg draw studio → http://localhost:8788  (0 source images)", "  Ctrl-C to stop."])
+
+  def test_non_loopback_host_binds_there_and_warns(self) -> None:
+    server_cls, out = self._serve("100.101.102.103")
+
+    server_cls.assert_called_once_with(("100.101.102.103", 8788), "handler")
+    self.assertEqual(out.splitlines()[:2], [
+      "genimg draw studio → http://100.101.102.103:8788  (0 source images)",
+      "  warning: anyone who can reach 100.101.102.103:8788 can generate with your credentials."])
+
+  def test_wildcard_host_is_refused(self) -> None:
+    with (
+      patch.object(draw, "_Server") as server_cls,
+      self.assertRaisesRegex(RuntimeError, "every network; pass one address"),
+    ):
+      draw.serve([], open_browser=False, host="0.0.0.0")
+    server_cls.assert_not_called()
+
+  def test_hostname_is_refused(self) -> None:
+    with (
+      patch.object(draw, "_Server") as server_cls,
+      self.assertRaisesRegex(RuntimeError, "needs an IPv4 address"),
+    ):
+      draw.serve([], open_browser=False, host="studio.example")
+    server_cls.assert_not_called()
+
+  def test_address_not_on_this_machine_is_named(self) -> None:
+    unavailable = OSError(errno.EADDRNOTAVAIL, "Can't assign requested address")
+    with (
+      patch.object(draw, "Studio"),
+      patch.object(draw, "_make_handler"),
+      patch.object(draw, "_Server", side_effect=unavailable),
+      self.assertRaisesRegex(RuntimeError, "100.101.102.103 is not an address of this machine"),
+    ):
+      draw.serve([], open_browser=False, host="100.101.102.103")
+
 
 class BootJsonTests(unittest.TestCase):
   def test_angle_bracket_in_source_name_is_escaped(self) -> None:
@@ -513,23 +647,35 @@ class DrawCommandModelTests(unittest.TestCase):
   """The studio model must support image input for iterations after the first image."""
 
   def _serve_model(self, args: list[str], default_cfg: str | None) -> str:
+    return self._serve_kwargs(args, default_cfg)["model"]
+
+  def _serve_kwargs(self, args: list[str], default_cfg: str | None) -> dict[str, str]:
     captured: dict[str, str] = {}
 
-    def fake_serve(sources, *, port, model, open_browser):
+    def fake_serve(sources, *, port, model, open_browser, host):
       captured["model"] = model
+      captured["host"] = host
 
     with (
       patch.object(draw, "serve", side_effect=fake_serve),
       patch.object(cli.config, "get_default_model", return_value=default_cfg),
     ):
       CliRunner().invoke(cli._app, ["draw", "--no-open", *args])
-    return captured["model"]
+    return captured
 
   def test_alias_is_canonicalized_to_studio_model(self) -> None:
     self.assertEqual(self._serve_model(["-m", "oai:gi2"], None), "oai:gpt-image-2")
 
   def test_no_model_uses_config_default_when_supported(self) -> None:
     self.assertEqual(self._serve_model([], "gdm:nbp"), "gdm:nbp")
+
+  def test_host_defaults_to_loopback_and_passes_through(self) -> None:
+    hosts = {
+      "default": self._serve_kwargs([], None)["host"],
+      "tailnet": self._serve_kwargs(["--host", "100.101.102.103"], None)["host"],
+    }
+
+    self.assertEqual(hosts, {"default": "127.0.0.1", "tailnet": "100.101.102.103"})
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ use is skipped; an explicit flag is never dropped.
 | `history view` | Interactive browser with in-terminal previews. `yi` copies the image, `yp` its path, `?` lists keys. | |
 | `cost` | Total estimated spend (`history --summary`). | `--json` |
 | `grid PATHS...` | HTML grid from existing images. | `-o`, `--open` |
-| `draw [PATHS...]` | Local Draw Studio canvas. | `--port`, `-m`, `--no-open` |
+| `draw [PATHS...]` | Local Draw Studio canvas. `--host IP` serves it to other devices, and anyone who can reach that IP can generate with your credentials. | `--port`, `--host`, `-m`, `--no-open` |
 | `config` | `show`, `path`, `edit`. See [config.toml](config.md). | |
 | `skills` | Prints `npx skills add lucharo/genimg`. `path [skill]` prints bundled skill sources. | |
 

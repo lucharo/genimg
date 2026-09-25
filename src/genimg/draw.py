@@ -14,6 +14,8 @@ Ported from a Claude Design mock (vanilla JS, no framework). Stdlib + Pillow onl
 from __future__ import annotations
 
 import base64
+import errno
+import ipaddress
 import json
 import os
 import secrets
@@ -377,13 +379,16 @@ def _safe_name(name: str) -> str:
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
-def _host_allowed(host: str | None) -> bool:
+def _host_allowed(host: str | None, bound: tuple[str, int] | None = None) -> bool:
   """Anti-DNS-rebinding guard for ALL routes: the Host header must name an explicit loopback
-  address. A rebinding page (Host: attacker.example) is rejected even though it resolves to
-  127.0.0.1, so it can't reach /generate or read /history, /gen, /src."""
+  address, or exactly the `ADDR:port` the server is bound to (`genimg draw --host ADDR`). A
+  rebinding page (Host: attacker.example) is rejected even though it resolves to the server's
+  address, so it can't reach /generate or read /history, /gen, /src."""
   if not host:
     return False
-  return urlparse("//" + host).hostname in _LOCAL_HOSTS
+  if urlparse("//" + host).hostname in _LOCAL_HOSTS:
+    return True
+  return bound is not None and host == f"{bound[0]}:{bound[1]}"
 
 
 def _origin_allowed(origin: str | None, host: str | None) -> bool:
@@ -433,8 +438,11 @@ def _make_handler(studio: Studio):
       }.get(path.suffix.lower(), "application/octet-stream")
       self._send(200, mime, path.read_bytes())
 
+    def _host_ok(self) -> bool:
+      return _host_allowed(self.headers.get("Host"), self.server.server_address[:2])
+
     def do_GET(self):
-      if not _host_allowed(self.headers.get("Host")):
+      if not self._host_ok():
         return self._send(403, "text/plain", b"forbidden")
       route = urlparse(self.path).path
       if route in ("/", "/index.html"):
@@ -454,7 +462,7 @@ def _make_handler(studio: Studio):
       return self._send(404, "text/plain", b"not found")
 
     def do_POST(self):
-      if not _host_allowed(self.headers.get("Host")):
+      if not self._host_ok():
         return self._send(403, "text/plain", b"forbidden")
       route = urlparse(self.path).path
       if route != "/generate":
@@ -501,26 +509,46 @@ class _Server(socketserver.ThreadingMixIn, _http_server.HTTPServer):
   allow_reuse_address = True
 
 
+_HOST_HINT = "`tailscale ip -4` or `ipconfig getifaddr en0`"
+
+
+def _bind_address(host: str) -> ipaddress.IPv4Address:
+  """Validate `--host`: one specific IPv4 address. 0.0.0.0 is refused because the Host guard
+  allows exactly the bound `ADDR:port`, which a wildcard bind leaves unknowable."""
+  try:
+    ip = ipaddress.IPv4Address(host)
+  except ValueError:
+    raise RuntimeError(f"--host needs an IPv4 address, such as the output of {_HOST_HINT}") from None
+  if ip.is_unspecified:
+    raise RuntimeError(f"--host {host} listens on every network; pass one address from {_HOST_HINT}")
+  return ip
+
+
 def serve(sources: list[Path], *, port: int = 8788, model: str = "gdm:nb2",
-          open_browser: bool = True) -> None:
+          open_browser: bool = True, host: str = "127.0.0.1") -> None:
   """Start the studio server (auto-bumping the port if busy) and block."""
+  ip = _bind_address(host)
   studio = Studio(sources, default_model=model)
   handler = _make_handler(studio)
   httpd = None
   chosen = port
   for candidate in range(port, port + 25):
     try:
-      httpd = _Server(("127.0.0.1", candidate), handler)
+      httpd = _Server((str(ip), candidate), handler)
       chosen = candidate
       break
-    except OSError:
+    except OSError as e:
+      if e.errno == errno.EADDRNOTAVAIL:
+        raise RuntimeError(f"{ip} is not an address of this machine; check {_HOST_HINT}") from None
       continue
   if httpd is None:
     raise RuntimeError(f"no free port in {port}..{port + 24}")
 
-  url = f"http://localhost:{chosen}"
+  url = f"http://{'localhost' if ip.is_loopback else ip}:{chosen}"
   n = len(sources)
   print(f"genimg draw studio → {url}  ({n} source image{'' if n == 1 else 's'})", flush=True)
+  if not ip.is_loopback:
+    print(f"  warning: anyone who can reach {ip}:{chosen} can generate with your credentials.", flush=True)
   print("  Ctrl-C to stop.", flush=True)
   if open_browser:
     threading.Timer(0.6, lambda: webbrowser.open(url)).start()
