@@ -1231,6 +1231,8 @@ const BOOT = /*__BOOT__*/;
     else if(k==="0"){S.view={x:0,y:0,s:1};updateZoom();redraw();} else if(k==="f"){zoomFit();}
   });
   window.addEventListener("resize",sizeCanvas);
+  // The canvas lives only in this tab: warn before a reload or close discards it.
+  window.addEventListener("beforeunload",(e)=>{ if(hasContent()){e.preventDefault();e.returnValue="";} });
 
   shell();
 })();

@@ -599,6 +599,9 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("if(p&&replacePrompt(p.prompt,p.label))", draw.PAGE)
     self.assertIn('if(replacePrompt(BOOT.defaultPrompt,"Default"))', draw.PAGE)
 
+  def test_reload_or_close_warns_while_the_canvas_has_content(self) -> None:
+    self.assertIn('window.addEventListener("beforeunload",(e)=>{ if(hasContent()){e.preventDefault();e.returnValue="";} });', draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
