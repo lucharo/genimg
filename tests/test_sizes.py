@@ -7,9 +7,9 @@ from genimg.interfaces import GenerateRequest
 from genimg.providers.openai import _SIZE_MAP, OpenAIImageGen
 
 
-def _req(resolution=None, aspect_ratio=None) -> GenerateRequest:
+def _req(resolution=None, aspect_ratio=None, model="gpt-image-2") -> GenerateRequest:
   return GenerateRequest(
-    prompt="x", output=Path("/tmp/x.png"), model="gpt-image-2",
+    prompt="x", output=Path("/tmp/x.png"), model=model,
     resolution=resolution, aspect_ratio=aspect_ratio,
   )
 
@@ -24,6 +24,14 @@ class OpenAISizeTests(unittest.TestCase):
   def test_unsupported_combo_raises(self) -> None:
     with self.assertRaises(RuntimeError):
       OpenAIImageGen()._size_for(_req("1K", "16:9"))
+
+  def test_gpt_image_1_family_serves_only_the_1024_square(self) -> None:
+    # Library callers bypass CLI validation, so the request builder must refuse too.
+    gen = OpenAIImageGen()
+    for model in ("gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5", "gpt-image-1-2025-04-15"):
+      self.assertEqual(gen._size_for(_req(model=model)), "1024x1024")
+      with self.assertRaises(RuntimeError):
+        gen._size_for(_req("2K", "1:1", model=model))
 
   def test_every_map_entry_round_trips(self) -> None:
     gen = OpenAIImageGen()

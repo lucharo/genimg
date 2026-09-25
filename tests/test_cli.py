@@ -152,6 +152,37 @@ class AuthFlagTests(unittest.TestCase):
     self.assertIn("--auth must be one of azure, direct, got 'native'", " ".join(result.output.split()))
 
 
+class ModelOptionDryRunTests(unittest.TestCase):
+  """Drive the real `prompt --dry-run` path: alias resolution, capabilities and validation."""
+
+  def _dry_run(self, *args: str) -> tuple[int, str]:
+    with patch.object(cli.config, "load", return_value={}), \
+         patch.dict("os.environ", {"OPENAI_API_KEY": "k"}):
+      result = CliRunner().invoke(cli._app, ["prompt", *args, "--dry-run"])
+    return result.exit_code, " ".join(result.output.split())
+
+  def test_nb2_lite_accepts_both_thinking_levels(self) -> None:
+    for level in ("minimal", "high"):
+      exit_code, output = self._dry_run("-m", "gdm:nb2-lite", "--thinking", level)
+      self.assertEqual(exit_code, 0, output)
+      self.assertIn(f"thinking={level}", output)
+
+  def test_gpt_image_1_family_rejects_sizes_beyond_the_1024_square(self) -> None:
+    models = (("oai:gi1", "gpt-image-1"), ("oai:gi1-mini", "gpt-image-1-mini"),
+              ("oai:gi1.5", "gpt-image-1.5"))
+    for alias, model_id in models:
+      for flags in (("-r", "2K"), ("-a", "4:3")):
+        exit_code, output = self._dry_run("-m", alias, *flags)
+        self.assertEqual(exit_code, 1, output)
+        self.assertIn(f"{model_id} takes only 1K 1:1 (1024x1024)", output)
+        self.assertNotIn("dry-run: no API call made", output)
+
+  def test_gpt_image_1_default_size_is_the_1024_square(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi1")
+    self.assertEqual(exit_code, 0, output)
+    self.assertIn("→ 1024x1024", output)
+
+
 class CorruptConfigTests(unittest.TestCase):
   def test_corrupt_config_toml_is_reported_not_clobbered(self) -> None:
     with tempfile.TemporaryDirectory() as td:

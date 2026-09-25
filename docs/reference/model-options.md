@@ -7,10 +7,10 @@ even on `--dry-run`.
 | Flag | Gemini (`gdm:`) | OpenAI (`oai:`) | Codex (`codex:image`) |
 | --- | --- | --- | --- |
 | `--mode batch` | yes | no | no |
-| `--thinking` | `minimal` or `high`, on `gdm:nb2` only | no | no |
+| `--thinking` | `minimal` or `high`, on `gdm:nb2` and `gdm:nb2-lite` | no | no |
 | `--quality` | no | `low medium high auto`, plus `xhigh max` on 2.5 | no |
-| `--resolution` | by model, see [Models](models.md#gemini) | from the [size table](models.md#openai) | no |
-| `--aspect-ratio` | 10 ratios; `gdm:nb2` and `gdm:nb2-lite` add `1:4 4:1 1:8 8:1` | `1:1 4:3 3:4 16:9 9:16`, by resolution | 10 ratios, as a request in the prompt |
+| `--resolution` | by model, see [Models](models.md#gemini) | from the [size table](models.md#openai); `1K` only on GPT Image 1.x | no |
+| `--aspect-ratio` | 10 ratios; `gdm:nb2` and `gdm:nb2-lite` add `1:4 4:1 1:8 8:1` | `1:1 4:3 3:4 16:9 9:16`, by resolution; `1:1` only on GPT Image 1.x | 10 ratios, as a request in the prompt |
 | `--input` and reference images | yes | up to 16 PNG, JPEG or WebP files, 50 MB each | yes |
 | `--region`, `--project` | yes | no | no |
 | `--auth` | no | `azure` or `direct` | no |
@@ -22,7 +22,8 @@ even on `--dry-run`.
 takes. It decides how many images to return, so genimg keeps what arrives and warns when the set
 is short. `--deltas` needs the default parallel mode. More in [Diverse images](../guide/diversity.md).
 
-Gemini 3 image models always think before they draw. On `gdm:nb2`, `--thinking` sets how hard:
+Gemini 3 image models always think before they draw. On `gdm:nb2` and `gdm:nb2-lite`, `--thinking`
+sets how hard:
 `minimal` (Google's default) or `high`. Google bills thinking tokens; genimg's estimate leaves
 them out.
 
@@ -61,8 +62,8 @@ The [Image API](https://developers.openai.com/api/reference/resources/images/met
 returns images and token counts. It has no text or reasoning output, and its `revised_prompt` field
 is for `dall-e-3` only. genimg keeps the image and prices it with its own estimate.
 
-GPT Image 1, 1.5 and 1 mini support only 1024×1024 of genimg's sizes, so leave `--resolution` and
-`--aspect-ratio` unset for them.
+GPT Image 1, 1.5 and 1 mini support only 1024×1024 of genimg's sizes, so genimg rejects any other
+`--resolution` or `--aspect-ratio` for them.
 
 ```console
 $ genimg "a lighthouse at dusk" --model oai:gi2.5 --quality xhigh --resolution 2K --aspect-ratio 16:9 --dry-run

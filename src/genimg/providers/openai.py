@@ -43,6 +43,17 @@ _SIZE_MAP = {
   ("4K", "16:9"): "3840x2160",
   ("4K", "9:16"): "2160x3840",
 }
+# GPT Image 1, 1 mini and 1.5 take only 1024x1024, 1536x1024 and 1024x1536; arbitrary WxH is
+# gpt-image-2 and 2.5 only (`size` in
+# https://developers.openai.com/api/reference/resources/images/methods/generate, read 2026-09-25).
+# Of genimg's (resolution, aspect) pairs, only 1K 1:1 lands on one of those sizes.
+_LEGACY_SIZE_MAP = {("1K", "1:1"): "1024x1024"}
+_LEGACY_MODEL = re.compile(r"gpt-image-1(\.5|-mini)?(-\d{4}-\d{2}-\d{2})?")
+
+
+def size_map(model_id: str) -> dict[tuple[str, str], str]:
+  """(resolution, aspect) → WxH for the sizes `model_id` accepts, dated snapshots included."""
+  return _LEGACY_SIZE_MAP if _LEGACY_MODEL.fullmatch(model_id) else _SIZE_MAP
 
 _INPUT_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _MAX_INPUT_MB = 50
@@ -144,9 +155,12 @@ def quality_options(model_id: str) -> list[str]:
   return ["low", "medium", "high", "auto"]
 
 
-def size_error(resolution: str | None, aspect_ratio: str | None) -> str:
-  """Explain why a (resolution, aspect) pair is not in the size table."""
+def size_error(resolution: str | None, aspect_ratio: str | None, model_id: str = "") -> str:
+  """Explain why a (resolution, aspect) pair is not in `model_id`'s size table."""
   res, ar = resolution or "1K", aspect_ratio or "1:1"
+  if size_map(model_id) is _LEGACY_SIZE_MAP:
+    return (f"OpenAI: {model_id} takes only 1K 1:1 (1024x1024) of genimg's sizes. "
+            "Drop -r/-a, or use -m oai:gi2 for 2K, 4K and other aspect ratios.")
   if res == "4K" and ar in ("4:3", "3:4"):
     return "OpenAI: 4K + 4:3/3:4 exceeds the total pixel cap (8.3M). Use 2K + 4:3/3:4, or 4K + 16:9/9:16."
   if res == "1K" and ar in ("16:9", "9:16"):
@@ -169,11 +183,12 @@ class OpenAIImageGen(IImageGen):
     so library callers (who bypass CLI validation) don't silently get a 1024² fallback."""
     res = req.resolution or "1K"
     ar = req.aspect_ratio or "1:1"
-    size = _SIZE_MAP.get((res, ar))
+    sizes = size_map(req.model)
+    size = sizes.get((res, ar))
     if size is None:
       raise RuntimeError(
-        f"OpenAI: ({res}, {ar}) is not a supported size combo. "
-        f"Supported: {sorted(_SIZE_MAP.keys())}"
+        f"OpenAI: ({res}, {ar}) is not a supported size combo for {req.model}. "
+        f"Supported: {sorted(sizes.keys())}"
       )
     return size
 
@@ -244,13 +259,14 @@ class OpenAIProvider(Provider):
   order = 20
 
   def capabilities(self, model_id: str) -> Capabilities:
+    sizes = size_map(model_id)
     return Capabilities(
-      resolutions=frozenset(r for r, _ in _SIZE_MAP),
-      aspect_ratios=frozenset(a for _, a in _SIZE_MAP),
+      resolutions=frozenset(r for r, _ in sizes),
+      aspect_ratios=frozenset(a for _, a in sizes),
       qualities=tuple(quality_options(model_id)),
       batch=False,
       max_inputs=_MAX_INPUTS, input_exts=_INPUT_EXTS, max_input_mb=_MAX_INPUT_MB,
-      sizes=dict(_SIZE_MAP), default_resolution="1K", default_aspect="1:1",
+      sizes=dict(sizes), default_resolution="1K", default_aspect="1:1",
     )
 
   def infer_model(self, model_id: str):
@@ -263,7 +279,7 @@ class OpenAIProvider(Provider):
 
   def price(self, model_id: str, quality: str | None = None, resolution: str | None = None,
             aspect: str | None = None) -> float | None:
-    size = _SIZE_MAP.get((resolution or "1K", aspect or "1:1"))
+    size = size_map(model_id).get((resolution or "1K", aspect or "1:1"))
     if size is None:
       return None
     width, height = (int(v) for v in size.split("x"))
@@ -287,5 +303,5 @@ class OpenAIProvider(Provider):
   def probe_default(self) -> tuple[str, str | None]:
     return "gpt-image-2", None
 
-  def size_error(self, resolution: str | None, aspect: str | None) -> str:
-    return size_error(resolution, aspect)
+  def size_error(self, resolution: str | None, aspect: str | None, model_id: str = "") -> str:
+    return size_error(resolution, aspect, model_id)
