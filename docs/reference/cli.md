@@ -116,7 +116,7 @@ genimg cost [--json]
 
 ## genimg grid { data-toc-label="grid" }
 
-- Turns existing images into an HTML grid. See [Grid and carousel](../visual-tools/grid.md).
+- Turns existing images, or every image in a folder, into an HTML grid. See [Grid and carousel](../visual-tools/grid.md).
 
 ```text
 genimg grid PATHS... \
