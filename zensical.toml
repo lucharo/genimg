@@ -40,11 +40,8 @@ nav = [
   { "FAQ" = "faq.md" },
   { "Maintainers" = [
     { "Overview" = "maintainers/index.md" },
-    { "Maintaining the model list" = "maintainers/maintaining-models.md" },
-    { "Releasing" = "maintainers/releasing.md" },
-    { "ADR 0001: no built-in default model" = "maintainers/adr/0001-no-built-in-default-model.md" },
-    { "ADR 0002: no org-internal defaults" = "maintainers/adr/0002-no-org-internal-defaults.md" },
-    { "ADR 0003: providers and auth profiles" = "maintainers/adr/0003-providers-and-auth-profiles.md" },
+    { "Adding or updating a model" = "maintainers/models.md" },
+    { "Design decisions" = "maintainers/decisions.md" },
   ] },
 ]
 

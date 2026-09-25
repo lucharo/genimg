@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-genimg ships no organization-specific defaults. The Vertex GCP project is resolved from the user's own environment — `--project` → `config.gcp_project` → `GOOGLE_CLOUD_PROJECT` → the `project_id` embedded in the service-account JSON (or gcloud's active project for ADC) — and errors clearly if none resolves, rather than falling back to a hardcoded project.
+genimg ships no organization-specific defaults. The Vertex GCP project is resolved from the user's own environment, in order: `--project`, the profile's `project` setting, `GOOGLE_CLOUD_PROJECT`, the `project_id` in the service-account JSON, or gcloud's active project for ADC. It errors clearly if none resolves, rather than falling back to a hardcoded project.
 
 Consequences:
 - Project selection has no hardcoded organization-specific fallback.

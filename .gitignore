@@ -38,3 +38,4 @@ htmlcov/
 .claude/worktrees/
 .kata.local.toml
 site/
+.cache/
