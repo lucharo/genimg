@@ -745,7 +745,6 @@ const BOOT = /*__BOOT__*/;
     const meta=MM[S.model]||{};
     const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta), thinking=meta.thinkingOptions||[];
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
-    if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
     if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
     const supportedAspects=meta.aspectOptions||[];
     if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
@@ -753,7 +752,7 @@ const BOOT = /*__BOOT__*/;
     S.sizeControlKey=sizeControlKey(meta);
     $("paramControls").innerHTML =
       (qualities.length?segmentedControl("quality","Quality",qualities,S.quality,"qualityfield"):"")+
-      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,S.resolution,"sizefield"):"")+
+      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,selectedResolution(),"sizefield"):"")+
       `<div class="controlfield aspectfield"><label class="toplbl" for="aspectSel">Aspect ratio</label><select id="aspectSel" aria-label="Aspect ratio" style="width:100%">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`+
       (thinking.length?segmentedControl("thinking","Thinking",thinking,S.thinking,"thinkingfield"):"");
     renderControlsVisibility();
@@ -771,7 +770,7 @@ const BOOT = /*__BOOT__*/;
       button.addEventListener("click",()=>selectSegment(button.dataset.segKey,button.dataset.segValue));
       button.addEventListener("keydown",e=>{
         const key=button.dataset.segKey, options=optionSets[key]||[];
-        let idx=options.indexOf(S[key]);
+        let idx=options.indexOf(key==="resolution"?selectedResolution():S[key]);
         if(e.key==="ArrowRight"||e.key==="ArrowDown")idx=(idx+1)%options.length;
         else if(e.key==="ArrowLeft"||e.key==="ArrowUp")idx=(idx-1+options.length)%options.length;
         else if(e.key==="Home")idx=0;
@@ -961,17 +960,15 @@ const BOOT = /*__BOOT__*/;
     const byAspect=meta.resolutionOptionsByAspect||{}, options=resolutionOptions(meta);
     return (Object.keys(byAspect).length?selectedAspect()+"|":"")+options.join(",");
   }
+  // S.resolution is the user's pick and is never overwritten. The size sent and priced is derived
+  // from it: the pick while this model and aspect allow it, else the nearest allowed size.
+  const RES_ORDER=["512","1K","2K","4K"];
   function selectedResolution(){
     const options=resolutionOptions();
     if(!options.length)return null;
     if(options.includes(S.resolution))return S.resolution;
-    return options.includes("2K")?"2K":options[0];
-  }
-  function effectiveResolution(){
-    const meta=MM[S.model]||{}, byAspect=meta.resolutionOptionsByAspect||{};
-    if(!Object.keys(byAspect).length)return selectedResolution()||"1K";
-    const valid=byAspect[selectedAspect()]||[];
-    return valid.includes(S.resolution)?S.resolution:"2K";
+    const want=RES_ORDER.indexOf(S.resolution), gap=r=>Math.abs(RES_ORDER.indexOf(r)-want);
+    return options.reduce((best,r)=>gap(r)<=gap(best)?r:best);  // ascending options: a tie goes to the larger
   }
   const providerLabel=(p)=>((BOOT.providers||{})[p]||{}).label;
   function costEstimate(){
@@ -980,7 +977,7 @@ const BOOT = /*__BOOT__*/;
     // prices: quality ("" when n/a) → resolution ("" when n/a) → USD, built server-side per model;
     // a "resolution|aspect" key overrides the default-aspect figure where size changes the price.
     const byQ=meta.prices||{}, row=byQ[(meta.qualityOptions||[]).length?S.quality:""]||{};
-    const res=(meta.resolutionOptions||[]).length?effectiveResolution():"";
+    const res=(meta.resolutionOptions||[]).length?selectedResolution():"";
     let usd=row[res+"|"+selectedAspect()]; if(usd==null) usd=row[res]; if(usd==null) usd=row["1K"]; if(usd==null) usd=row[""];
     if(usd==null) return "cost unknown";
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
@@ -1065,11 +1062,7 @@ const BOOT = /*__BOOT__*/;
     ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(off,0,0);
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
-    const resolution=selectedResolution();
-    if(sizeControlKey()!==S.sizeControlKey||(resolution&&resolution!==S.resolution)){
-      if(resolution)S.resolution=resolution;
-      renderTopbar();
-    }
+    if(sizeControlKey()!==S.sizeControlKey)renderTopbar();
     renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }

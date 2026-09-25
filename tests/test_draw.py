@@ -588,6 +588,12 @@ class BootJsonTests(unittest.TestCase):
     self.assertNotIn('S.tool="pen"', draw.PAGE)  # every switch to Pen goes through setTool
     self.assertIn('if(hasContent()&&!confirm("Clear the canvas? Your drawing will be lost."))return;', draw.PAGE)
 
+  def test_image_size_keeps_the_users_pick_and_derives_the_shown_and_priced_size(self) -> None:
+    # A wide stroke used to overwrite 1K with 2K for good, doubling the estimate unasked.
+    self.assertNotIn("S.resolution=", draw.PAGE)  # only the size control's own click sets it
+    self.assertIn('segmentedControl("resolution","Image size",resolutions,selectedResolution(),"sizefield")', draw.PAGE)
+    self.assertIn('const res=(meta.resolutionOptions||[]).length?selectedResolution():"";', draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
