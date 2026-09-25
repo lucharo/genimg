@@ -1,38 +1,49 @@
 # Maintainers
 
-How genimg is built, tested, distributed and released. Users do not need this section.
+How genimg is built, tested and shipped. You only need this section to contribute.
 
-| Concern | Where |
+| Task | Command |
 | --- | --- |
-| Source layout | `src/genimg/`: `cli.py` (Typer app), `providers/` (one plugin per backend), `auth/` (profiles and resolver), `registry.py` (aliases), `config.py`, `discovery.py` (model probes), `metadata.py` / `history.py` / `provenance.py` (sidecars), `grid.py`, `draw.py` (Studio), `setup.py` (wizard). Skills live in `skills/` and are packaged as `genimg/_skills`. |
-| Tests | `uv sync --group dev` then `uv run pytest`. `tests/test_provider_contract.py` parametrises over every registered provider. |
-| Lint | `uv run ruff check .` (pyflakes and import order only). |
-| Build | `uv build` produces the wheel and sdist. CI runs lint and tests from the checkout; installing the built wheel in a clean environment is a manual pre-release check (see [Releasing](releasing.md)). |
-| Docs | `uv sync --group docs` then `uv run zensical serve`. CI runs `zensical build --strict` on every pull request that touches the docs, and publishes to GitHub Pages on pushes to `main` once the repository is public. |
-| Release | [Releasing](releasing.md): release-please and PyPI Trusted Publishing. |
-| Models | [Maintaining the model list](maintaining-models.md): when to edit the registry, capability tables and prices. |
-| Decisions | ADRs: [no built-in default model](adr/0001-no-built-in-default-model.md), [no org-internal defaults](adr/0002-no-org-internal-defaults.md), [providers as plugins, auth profiles](adr/0003-providers-and-auth-profiles.md). |
+| Set up | `uv sync` |
+| Test | `uv run pytest` |
+| Lint | `uv run ruff check .` |
+| Build the wheel and sdist | `uv build` |
+| Build the docs | `uv run --only-group docs zensical build --strict` |
 
-## Adding a provider
+## Code layout
 
-1. Subclass `genimg.providers.base.Provider` in `src/genimg/providers/<name>.py`: declare
-   `name`, `label`, `alias_prefix`, `auth_modes`, `flags`, and implement `capabilities()`,
-   `make()`, and where applicable `infer_model()`, `price()`, `probe_listed()`,
-   `probe_default()`.
-2. Add one `AuthProfile` subclass per auth mode in `src/genimg/auth/<name>.py` with
-   `detect()`, `client()`, `validate()`, `info()`, plus `env_vars`, `secret` and
-   `settings_spec` so the setup wizard and `genimg auth --modes` describe it.
-3. Register it in `src/genimg/providers/__init__.py` and add curated aliases in
-   `registry.py`.
-4. Run the suite: the contract test checks the new provider the same way as the built-ins,
-   and the CLI, cost, grid, discovery and Draw Studio pick it up from the registry.
+| Path | Holds |
+| --- | --- |
+| `src/genimg/cli.py` | The Typer app |
+| `src/genimg/providers/` | One plugin per backend: OpenAI, Google, Codex |
+| `src/genimg/auth/` | One profile class per provider and auth mode |
+| `src/genimg/registry.py` | Model aliases |
+| `src/genimg/draw.py`, `grid.py` | Draw Studio and the grid |
+| `skills/` | Agent skills, shipped in the wheel as `genimg/_skills` |
 
-## Roadmap
+## CI
 
-Open design work is tracked as GitHub issues:
-[prompt-first `genimg ui`](https://github.com/lucharo/genimg/issues/3),
-[paperbanana-style paper figures](https://github.com/lucharo/genimg/issues/4),
-[image tournament in the grid](https://github.com/lucharo/genimg/issues/22),
-[use-case skills above the mechanics layer](https://github.com/lucharo/genimg/issues/23).
-A hosted, multi-user Draw Studio is out of scope for now (see the
-[security boundary](../surfaces/draw-studio.md#security-boundary)).
+| Workflow | Runs |
+| --- | --- |
+| `ci.yml` | Lint and tests on Python 3.11, 3.12 and 3.13; checks pull request titles |
+| `docs.yml` | A strict docs build; deploys to GitHub Pages from `main` |
+| `release.yml` | release-please and PyPI publishing |
+
+## Releases
+
+Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`,
+`fix:`, `docs:`). Merges are squashed, so each title becomes a changelog line.
+[release-please](https://github.com/googleapis/release-please) collects them into a Release PR
+that bumps the version and writes `CHANGELOG.md`. Merging it tags the release and publishes to PyPI
+through [trusted publishing](https://docs.pypi.org/trusted-publishers/), with no API tokens.
+
+## Add a provider
+
+1. Subclass `Provider` in `src/genimg/providers/<name>.py`.
+2. Add one `AuthProfile` per auth mode in `src/genimg/auth/<name>.py`.
+3. Register it in `providers/__init__.py` and add aliases in `registry.py`.
+4. Run `uv run pytest`. `tests/test_provider_contract.py` checks every registered provider.
+
+New models usually need less: see [Adding or updating a model](models.md). The
+[design decisions](decisions.md) explain why the code is shaped this way. Open work is in
+[GitHub issues](https://github.com/lucharo/genimg/issues).

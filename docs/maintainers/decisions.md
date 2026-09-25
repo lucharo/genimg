@@ -1,0 +1,26 @@
+# Design decisions
+
+Three choices shape the code. Keep them unless you mean to change the decision itself.
+
+## No built-in default model
+
+Without `-m` or a saved default, genimg stops and says how to pick a model. A hardcoded default
+could name a model a fresh key cannot reach, and the very first command would fail. `genimg setup`
+offers to save a default, so the guided path still ends in a command with no flags.
+
+## No organisation-specific defaults
+
+genimg never falls back to a hardcoded GCP project or credential. The Vertex project comes from
+`--project`, then the profile's `project` setting, then `GOOGLE_CLOUD_PROJECT`, then the
+service-account file or gcloud. If none is set, genimg says what to set. A hardcoded fallback would
+be wrong for every user but its author.
+
+## Providers are plugins, auth lives in profiles
+
+Each backend is a `Provider` that owns its auth modes, model capabilities, prices and model-id
+inference. No other module branches on a provider name, so the CLI, the grid and Draw Studio read
+the same tables. Each provider and auth mode pair is an `AuthProfile`. Users pin one as a
+`[profiles.NAME]` table in `config.toml`, which never holds secrets. Without one, genimg uses the
+first mode whose environment variables are set.
+
+The full records are in `internal/adr/` in the repository.
