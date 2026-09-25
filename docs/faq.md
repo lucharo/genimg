@@ -39,7 +39,7 @@ Run `genimg draw` again and open the URL it prints. The tab has probably outlive
 
 Each model accepts different sizes, aspect ratios and quality levels. Draw Studio only shows the
 controls the selected model accepts. It runs the same `genimg` command you would type, and a test
-checks that every combination of controls it can send passes the CLI's own validation.
+checks each option it offers, and each aspect and size pair, against the CLI's own validation.
 
 ## Can I use Draw Studio from an iPad?
 
