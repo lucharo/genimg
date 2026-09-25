@@ -9,10 +9,11 @@ One simple CLI, made with both humans and agents in mind. The agent-native desig
 by [kenn-io](https://github.com/kenn-io) and the tools they put out, especially
 [roborev](https://github.com/kenn-io/roborev) and [agentsview](https://github.com/kenn-io/agentsview).
 
-Generate images with OpenAI and
-Google DeepMind models in a unified interface, via API or via Codex with a ChatGPT
-subscription. It bundles one HTML grid artefact and a drawing sketchpad for image generation,
-as well as several skills for productive image generation workflows.
+Generate images with OpenAI and Google DeepMind [models](https://genimg.luischav.es/reference/models/) in a unified
+interface, via API or via [Codex with a ChatGPT subscription](https://genimg.luischav.es/guide/codex-subscription/). It
+bundles an [image review tool](https://genimg.luischav.es/visual-tools/grid/) and a
+[drawing studio app](https://genimg.luischav.es/visual-tools/draw-studio/) for image generation, as well as several
+[skills](https://genimg.luischav.es/skills/) for productive image generation workflows.
 
 **Docs: [genimg.luischav.es](https://genimg.luischav.es/)**
 
