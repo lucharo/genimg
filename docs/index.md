@@ -2,8 +2,8 @@
 
 One command for image generation across OpenAI (GPT Image), Google DeepMind (Gemini Image)
 and Codex with your ChatGPT subscription. Built from the bottom up to be human and agent
-friendly: every verb has a `--json` or plain-text form, every generation is recorded, and a
-bundled skill teaches your coding agent the whole tool.
+friendly: `auth`, `models`, `history` and `cost` have a `--json` form, every generation is
+recorded, and a bundled skill teaches your coding agent the whole tool.
 
 ```bash
 uv tool install genimg

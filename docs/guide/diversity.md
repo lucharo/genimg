@@ -21,7 +21,7 @@ takes `#2..#n` each get one of your deltas in order, so supply `n-1` of them:
 ```bash
 genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
   --deltas "line art, block print, brush stroke" -g --open
-genimg "…" -n 5 --deltas @styles.txt      # one delta per line
+genimg "…" -m oai:gi2.5-flare -n 5 --deltas @styles.txt      # one delta per line
 ```
 
 `--deltas` implies `-d`. It works on every provider and is the right choice when you know how

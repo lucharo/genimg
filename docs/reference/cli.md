@@ -64,8 +64,12 @@ Model-specific constraints that the CLI enforces before calling a provider:
 ## Exit codes and output
 
 `0` success, `1` usage or configuration error (bad flag combination, unknown model or
-profile), `2` generation failure after the request was sent. The generation preview and
-result lines go to stdout; `--json` variants print only JSON so they can be piped.
+profile), `2` an option the parser rejects (an unknown flag, even with `--dry-run`) or a
+failed generation. A `2` alone does not prove a provider request was sent. The generation
+preview and result lines go to stdout and are for reading: they show paths as given and may
+abbreviate the home directory as `~`. The `--json` forms (`auth`, `models`, `history`, `cost`)
+print only JSON so they can be piped; the metadata sidecar and `history --json` carry
+absolute paths.
 
 ## Files
 

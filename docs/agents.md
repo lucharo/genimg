@@ -1,8 +1,9 @@
 # For agents
 
 genimg is built from the bottom up to be human and agent friendly. The CLI is the whole
-interface: no daemon, no SDK to learn, every verb has a `--json` or plain-text form, and every
-generation leaves a metadata sidecar an agent can read back. The bundled **`genimg` skill**
+interface: no daemon, no SDK to learn, `auth`, `models`, `history` and `cost` have a `--json`
+form (the other verbs print plain text), and every generation leaves a metadata sidecar an
+agent can read back. The bundled **`genimg` skill**
 describes the mechanics of the entire package so a coding agent can generate images for you.
 
 ## Install the skill into your agent
@@ -38,9 +39,11 @@ obvious:
 - `genimg auth --json` and `genimg models --json` tell an agent what it can use before it
   spends anything.
 - `--dry-run` previews model, size and cost with no API call.
-- Output paths are printed as absolute paths; the metadata sidecar under
-  `~/.genimg/metadata/<id>.json` records prompt, model, parameters, per-image prompt deltas,
-  cost and provenance.
+- Human-readable output shows paths as given and may abbreviate the home directory as `~`.
+  The metadata sidecar under `~/.genimg/metadata/<id>.json` records absolute output paths,
+  prompt, model, parameters, per-image prompt deltas, cost and provenance.
+- Exit code `2` alone does not prove a provider request was sent: an unknown option also
+  exits `2`, even with `--dry-run`. See [exit codes](reference/cli.md#exit-codes-and-output).
 - `genimg history --json` returns the same records; `genimg grid *.png` renders any set of
   images into a shareable HTML review page.
 
