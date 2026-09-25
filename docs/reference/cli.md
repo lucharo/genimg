@@ -49,7 +49,7 @@ genimg setup [--model ALIAS]
 
 | Flag | Effect |
 | --- | --- |
-| `--model`, `-m` | Saves this default model instead of asking for one. |
+| `--model`, `-m` | Saves this default model instead of asking for one. Exits `1` if no profile covers its provider. |
 
 - Without a terminal on stdin it never prompts: it saves each provider whose credentials are
   already in the environment and pass the check, and exits `1` if none does.
