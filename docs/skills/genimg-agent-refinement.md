@@ -7,7 +7,8 @@ or when artifacts are obvious and you want a concrete next step.
 
 ## The loop
 
-1. Generate a small batch, usually `genimg "PROMPT" -n 4 -g`.
+1. Generate a small batch, usually `genimg "PROMPT" -m gdm:nb2 -n 4 -g`. The agent picks the
+   model (there is no built-in default) and keeps it for the retries.
 2. Inspect the PNGs at full resolution. For diagrams, dense text and multi-cell layouts the
    agent crops the regions that matter and reads them; a thumbnail hides skipped cells,
    garbled labels, wrong arrow directions and prompt text that leaked in as a label.
