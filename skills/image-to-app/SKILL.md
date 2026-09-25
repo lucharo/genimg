@@ -1,101 +1,71 @@
 ---
 name: image-to-app
-description: "Turn generated mockups, wireframes, screenshots, or selected visual directions into a working and visually verified application. Use for image-to-web or image-to-app tasks, design-direction exploration before implementation, multi-view UI systems generated with genimg, implementation handoffs to frontend specialists, and visual-parity QA against reference images."
+description: "Visual interview that turns an app idea into a chosen design, then a working app. Show distinct visual directions for a mobile or web app, let the user pick one, break it into its views, iterate, then build and verify against the images. Use for image-to-app or image-to-web work, exploring UI directions with genimg before coding, or turning mockups into an app."
 ---
 
 # Image to app
 
-Treat images as design evidence, not as an executable specification. Preserve the selected visual language while resolving accessibility, interaction, responsive layout, real data, and application-state details in code.
+A visual interview. You show, the user picks, you narrow. Every round puts images on screen before it asks anything. The accepted images are design evidence; the code still owns accessibility, interaction, real data and state.
 
-## Workflow
+## Set up the interview
 
-### 1. Freeze the product contract
+Load `genimg` for the CLI mechanics. The interview itself is Matt Pocock's `grill-with-docs`. It is user-invoked only, so do what it does and load its two parts: `grilling` (numbered rounds, each question with your recommended answer) and `domain-modeling` (the app's vocabulary in `CONTEXT.md`, each hard-to-reverse decision as an ADR). If they are not installed, ask the user to install them, then continue:
 
-Before generating or coding, record:
+```bash
+npx skills add mattpocock/skills -s grill-with-docs grilling domain-modeling
+```
 
-- The user outcome and non-goals.
-- The canonical repository, branch or worktree, and which process owns the running app.
-- Required views, states, actions, data, keyboard behavior, and persistence.
-- The delivery surfaces and shortcut owner: browser, native shell, mobile wrapper, or installed app.
-- For every important field, whether it is authoritative source data, derived presentation, or human-owned state.
-- Entity lifecycle, workflow stage, attention state, parent/child hierarchy, and grouping as separate concepts when the product has them.
-- The exact reference-image paths and what each reference contributes.
-- Constraints that must survive visual exploration, such as tab count, density, theme, or platform feel.
-- The current evidence tier and the next required tier: visual direction, fixture-backed prototype, live-source integration, or installed runtime.
+Open with one grilling round: what the app is for, who uses it, and whether it is a **mobile app** or a **web app**. Settle the platform before the first image; it fixes the frame for every render (`-a 9:16` for a phone screen, `-a 16:9` for a desktop window; `oai:gi2` needs `-r 2K` for both).
 
-Keep product behavior constant across visual variants. Do not compare design systems that quietly change the information architecture.
+## The loop
 
-### 2. Generate coherent directions
+### 1. Directions
 
-Load the `genimg` skill before using the CLI. Verify the live CLI and model catalog rather than relying on remembered aliases. For text-heavy UI, start with the current GPT Image model intended for reliable typography; use a structurally stronger model when spatial layout matters more.
+Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single `-n` call; #1 keeps the plain base prompt.
 
-Preflight the whole delivery path before spending: canonical checkout, installed CLI source and version, available model, target viewport, endpoint and origin policy, signing identity when native, and the ports or processes that will own the app. A catalog entry proves only that a model is advertised; run the smallest positive control that proves it serves.
+```bash
+genimg "a SINGLE mobile app home screen for <app>, one phone screen filling the frame, NOT a grid" \
+  -m oai:gi2 -a 9:16 -r 2K -n 4 --deltas @directions.txt -o directions.png
+genimg grid directions_*.png -o directions.html --open
+```
 
-Generate one coherent design system at a time. If the app has several important views, produce the same fixed view set for every direction. Use stable IDs and filenames, for example `quiet-ledger-01-kanban.png` and `quiet-ledger-02-ideas.png`.
+Give each direction a stable name (`quiet-ledger`, `night-market`) and record prompt, model and index in `selection-manifest.md`. With the grid open, ask the pick as a grilling round, then copy the accepted image to `<name>-01-home.png`. When the answer combines directions, write the synthesis out: which shell, components, type and spacing come from which direction.
 
-Use `--diverse` or tailored `--deltas` to explore genuinely different systems. Do not ask one image to contain a contact sheet. Retain prompts, model, quality, references, and original index.
+### 2. Views
 
-### 3. Review and choose
+Agree the view set in a grilling round, with your recommended list (for example home, detail, create, settings, empty state). Then render each view in the chosen system, passing the accepted image as a reference after the prompt so the style holds:
 
-Inspect every candidate at full resolution. Build one `genimg grid` containing the comparable set and use its carousel for human review. Evaluate hierarchy, density, navigation, state clarity, interaction discoverability, and cross-view consistency, not only atmosphere.
+```bash
+genimg "the item detail screen of the same app, same palette, type and components as the reference, one phone screen, NOT a grid" \
+  quiet-ledger-01-home.png -m oai:gi2 -a 9:16 -r 2K -o quiet-ledger-02-detail.png
+```
 
-Before ranking aesthetics, audit each candidate against the frozen contract. Label every material departure **Preserve**, **Reinterpret**, or **Reject**. A beautiful image that adds tabs, removes a required state, or changes ownership is a contract defect, not a stronger direction.
+Name files `<direction>-<NN>-<view>.png` and show the whole set in one grid. Audit each image against the agreed views and label any departure **Preserve**, **Reinterpret** or **Reject**: an extra tab or a missing state is a defect, however good it looks.
 
-When the strongest answer combines directions, write the synthesis explicitly: base shell, component language, typography, spacing, and interaction model. Never tell an implementation agent to “mix A and B” without naming which parts come from each.
+### 3. Iterate
 
-If a visual specialist is available, pass absolute image paths or screenshots. For code-design work, also pass the app/repo path and ask the specialist to inspect the rendered result, not only source code.
+Each round: show the current set, ask one grilling round, apply the answers. Use `-i <view>.png` for a small fix to one view; regenerate from a corrected full prompt when the structure is wrong. Change one decision per round so any drift has one cause. As decisions settle, `domain-modeling` records them.
 
-### 4. Record answered decisions
+The interview is done when every agreed view has an accepted image, the grilling frontier is empty, and the user confirms the set.
 
-Write concise accepted decision records before implementation. Phrase the design grill as answered questions so later agents can see both the decision and the pressure behind it. Use [decision-record.md](references/decision-record.md).
+## Build
 
-Record at least:
+Hand the implementer the accepted images, the synthesis, `CONTEXT.md`, the ADRs and the expected interactions, using [implementation-handoff.md](references/implementation-handoff.md). Ask for a working app with realistic states, not a screenshot recreation. Name every fixture, the real interface it stands in for, and how it is retired.
 
-- Chosen design system and rejected alternatives.
-- Navigation and view count.
-- Data ownership and persistence boundaries.
-- Responsive and theme behavior.
-- Integration contract and deliberate deferrals.
+## Verify
 
-### 5. Hand off implementation precisely
+Run the functional checks, then compare the running app with the accepted images side by side, in the same states, at the main viewport and one narrow one. Use [visual-qa.md](references/visual-qa.md). Label each claim with its rung on this ladder; no rung proves the one above it:
 
-Use an isolated branch or worktree for substantial builds. Give the implementer the fixed product contract, exact reference paths, accepted decision records, expected interactions, test commands, and visual-QA requirements. Use [implementation-handoff.md](references/implementation-handoff.md).
+1. **Visual direction**: the accepted images.
+2. **Fixture-backed prototype**: layout and interaction on declared substitute data.
+3. **Live integration**: real data, refresh, empty and error states.
+4. **Installed runtime**: the packaged app, cold start, persistence.
 
-Ask for a working app, not a static screenshot recreation. Require realistic states and interactions. Make fixture-backed boundaries explicit when the real integration is intentionally deferred.
+Fix the largest mismatch first. Stop after two or three review rounds unless a gap breaks the accepted design.
 
-For fixtures, name the real interface they substitute for, how production avoids loading them, and the retirement or migration step that moves the app to live data. Do not let fixture content, observer-window counts, or demo persistence leak into the installed product.
+## Done when
 
-### 6. Verify the real app
-
-Run functional checks, then browser QA at the main desktop viewport and at least one narrow viewport. Capture the implemented app in the same states as the references and compare them side by side. Use [visual-qa.md](references/visual-qa.md).
-
-Use this evidence ladder; no rung can prove the one above it:
-
-1. **Visual direction** — generated images establish design intent only.
-2. **Fixture-backed prototype** — proves local interaction and layout with declared substitute data.
-3. **Live-source integration** — proves discovery, identity, refresh, empty/error state, and real data flow.
-4. **Installed runtime** — proves the packaged executable, daemon or native shell, cold start, persistence, and OS-owned shortcuts.
-
-Label every screenshot, test, and claim with its rung. A green fixture test cannot close a live-integration ask; a healthy process cannot prove the visible installed UI.
-
-Verify cold reload after changing persisted state. Exercise keyboard navigation, focus visibility, overflow, empty/loading/error states, theme switching, and reduced motion where relevant. A passing build does not prove the visual or interaction contract.
-
-For live dashboards, validate fresh and stale protocol states, renamed entities, external and owned entities, parent/child containment, and lifecycle/event precedence separately. Identify every listener and server before restarting or stopping anything; age and port alone do not establish process ownership.
-
-### 7. Iterate with bounded loops
-
-Fix the largest contract mismatch first. Re-render and compare after each meaningful change. Stop after two or three review rounds unless a remaining issue blocks the accepted contract; otherwise review churn starts redesigning the app.
-
-Preserve generated directions, selection rationale, decision records, final screenshots, and verification commands as durable project evidence. Mark superseded artifacts; do not delete the decision trail.
-
-## Completion criteria
-
-Finish only when:
-
-- The selected visual direction and product contract are named precisely.
-- Required interactions work with realistic state.
-- The app has been visually inspected at desktop and narrow sizes.
-- Persisted state survives a cold reload.
-- Tests and checks have positive, read evidence.
-- The integration boundary and any fixture-backed portion are stated honestly.
-- Evidence reaches the tier claimed in the handoff, including the installed path when OS behavior or persistence is part of the ask.
+- Every agreed view has an accepted image and the user confirmed the set.
+- `CONTEXT.md` and the ADRs record the decisions.
+- The app matches the images at desktop and narrow sizes, interactions work with realistic state, and persisted state survives a cold reload.
+- The report names the evidence rung reached and any fixture-backed part.

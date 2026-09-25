@@ -22,10 +22,9 @@ nav = [
     { "Grid and carousel" = "surfaces/grid.md" },
     { "Draw Studio" = "surfaces/draw-studio.md" },
   ] },
-  { "Workflow skills" = [
+  { "Skills" = [
     { "Overview" = "skills/index.md" },
     { "genimg-infographic" = "skills/genimg-infographic.md" },
-    { "genimg-agent-refinement" = "skills/genimg-agent-refinement.md" },
     { "image-to-app" = "skills/image-to-app.md" },
   ] },
   { "Reference" = [

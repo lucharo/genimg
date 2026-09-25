@@ -8,7 +8,7 @@ Give an implementation agent this evidence packet:
 4. Canonical repository/worktree, running-process owner, target delivery surface, endpoint/port, and which layer owns each shortcut.
 5. Absolute paths to selected images and a one-line role for each image.
 6. Accepted synthesis, for example “shell from A; cards and capture language from B”.
-7. Accepted decision records, including Preserve/Reinterpret/Reject treatment of reference departures.
+7. Accepted ADRs and `CONTEXT.md`, including the Preserve/Reinterpret/Reject label for each reference departure.
 8. Existing repo instructions, stack, commands, and worktree boundary.
 9. Real integration contract or typed fixture-backed substitute, plus fixture isolation and retirement plan.
 10. Required evidence tier and the positive control for reaching it.
