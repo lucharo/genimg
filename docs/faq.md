@@ -7,14 +7,14 @@ so use an API model when you need those controls. See [Codex subscription](guide
 
 ## Why does genimg ask me to choose a model?
 
-genimg has no built-in default model. Pass `--model`, or save a default with
-`genimg models set-default gdm:nb2`.
+Save a default once with `genimg models set-default gdm:nb2`, or pass `--model` each time.
+genimg has no built-in default model.
 
 ## Where are my images saved?
 
-Without `--output`, in `~/.genimg/generations/`. Each generation also gets a JSON record (prompt, model,
-settings, estimated cost) in `~/.genimg/metadata/`. `genimg history` lists them and
-`genimg history view` browses them.
+In `~/.genimg/generations/` unless you pass `--output`. `genimg history` lists them and
+`genimg history view` browses them. Each generation also gets a JSON record (prompt, model,
+settings, estimated cost) in `~/.genimg/metadata/`.
 
 ## A model is listed in `genimg models` but fails to generate. Why?
 
@@ -33,8 +33,7 @@ your account or deployment serves them varies; `genimg models` shows what it lis
 
 ## Draw Studio says `Failed to fetch`
 
-The browser tab has probably outlived its local server. Run `genimg draw` again and open the URL it
-prints.
+Run `genimg draw` again and open the URL it prints. The tab has probably outlived its local server.
 
 ## Why do Draw Studio's controls change with the model?
 

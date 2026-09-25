@@ -1,6 +1,7 @@
 # Diverse images
 
-`--num 4` asks for four images:
+- On a simple subject, plain `--num 4` returns four near-copies.
+- `--deltas` or `--diverse` makes each take look different.
 
 ```bash
 genimg "a SINGLE minimal fox logo, NOT a grid" \
@@ -11,12 +12,12 @@ genimg "a SINGLE minimal fox logo, NOT a grid" \
 
 <figure markdown>
   ![Four near-identical line-art fox logos](../assets/fox-plain-n.webp){ width="720" }
-  <figcaption>On a simple subject the four come back nearly identical.</figcaption>
+  <figcaption>Plain <code>--num 4</code>.</figcaption>
 </figure>
 
-Two flags spread them out.
-
 ## Name the styles: `--deltas`
+
+- You choose the look of each take, on any provider and any subject.
 
 ```bash
 genimg "a minimal fox logo, NOT a grid" \
@@ -33,9 +34,10 @@ genimg "a minimal fox logo, NOT a grid" \
 </figure>
 
 Pass one delta fewer than `--num`, comma-separated or as `--deltas @styles.txt` with one per line.
-It works on every provider. Use it for diagrams and photos too.
 
 ## Let genimg pick: `--diverse`
+
+- No styles in mind? genimg picks a different look for each take, and each run differs.
 
 ```bash
 genimg "a SINGLE minimal fox logo, NOT a grid" \
@@ -51,8 +53,8 @@ genimg "a SINGLE minimal fox logo, NOT a grid" \
   <figcaption>Takes #2 to #4 drew close-up framing, neon glow and dramatic lighting from the built-in pool.</figcaption>
 </figure>
 
-`--diverse` picks deltas from a built-in pool that suits illustrations and logos, so each run differs.
-On Gemini, `--mode batch` sends one request instead and the model varies its own takes:
+The built-in pool suits illustrations and logos. On Gemini, `--mode batch` sends one request
+instead and the model varies its own takes:
 
 ```bash
 genimg "a minimal fox logo, NOT a grid" \

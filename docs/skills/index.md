@@ -7,8 +7,6 @@ npx skills add lucharo/genimg
 npx skills add lucharo/genimg --skill genimg genimg-visual-exploration
 ```
 
-The main `genimg` skill holds the mechanics; workflow skills sit on top and call it.
-
 | Skill | Gives your agent |
 | --- | --- |
 | [`genimg`](https://github.com/lucharo/genimg/blob/main/skills/genimg/SKILL.md) (main) | Every flag, model choice, recipes, and how to get real variations. |
@@ -19,6 +17,7 @@ The main `genimg` skill holds the mechanics; workflow skills sit on top and call
 
 ## Your preferences
 
-State a lasting preference once ("always sober", a house palette) and the agent saves it in a
-`genimg-preferences` skill in your own skills folder, then reads it before every image. It is
-yours: genimg never ships or overwrites it.
+- Say a lasting preference once ("always sober", a house palette) and every later image follows it.
+
+The agent saves it in a `genimg-preferences` skill in your own skills folder and reads it before
+every image. genimg never ships or overwrites it.
