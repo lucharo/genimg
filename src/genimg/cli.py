@@ -196,7 +196,7 @@ def _run(
   resolved = model or user_cfg.get("default_model")
   if not resolved:
     _die(
-      "no model specified. Pass -m <alias> (e.g. -m gdm:nb or -m oai:gi2), "
+      "no model specified. Pass -m <alias> (e.g. -m gdm:nb2 or -m oai:gi2), "
       "set a default with `genimg models set-default <alias>`, or run `genimg setup`. "
       "See `genimg models` for the full list."
     )

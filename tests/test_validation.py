@@ -36,7 +36,7 @@ class ValidationMatrixTests(unittest.TestCase):
   # --- provider/flag incompatibilities ---
   def test_quality_on_google_rejected(self) -> None:
     with self.assertRaises(typer.Exit):
-      _validate(provider="google", quality="high", model_id="gemini-2.5-flash-image")
+      _validate(provider="google", quality="high", model_id="gemini-3.1-flash-image")
 
   def test_resolution_on_gemini_allowed(self) -> None:
     # Gemini 3 image models honor image_size (providers/google.py sets image_config.image_size;
@@ -70,7 +70,7 @@ class ValidationMatrixTests(unittest.TestCase):
 
   def test_auth_on_google_rejected(self) -> None:
     with self.assertRaises(typer.Exit):
-      _validate(provider="google", auth="direct", model_id="gemini-2.5-flash-image")
+      _validate(provider="google", auth="direct", model_id="gemini-3.1-flash-image")
 
   # --- OpenAI size combos (derived from _SIZE_MAP) ---
   def test_openai_1k_16_9_rejected(self) -> None:
@@ -96,7 +96,7 @@ class ValidationMatrixTests(unittest.TestCase):
   # --- provider-neutral + OpenAI input checks ---
   def test_missing_input_rejected_for_google(self) -> None:
     with self.assertRaises(typer.Exit):
-      _validate(provider="google", model_id="gemini-2.5-flash-image", input=Path("/nope/x.png"))
+      _validate(provider="google", model_id="gemini-3.1-flash-image", input=Path("/nope/x.png"))
 
   def test_openai_bad_extension_rejected(self) -> None:
     bad = self.tmp / "a.gif"

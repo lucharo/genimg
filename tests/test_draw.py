@@ -370,7 +370,7 @@ class StudioModelsTests(unittest.TestCase):
 
   def test_resolution_controls_only_appear_for_models_that_support_them(self) -> None:
     models = {model["alias"]: model for model in draw._studio_models()}
-    self.assertEqual(models["gdm:nb"]["resolutionOptions"], [])
+    self.assertEqual(models["codex:image"]["resolutionOptions"], [])
     self.assertEqual(models["gdm:nb2"]["resolutionOptions"], ["512", "1K", "2K", "4K"])
     self.assertEqual(models["gdm:nb2-lite"]["resolutionOptions"], ["1K"])
     self.assertEqual(models["oai:gpt-image-2"]["resolutionOptions"], ["1K", "2K", "4K"])
@@ -421,10 +421,10 @@ class AvailableModelsTests(unittest.TestCase):
     self.assertFalse(models["oai:gpt-image-1.5"]["enabled"])
 
   def test_provider_region_failure_disables_only_affected_google_models(self) -> None:
-    cache = {"probes": {"gdm:nb": {"status": "403", "detail": "permission denied"}}}
+    cache = {"probes": {"gdm:nbp": {"status": "403", "detail": "permission denied"}}}
     models = {m["alias"]: m for m in draw.available_models(cache, self.AUTH_OK)}
-    self.assertFalse(models["gdm:nb"]["enabled"])
-    self.assertIn("permission denied", models["gdm:nb"]["reason"])
+    self.assertFalse(models["gdm:nbp"]["enabled"])
+    self.assertIn("permission denied", models["gdm:nbp"]["reason"])
     self.assertTrue(models["gdm:nb2"]["enabled"])
 
 

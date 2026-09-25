@@ -23,18 +23,18 @@ class NoDefaultModelTests(unittest.TestCase):
   def test_incompatible_global_size_defaults_are_ignored_for_selected_model(self) -> None:
     runner = CliRunner()
     config = {
-      "default_resolution": "4K",
+      "default_resolution": "512",
       "default_aspect_ratio": "1:8",
     }
     with (
       patch.object(cli.config, "load", return_value=config),
       patch.object(cli.auth_resolve, "info", return_value=AuthInfo("vertex", "env", "-", "GOOGLE_APPLICATION_CREDENTIALS", True)),
     ):
-      result = runner.invoke(cli._app, ["a prompt", "-m", "gdm:nb", "--dry-run"])
+      result = runner.invoke(cli._app, ["a prompt", "-m", "gdm:nbp", "--dry-run"])
 
     self.assertEqual(result.exit_code, 0, result.output)
     params_line = next(line for line in result.output.splitlines() if "params" in line)
-    self.assertNotIn("r=4K", params_line)
+    self.assertNotIn("r=512", params_line)
     self.assertNotIn("a=1:8", params_line)
 
   def test_retired_imagen_alias_explains_the_supported_replacement(self) -> None:
@@ -138,7 +138,7 @@ class GoogleMkdirTests(unittest.TestCase):
       models = FakeModels()
 
     out = Path(tempfile.mkdtemp()) / "new" / "sub" / "x.png"  # parent does not exist
-    req = GenerateRequest(prompt="x", output=out, model="gemini-2.5-flash-image", n=1)
+    req = GenerateRequest(prompt="x", output=out, model="gemini-3.1-flash-image", n=1)
     with patch.object(gp, "get_client", return_value=FakeClient()):
       gp.GeminiImageGen()._generate_single_image(req, 0)
     self.assertTrue(out.exists())
