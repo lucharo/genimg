@@ -3,7 +3,7 @@
 - One section per command. `genimg COMMAND --help` prints the same flags; `genimg --version` prints
   the version.
 
-## genimg PROMPT
+## genimg PROMPT { data-toc-label="PROMPT" }
 
 - Generates images. With a saved default model, the prompt is all you must pass.
 
@@ -38,7 +38,7 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
   [Model-specific options](model-options.md) lists each family's flags.
 - A saved default the model cannot use is skipped. A flag you pass is never dropped.
 
-## genimg setup
+## genimg setup { data-toc-label="setup" }
 
 - Takes you from nothing to a working profile: finds or asks for credentials, tests them, saves a
   profile and, if you pick one, a default model. Walkthrough in [Getting started](../getting-started.md).
@@ -47,7 +47,7 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
 genimg setup
 ```
 
-## genimg auth
+## genimg auth { data-toc-label="auth" }
 
 - Shows each provider's active auth mode and whether it is ready.
 
@@ -64,7 +64,7 @@ genimg auth \
 | `--json` | JSON output. |
 | `--modes` | Lists every auth mode and the env vars it detects. |
 
-## genimg models
+## genimg models { data-toc-label="models" }
 
 - Lists every model, its alias, and whether the provider's model list includes it. Cached for 5 days.
 
@@ -87,7 +87,7 @@ genimg models clear-default
 | `get-default` | Prints the saved default. |
 | `clear-default` | Removes it; `--model` is required again. |
 
-## genimg history
+## genimg history { data-toc-label="history" }
 
 - Lists recent generations with name, model, prompt, cost and output path.
 
@@ -106,7 +106,7 @@ genimg history view
 | `--json` | JSON output. |
 | `view` | Browses every generation in the terminal with image previews. `yi` copies the image, `yp` its path, `?` lists keys. |
 
-## genimg cost
+## genimg cost { data-toc-label="cost" }
 
 - Prints your total estimated spend. Same as `genimg history --summary`.
 
@@ -114,7 +114,7 @@ genimg history view
 genimg cost [--json]
 ```
 
-## genimg grid
+## genimg grid { data-toc-label="grid" }
 
 - Turns existing images into an HTML grid. See [Grid and carousel](../visual-tools/grid.md).
 
@@ -129,7 +129,7 @@ genimg grid PATHS... \
 | `--output`, `-o` | Default `~/.genimg/grids/<timestamp>.html`. |
 | `--open` | Opens the grid in the browser. |
 
-## genimg draw
+## genimg draw { data-toc-label="draw" }
 
 - Opens Draw Studio, a local canvas to sketch or annotate, then generate.
   See [Draw Studio](../visual-tools/draw-studio.md).
@@ -154,7 +154,7 @@ genimg draw [PATHS...] \
     Anyone who can reach that IP can generate with your credentials and open your generated and
     loaded images.
 
-## genimg config
+## genimg config { data-toc-label="config" }
 
 - Reads or edits your saved [config.toml](config.md).
 
@@ -170,7 +170,7 @@ genimg config edit
 | `path` | Prints the file path. |
 | `edit` | Opens the file in `$EDITOR`. |
 
-## genimg skills
+## genimg skills { data-toc-label="skills" }
 
 - Prints the install command for the bundled [agent skills](../skills/index.md):
   `npx skills add lucharo/genimg`, which needs Node.js.

@@ -45,3 +45,18 @@
 /* A picture or clip that stands alone in its paragraph sits centred in the column. */
 .md-typeset p > img:only-child,
 .md-typeset video { display: block; margin-left: auto; margin-right: auto; max-width: 100%; }
+/* Shell snippets: javascripts/shell.js marks the command and its flags; strings keep the theme's
+   green. The "\" continuations step back so the flags carry the eye. */
+.md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) {
+  --gi-cmd: #b23c17;
+  --gi-flag: #1d5fa0;
+  --gi-quiet: #a3988a;
+}
+[data-md-color-scheme="slate"] .md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) {
+  --gi-cmd: #ff9466;
+  --gi-flag: #82b6ff;
+  --gi-quiet: #6f665f;
+}
+.md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) .gi-cmd { color: var(--gi-cmd); font-weight: 600; }
+.md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) .gi-flag { color: var(--gi-flag); }
+.md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) .se { color: var(--gi-quiet); }

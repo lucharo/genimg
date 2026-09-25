@@ -8,6 +8,7 @@ repo_name = "lucharo/genimg"
 edit_uri = "edit/main/docs/"
 
 extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/shell.js"]
 
 nav = [
   { "genimg" = "index.md" },

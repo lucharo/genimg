@@ -23,6 +23,8 @@ genimg draw --model oai:gi2.5 fox-sketch.webp
 
 ## Draw from an iPad
 
+- Draw with a finger or Apple Pencil while the Studio runs on your Mac.
+
 <figure markdown>
   ![Draw Studio in Safari on an iPad, with the fox doodle on the canvas](../assets/draw-studio-ipad.webp){ width="420" }
   <figcaption>The iPad Pro 13-inch simulator, which shares the Mac's localhost. The moon was drawn by touch.</figcaption>
@@ -34,29 +36,18 @@ genimg draw --model oai:gi2.5 fox-sketch.webp
 | [Tailscale](https://tailscale.com/) | Mac and iPad on the same tailnet | Works away from home; only your tailnet can reach it | Needs Tailscale on both |
 | Same network | Mac and iPad on one network, such as home Wi-Fi | Nothing to install | Anyone on that network can reach it. Trusted home networks only |
 
-**Sidecar.** Start the Studio as usual, drag the browser window onto the iPad and draw with
-Apple Pencil.
-
 ```bash
-genimg draw
+genimg draw                                     # Sidecar
+genimg draw --host "$(tailscale ip -4)"         # Tailscale
+genimg draw --host "$(ipconfig getifaddr en0)"  # same network
 ```
 
-**Tailscale.** Serve on the Mac's Tailscale address, then open the printed URL in Safari on the
-iPad.
+With Sidecar, drag the browser window onto the iPad. With `--host`, open the printed URL in Safari
+on the iPad; there is no login, so press Ctrl-C when you finish.
 
-```bash
-genimg draw --host "$(tailscale ip -4)"
-```
-
-**Same network.** Serve on the Mac's Wi-Fi address (`en0` on most Macs), then open the printed
-URL on the iPad.
-
-```bash
-genimg draw --host "$(ipconfig getifaddr en0)"
-```
-
-There is no login: anyone who can reach a `--host` address can generate with your credentials
-and open your images. Press Ctrl-C when you finish.
+- [DrawPen](https://github.com/DmytroVasin/DrawPen) (`brew install --cask drawpen`) draws over
+  any Mac app, so through Sidecar you can mark up a grid or a web page too. Screenshot it and pass
+  the file with `--input`.
 
 ## Draw Studio or the CLI?
 
