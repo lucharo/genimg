@@ -576,7 +576,8 @@ PAGE = r"""<!doctype html>
   .trayrail:hover{border-color:var(--btnb);color:var(--text);background:var(--panel)}
   .trayrail:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .trayraillabel{writing-mode:vertical-rl;font-size:12px;font-weight:600;color:var(--text)}
-  #studiogrid>.card{grid-column:1}#splith{grid-column:2}#traycol{grid-column:3}
+  #studiogrid>.card{grid-column:1;min-height:0;overflow-y:auto}#splith{grid-column:2}#traycol{grid-column:3}
+  #generateBtn{position:sticky;bottom:0}
   .controlfield{display:grid;grid-template-rows:12px 36px;gap:6px;align-items:center;min-width:0}
   .qualityfield,.sizefield{width:max-content}.aspectfield{width:126px}.thinkingfield{width:138px}
   .toplbl{font-size:10px;line-height:12px;color:var(--control-sub);text-transform:uppercase;letter-spacing:.65px;font-weight:600}

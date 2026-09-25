@@ -345,6 +345,12 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
 
+  def test_studio_card_scrolls_and_pins_generate_when_prompt_overflows(self) -> None:
+    # issue #40: body is overflow:hidden and the canvas keeps a 340px floor, so without a
+    # scrollable card an expanded prompt pushed Generate below a 769px-tall viewport.
+    self.assertIn('#studiogrid>.card{grid-column:1;min-height:0;overflow-y:auto}', draw.PAGE)
+    self.assertIn('#generateBtn{position:sticky;bottom:0}', draw.PAGE)
+
   def test_generated_panel_uses_one_persistent_right_rail(self) -> None:
     self.assertIn('class="trayframe"', draw.PAGE)
     self.assertIn('class="trayframe expanded"', draw.PAGE)
