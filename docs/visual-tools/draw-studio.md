@@ -46,10 +46,6 @@ genimg draw --host "$(ipconfig getifaddr en0)"  # same network
 With Sidecar, drag the browser window onto the iPad. With `--host`, open the printed URL in Safari
 on the iPad; there is no login, so press Ctrl-C when you finish.
 
-- [DrawPen](https://github.com/DmytroVasin/DrawPen) (`brew install --cask drawpen`) draws over
-  any Mac app, so through Sidecar you can mark up a grid or a web page too. Screenshot it and pass
-  the file with `--input`.
-
 ## Draw Studio or the CLI?
 
 | Need | Draw Studio | CLI |
