@@ -112,8 +112,9 @@ def clear_default_model() -> None:
 
 def open_in_editor() -> None:
   """Open the config file in $EDITOR (creating it if needed)."""
+  import shlex
   import subprocess
-  editor = os.getenv("EDITOR") or "vi"
+  editor = shlex.split(os.getenv("EDITOR") or "") or ["vi"]  # EDITOR="code --wait" is a command line
   CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
   CONFIG_PATH.touch(exist_ok=True)
-  subprocess.run([editor, str(CONFIG_PATH)])
+  subprocess.run([*editor, str(CONFIG_PATH)])

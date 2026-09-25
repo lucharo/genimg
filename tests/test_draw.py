@@ -338,6 +338,17 @@ class GenerateHttpTests(unittest.TestCase):
       h=1024,
     )
 
+  def test_blank_prompt_with_an_image_uses_the_default_prompt(self) -> None:
+    self.studio.start_job = MagicMock(return_value="draw124")
+    body = json.dumps({"prompt": "   ", "image": _IMG_DATAURL, "model": "gdm:nb2"})
+    conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port, timeout=2)
+    self.addCleanup(conn.close)
+    conn.request("POST", "/generate", body=body, headers={"Content-Type": "application/json"})
+    response = conn.getresponse()
+
+    self.assertEqual(response.status, 200, response.read())
+    self.assertEqual(self.studio.start_job.call_args.kwargs["prompt"], draw.DEFAULT_PROMPT.strip())
+
   def test_disabled_model_is_rejected_server_side(self) -> None:
     boot = self.studio.boot_data()
     disabled = next(model for model in boot["models"] if model["alias"] == "oai:gpt-image-2")
@@ -807,6 +818,14 @@ class DrawCommandModelTests(unittest.TestCase):
     }
 
     self.assertEqual(hosts, {"default": "127.0.0.1", "tailnet": "100.101.102.103"})
+
+  def test_port_outside_1_to_65535_is_a_parser_error(self) -> None:
+    for port in ("0", "70000"):
+      with self.subTest(port=port), patch.object(draw, "serve") as serve:
+        result = CliRunner().invoke(cli._app, ["draw", "--no-open", "--port", port])
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn("1<=x<=65535", result.output)
+        serve.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 """Typer CLI. `genimg PROMPT [opts]` is the default action; subcommands are utilities."""
 from __future__ import annotations
 
+import difflib
+import os
+import sys
 import time
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -30,7 +33,29 @@ from .auth import resolve as auth_resolve
 from .generate import generate as run_generate
 from .interfaces import GenerateRequest, IImageGen
 
-console = Console()
+_PIPED_WIDTH = 200
+
+
+def _console() -> Console:
+  """Piped output with no COLUMNS (an agent's shell) gets 200 columns, not Rich's fallback of
+  80, which cuts model ids, env-var names and paths mid-word."""
+  piped = not sys.stdout.isatty() and not os.environ.get("COLUMNS")
+  return Console(width=_PIPED_WIDTH if piped else None)
+
+
+console = _console()
+
+# One-word prompts that read as a command, never as a prompt: with a default model saved,
+# `genimg help` would otherwise buy an image of the word "help". Maps word → what to run.
+_COMMAND_WORDS = {
+  "help": "genimg --help", "version": "genimg --version",
+  "list": "genimg models", "ls": "genimg models",
+  "login": "genimg setup", "logout": "genimg setup", "init": "genimg setup",
+  "status": "genimg auth", "whoami": "genimg auth",
+  "settings": "genimg config", "profiles": "genimg config",
+  "install": "genimg --help", "uninstall": "genimg --help",
+  "update": "genimg --help", "upgrade": "genimg --help",
+}
 
 
 class _DefaultGroup(typer.core.TyperGroup):
@@ -39,13 +64,37 @@ class _DefaultGroup(typer.core.TyperGroup):
   default_cmd_name = "_run"
   subcommand_metavar = '"PROMPT" [OPTIONS] | SUBCOMMAND'
 
+  def parse_args(self, ctx, args):
+    # `genimg -- WORD` makes WORD a prompt even when it is a command name or a reserved word.
+    ctx.meta["genimg_literal_prompt"] = bool(args) and args[0] == "--"
+    return super().parse_args(ctx, args)
+
   def resolve_command(self, ctx, args):
-    try:
-      return super().resolve_command(ctx, args)
-    except click.UsageError:
-      args = list(args)
-      args.insert(0, self.default_cmd_name)
-      return super().resolve_command(ctx, args)
+    if not ctx.meta.get("genimg_literal_prompt"):
+      try:
+        return super().resolve_command(ctx, args)
+      except click.UsageError:
+        self._refuse_command_like_prompt(args[0])
+    return super().resolve_command(ctx, [self.default_cmd_name, *args])
+
+  def _refuse_command_like_prompt(self, word: str) -> None:
+    """Exit 2 when a one-word prompt is a reserved word or close to a subcommand."""
+    if len(word.split()) != 1:
+      return
+    lowered = word.lower()
+    suggestion = _COMMAND_WORDS.get(lowered)
+    if suggestion is None:
+      visible = [name for name, cmd in self.commands.items() if not cmd.hidden]
+      close = difflib.get_close_matches(lowered, visible, n=1, cutoff=0.75)
+      suggestion = f"genimg {close[0]}" if close else None
+    if suggestion is None:
+      return
+    console.print(
+      f"[red]error:[/red] unknown command {_rich_escape(repr(word))}; did you mean '{suggestion}'? "
+      f'To generate an image of that word, run genimg -- "{_rich_escape(word)}"',
+      soft_wrap=True,
+    )
+    raise typer.Exit(2)
 
   def get_help(self, ctx):
     """Render group help + default command's named option panels (so `genimg -h` shows everything).
@@ -172,6 +221,9 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  if not prompt.strip():
+    console.print("[red]error:[/red] prompt is empty")
+    raise typer.Exit(2)
   if name is not None:
     if "\n" in name or "\r" in name:
       _die("--name must be one line")
@@ -218,8 +270,8 @@ def _run(
     caps, resolution, aspect_ratio,
     user_cfg.get("default_resolution"), user_cfg.get("default_aspect_ratio"),
   )
-  if caps.qualities:
-    quality = quality or user_cfg.get("default_quality")
+  if quality is None and user_cfg.get("default_quality") in caps.qualities:
+    quality = user_cfg["default_quality"]  # a saved quality this model cannot use is skipped
 
   _validate_provider_flags(
     provider, caps, quality=quality, region=region, project=project, auth=auth,
@@ -310,12 +362,18 @@ def _run(
       'or pass your own subject-appropriate deltas: --deltas "isometric, blueprint, macro photo" (or --deltas @file, one per line)'
     )
   if planned_grid:
-    console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
+    console.print(f"  [dim]grid[/dim]     {_rich_escape(_short_path(planned_grid))}", soft_wrap=True)
   if effective_q == "high":
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
   if dry_run:
+    # Dry-run is the preflight: a run that would fail on auth says so and exits 1.
+    if not auth_info.ok:
+      hint = auth_info.hint or "not ready; see `genimg auth`."
+      console.print(f"  [dim]auth[/dim]     [red]✗[/red] {_rich_escape(hint)}", soft_wrap=True)
     console.print("[dim]dry-run: no API call made.[/dim]")
+    if not auth_info.ok:
+      raise typer.Exit(1)
     return
 
   t0 = time.time()
@@ -453,6 +511,7 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
       payload.append({
         "alias": alias, "model_id": spec.model_id, "provider": spec.provider,
         "region": spec.region, "status": p.status if p else "unknown",
+        "detail": p.detail if p else "",
         "is_default": alias == config.get_default_model(),
       })
     typer.echo(_json.dumps(payload, indent=2))
@@ -480,6 +539,13 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
     table.add_row(*row)
 
   console.print(table)
+  # Why rows failed, once per provider and reason (a provider's rows share one list call).
+  reasons = dict.fromkeys(
+    (spec.provider, p.detail) for alias, spec in registry.all_canonical().items()
+    if (p := probes.get(alias)) and p.detail and p.status not in ("listed", "ready", "missing")
+  )
+  for provider_name, detail in reasons:
+    console.print(f"  [yellow]{provider_name}[/yellow] · {_rich_escape(detail)}", soft_wrap=True)
   console.print("[dim]★ = current default. Change with `genimg models set-default <alias>`.[/dim]")
   if any((p.status if p else "") == "missing" for p in probes.values()):
     console.print(
@@ -499,7 +565,7 @@ def models_set_default(alias: Annotated[str, typer.Argument(help="Alias or canon
   if alias != canonical:
     console.print(f"[dim]resolved {alias!r} → {canonical}[/dim]")
   console.print(f"[green]default →[/green] {canonical} ({spec.provider} / {spec.model_id})")
-  console.print(f"[dim]saved to {config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]saved to {_rich_escape(str(config.CONFIG_PATH))}[/dim]", soft_wrap=True)
 
 
 @models_app.command("get-default", help="Show the current default model.")
@@ -514,7 +580,7 @@ def models_get_default():
         "`genimg models set-default gdm:nb2`, or remove it with "
         "`genimg models clear-default`."
       )
-    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]")
+    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]", soft_wrap=True)
   else:
     console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")
 
@@ -527,9 +593,19 @@ def models_clear_default():
 
 # ────────────────────── setup command ──────────────────────
 
-@_app.command("setup", help="Interactive wizard: detect creds, pick providers, save config.")
-def setup_cmd():
-  setup_module.run_setup()
+@_app.command("setup", help="Interactive wizard: detect creds, pick providers, save config. "
+             "Without a terminal it never prompts: it saves each provider whose env credentials validate.")
+def setup_cmd(
+  model: Annotated[str | None, typer.Option("-m", "--model",
+    help="Save this default model (alias or model id) instead of asking for one.")] = None,
+):
+  if model is not None:
+    try:
+      model = registry.resolve(model)[0]
+    except ValueError as e:
+      _die(_rich_escape(str(e)))
+  if not setup_module.run_setup(model=model):
+    raise typer.Exit(1)
 
 
 # ────────────────────── auth command ──────────────────────
@@ -684,7 +760,8 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   table.add_column("prompt", ratio=3, overflow="fold")
   table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  table.add_column("output", style="dim", ratio=2, overflow="fold")
+  # On a wide console the prompt wraps first so the path stays whole; a narrow terminal folds it.
+  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=console.width >= _PIPED_WIDTH)
   for e in entries:
     paths = e.get("outputs", [])
     first = paths[0] if paths else None
@@ -716,6 +793,8 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
 
 @history_app.command("view", help="Interactively browse all generated images and their metadata.")
 def history_view_cmd():
+  if not _is_interactive():
+    _die("history view is interactive; use genimg history --json")
   from . import history_view
 
   history_view.run()
@@ -774,7 +853,8 @@ def grid_cmd(
 def draw_cmd(
   paths: Annotated[list[Path] | None, typer.Argument(
     help="Image files and/or directories to load into the studio (optional).")] = None,
-  port: Annotated[int, typer.Option("--port", help="Port to serve on (auto-bumps if busy).")] = 8788,
+  port: Annotated[int, typer.Option("--port", min=1, max=65535,
+    help="Port to serve on (auto-bumps if busy).")] = 8788,
   host: Annotated[str, typer.Option("--host",
     help="IPv4 address to serve on, e.g. your Tailscale or LAN IP for an iPad. "
          "Anyone who can reach it can generate with your credentials and open your "
@@ -833,10 +913,10 @@ def _config_root(ctx: typer.Context):
 def config_show():
   data = config.load()
   if not data:
-    console.print(f"[dim]no config yet at {config.CONFIG_PATH}. Run `genimg setup` to create one.[/dim]")
+    console.print(f"[dim]no config yet at {config.CONFIG_PATH}. Run `genimg setup` to create one.[/dim]", soft_wrap=True)
     return
   console.print(config.dumps(data).rstrip(), markup=False, highlight=False)
-  console.print(f"[dim]{config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]{config.CONFIG_PATH}[/dim]", soft_wrap=True)
 
 
 @config_app.command("path", help="Print the config file path.")
@@ -847,7 +927,7 @@ def config_path():
 @config_app.command("edit", help="Open the config file in $EDITOR.")
 def config_edit():
   config.open_in_editor()
-  console.print(f"[dim]edited {config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]edited {config.CONFIG_PATH}[/dim]", soft_wrap=True)
 
 
 # ────────────────────── skills sub-typer ──────────────────────
@@ -965,7 +1045,7 @@ def _print_planned_paths(paths: list[Path]) -> None:
   label = "output" if len(paths) == 1 else "outputs"
   for i, path in enumerate(paths):
     row_label = label if i == 0 else ""
-    console.print(f"  [dim]{row_label:<7}[/dim]  {_short_path(path)}")
+    console.print(f"  [dim]{row_label:<7}[/dim]  {_rich_escape(_short_path(path))}", soft_wrap=True)
 
 
 def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
@@ -1053,6 +1133,11 @@ def _validate_provider_flags(
       mb = p.stat().st_size / 1_048_576
       if mb > caps.max_input_mb:
         _die(f"input {p.name} is {mb:.1f}MB, exceeds {provider.label} cap {caps.max_input_mb}MB")
+
+
+def _is_interactive() -> bool:
+  """A person at a terminal: both stdin and stdout are TTYs (not an agent's shell, CI or a pipe)."""
+  return sys.stdin.isatty() and sys.stdout.isatty()
 
 
 def _die(msg: str) -> NoReturn:

@@ -211,6 +211,9 @@ class GoogleProvider(Provider):
     def one(region: str, cohort: list) -> dict[str, ProbeResult]:
       try:
         client = get_client(region=region, profile=profile)
+      except RuntimeError as e:  # no usable credentials; "auth" rows are never cached
+        return error_results(cohort, "auth", str(e))
+      try:
         return results_from_model_ids(cohort, listed_model_ids(client.models.list()))
       except ClientError as e:
         code = getattr(e, "code", None)

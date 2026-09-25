@@ -20,6 +20,7 @@ from genimg import (
   providers,
   registry,
 )
+from genimg.auth.base import AuthInfo
 from genimg.generate import generate
 from genimg.interfaces import GenerateRequest
 from genimg.providers import openai
@@ -98,7 +99,9 @@ def test_extended_quality_rejected_before_api_for_other_models(tmp_path, model):
 @pytest.mark.parametrize("variant", ["sunburst", "flare"])
 def test_snapshot_quality_is_priced_like_its_family(variant):
   model = f"gpt-image-2.5-{variant}-2026-09-08"
-  result = CliRunner().invoke(cli._app, ["circle", "-m", model, "-q", "max", "--dry-run"])
+  with patch.object(cli.config, "load", return_value={}), \
+       patch.object(cli.auth_resolve, "info", return_value=AuthInfo("direct", "env", "-", "OPENAI_API_KEY", True)):
+    result = CliRunner().invoke(cli._app, ["circle", "-m", model, "-q", "max", "--dry-run"])
   assert result.exit_code == 0, result.output
   assert "$0.2107" in result.output
   assert cost.estimate(provider="openai", model_id=model, quality="max") == pytest.approx(0.21072)

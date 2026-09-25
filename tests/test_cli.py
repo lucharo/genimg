@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +13,7 @@ from typer.testing import CliRunner
 
 from genimg import cli, metadata
 from genimg.auth.base import AuthInfo
-from genimg.interfaces import GenerateResult
+from genimg.interfaces import GenerateResult, ProbeResult
 
 
 class ModelDefaultTests(unittest.TestCase):
@@ -157,7 +160,7 @@ class ModelOptionDryRunTests(unittest.TestCase):
 
   def _dry_run(self, *args: str) -> tuple[int, str]:
     with patch.object(cli.config, "load", return_value={}), \
-         patch.dict("os.environ", {"OPENAI_API_KEY": "k"}):
+         patch.object(cli.auth_resolve, "info", return_value=AuthInfo("direct", "env", "-", "OPENAI_API_KEY", True)):
       result = CliRunner().invoke(cli._app, ["prompt", *args, "--dry-run"])
     return result.exit_code, " ".join(result.output.split())
 
@@ -235,3 +238,195 @@ class StandaloneGridTests(unittest.TestCase):
       self.assertIsInstance(result.exception, SystemExit)
       self.assertIn("no images found", result.output)
       self.assertFalse(out.exists())
+
+
+_READY_AUTH = AuthInfo("direct", "env", "-", "GEMINI_API_KEY", True)
+
+
+class CommandLikePromptTests(unittest.TestCase):
+  """With a default model saved, a one-word prompt that reads as a command must not generate."""
+
+  def _invoke(self, *args: str):
+    with patch.object(cli.config, "load", return_value={"default_model": "gdm:nb2"}), \
+         patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH), \
+         patch.object(cli, "run_generate") as run_generate:
+      result = CliRunner().invoke(cli._app, list(args))
+    return result, run_generate
+
+  def test_reserved_words_and_subcommand_typos_are_refused(self) -> None:
+    cases = {"help": "genimg --help", "version": "genimg --version", "list": "genimg models",
+             "login": "genimg setup", "modles": "genimg models", "Histroy": "genimg history"}
+    for word, suggestion in cases.items():
+      with self.subTest(word=word):
+        result, run_generate = self._invoke(word)
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertEqual(
+          " ".join(result.output.split()),
+          f"error: unknown command '{word}'; did you mean '{suggestion}'? "
+          f'To generate an image of that word, run genimg -- "{word}"',
+        )
+        run_generate.assert_not_called()
+
+  def test_double_dash_makes_the_word_a_prompt(self) -> None:
+    for word in ("modles", "models"):
+      with self.subTest(word=word):
+        result, _ = self._invoke("--", word, "--dry-run")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(f'prompt "{word}"', " ".join(result.output.split()))
+        self.assertIn("dry-run: no API call made", result.output)
+
+  def test_multi_word_and_ordinary_prompts_are_unaffected(self) -> None:
+    for prompt in ("help me draw a fox", "fox"):
+      with self.subTest(prompt=prompt):
+        result, _ = self._invoke(prompt, "--dry-run")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(f'prompt "{prompt}"', " ".join(result.output.split()))
+
+
+class BlankPromptTests(unittest.TestCase):
+  def test_blank_or_whitespace_prompt_is_rejected(self) -> None:
+    for prompt in ("", "   "):
+      with self.subTest(prompt=prompt), \
+           patch.object(cli.config, "load", return_value={}), \
+           patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH):
+        result = CliRunner().invoke(cli._app, [prompt, "-m", "gdm:nb2", "--dry-run"])
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertEqual(result.output.strip(), "error: prompt is empty")
+
+
+class DefaultQualityTests(unittest.TestCase):
+  def _dry_run(self, *args: str) -> tuple[int, str]:
+    with patch.object(cli.config, "load", return_value={"default_quality": "xhigh"}), \
+         patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH):
+      result = CliRunner().invoke(cli._app, ["a fox", *args, "--dry-run"])
+    return result.exit_code, " ".join(result.output.split())
+
+  def test_saved_quality_the_model_cannot_use_is_skipped(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2")
+    self.assertEqual(exit_code, 0, output)
+    self.assertIn("q=medium (default)", output)
+
+  def test_saved_quality_the_model_can_use_applies(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2.5")
+    self.assertEqual(exit_code, 0, output)
+    self.assertIn("q=xhigh (default)", output)
+
+  def test_explicit_quality_the_model_cannot_use_still_fails(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2", "-q", "xhigh")
+    self.assertEqual(exit_code, 1, output)
+    self.assertIn("--quality for gpt-image-2 must be one of", output)
+
+
+class DryRunAuthPreflightTests(unittest.TestCase):
+  """Real auth resolution (OpenAI direct mode reads only env), no network."""
+
+  def _dry_run(self, env: dict[str, str]) -> tuple[int, str]:
+    with patch.object(cli.config, "load", return_value={}), patch.dict("os.environ", env):
+      for var in ("OPENAI_API_KEY", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "OPENAI_BASE_URL"):
+        if var not in env:
+          os.environ.pop(var, None)
+      result = CliRunner().invoke(cli._app, ["a fox", "-m", "oai:gi2", "--auth", "direct", "--dry-run"])
+    return result.exit_code, " ".join(result.output.split())
+
+  def test_auth_not_ready_fails_the_preflight_with_the_auth_hint(self) -> None:
+    exit_code, output = self._dry_run({})
+    self.assertEqual(exit_code, 1, output)
+    self.assertIn("auth ✗ Direct mode needs OPENAI_API_KEY in env. dry-run: no API call made.", output)
+
+  def test_ready_auth_adds_no_auth_line(self) -> None:
+    exit_code, output = self._dry_run({"OPENAI_API_KEY": "k"})
+    self.assertEqual(exit_code, 0, output)
+    self.assertNotIn("auth ✗", output)
+    self.assertTrue(output.endswith("dry-run: no API call made."), output)
+
+
+class HistoryViewTests(unittest.TestCase):
+  def test_history_view_refuses_to_start_without_a_terminal(self) -> None:
+    with patch("genimg.history_view.run") as run:
+      result = CliRunner().invoke(cli._app, ["history", "view"])  # CliRunner streams are not TTYs
+    self.assertEqual(result.exit_code, 1, result.output)
+    self.assertEqual(" ".join(result.output.split()),
+                     "error: history view is interactive; use genimg history --json")
+    run.assert_not_called()
+
+
+class ModelsFailureDetailTests(unittest.TestCase):
+  HINT = "No google auth detected. Run `genimg setup` or set GEMINI_API_KEY."
+
+  def _invoke(self, *args: str):
+    probes = {alias: ProbeResult(model=spec.model_id, status="auth", detail=self.HINT)
+              if spec.provider == "google" else ProbeResult(model=spec.model_id, status="listed")
+              for alias, spec in cli.registry.all_canonical().items()}
+    with patch.object(cli.config, "load", return_value={}), \
+         patch.object(cli.discovery, "load_cache", return_value=None), \
+         patch.object(cli.discovery, "get_or_probe", return_value=(probes, 0.0)):
+      return CliRunner().invoke(cli._app, ["models", *args])
+
+  def test_table_explains_failed_rows_once_per_provider(self) -> None:
+    result = self._invoke()
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertEqual(result.output.count(f"google · {self.HINT}"), 1, result.output)
+
+  def test_json_carries_each_rows_detail(self) -> None:
+    result = self._invoke("--json")
+    self.assertEqual(result.exit_code, 0, result.output)
+    details = {row["alias"]: row["detail"] for row in json.loads(result.output)}
+    self.assertEqual(details["gdm:nb2"], self.HINT)
+    self.assertEqual(details["oai:gpt-image-2"], "")
+
+
+class PipedOutputTests(unittest.TestCase):
+  """An agent's shell: stdout piped, COLUMNS unset. Ids, env-var names and paths print whole."""
+
+  def setUp(self) -> None:
+    self._home = tempfile.TemporaryDirectory()
+    self.home = Path(self._home.name)
+
+  def tearDown(self) -> None:
+    self._home.cleanup()
+
+  def _run(self, *args: str, **env_extra: str) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("COLUMNS", "LINES", "GENIMG_HOME", "GENIMG_CONFIG_HOME")
+           and not any(t in k for t in ("OPENAI", "GEMINI", "GOOGLE", "AZURE", "CLAUDE_GCP"))}
+    env.update(HOME=str(self.home), **env_extra)
+    return subprocess.run([sys.executable, "-m", "genimg", *args], env=env, capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL, timeout=60)
+
+  def test_config_path_longer_than_the_console_stays_on_one_line(self) -> None:
+    # Longer than the 200-column console, in parts shorter than any filesystem's name limit.
+    config_home = str(self.home.joinpath(*["very-long-config-folder-name"] * 8))
+    result = self._run("config", "show", GENIMG_CONFIG_HOME=config_home)
+    self.assertEqual(result.returncode, 0, result.stderr)
+    self.assertIn(f"no config yet at {config_home}/config.toml.", result.stdout)
+
+  def test_history_output_path_is_not_folded(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+    meta_dir = self.home / ".genimg" / "metadata"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "20260925_120000_abcdef.json").write_text(json.dumps({
+      "id": "20260925_120000_abcdef", "time": "2026-09-25T12:00:00", "alias": "oai:gi2",
+      "model_id": "gpt-image-2", "prompt": "a red fox curled up asleep in fresh snow under a pine tree",
+      "n": 1, "cost_usd_estimated": 0.0527, "outputs": [{"path": out}],
+    }))
+    result = self._run("history", "-n", "1")
+    self.assertEqual(result.returncode, 0, result.stderr)
+    self.assertIn(out, result.stdout)
+
+    narrow = self._run("history", "-n", "1", COLUMNS="80")  # a small terminal still gets every column
+    self.assertEqual(narrow.returncode, 0, narrow.stderr)
+    for header in ("time", "prompt", "made/req", "output"):
+      self.assertIn(header, narrow.stdout)
+
+  def test_auth_modes_env_var_names_are_not_truncated(self) -> None:
+    result = self._run("auth", "--modes")
+    self.assertEqual(result.returncode, 0, result.stderr)
+    for name in ("GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_API_KEY"):
+      self.assertIn(name, result.stdout)
+
+  def test_dry_run_output_paths_stay_on_one_line(self) -> None:
+    target = "/tmp/" + "/".join(["deeply-nested-folder"] * 6) + "/fox.png"
+    result = self._run("a fox", "-m", "oai:gi2", "-n", "2", "-o", target, "--dry-run", OPENAI_API_KEY="k")
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    for i in (1, 2):
+      self.assertIn(target.replace("fox.png", f"fox_{i}.png"), result.stdout)

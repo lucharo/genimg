@@ -27,7 +27,7 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
 | `--output` | `-o` | path | Default `~/.genimg/generations/<id>.png`, with `_1` to `_n` for several takes. |
 | `--grid` | `-g` | | With 2 or more takes, also writes an HTML grid. |
 | `--open` | | | Opens the grid, or the image, in the browser. |
-| `--dry-run` | | | Prints model, size, cost and output path. No API call. |
+| `--dry-run` | | | Prints model, size, cost and output path. No API call. Exits `1` when auth is not ready. |
 | `--quality` | `-q` | `low medium high auto`; GPT Image 2.5 adds `xhigh max` | OpenAI only. Default `medium`. |
 | `--auth` | | `azure` \| `direct` | OpenAI only. Forces an auth mode for this run. |
 | `--thinking` | | `minimal` \| `high` | Gemini 3.1 Flash Image and Flash Lite Image only. |
@@ -44,8 +44,15 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
   profile and, if you pick one, a default model. Walkthrough in [Getting started](../getting-started.md).
 
 ```text
-genimg setup
+genimg setup [--model ALIAS]
 ```
+
+| Flag | Effect |
+| --- | --- |
+| `--model`, `-m` | Saves this default model instead of asking for one. Exits `1` if no profile covers its provider. |
+
+- Without a terminal on stdin it never prompts: it saves each provider whose credentials are
+  already in the environment and pass the check, and exits `1` if none does.
 
 ## genimg auth { data-toc-label="auth" }
 
@@ -66,7 +73,8 @@ genimg auth \
 
 ## genimg models { data-toc-label="models" }
 
-- Lists every model, its alias, and whether the provider's model list includes it. Cached for 5 days.
+- Lists every model, its alias, and whether the provider's model list includes it. Cached for 5 days,
+  except rows that failed on auth, which are probed again on the next run.
 
 ```text
 genimg models \
@@ -104,7 +112,7 @@ genimg history view
 | `--limit`, `-n` | Rows, 1 to 200. Default 20. |
 | `--summary` | Total estimated spend instead of rows. |
 | `--json` | JSON output. |
-| `view` | Browses every generation in the terminal with image previews. `yi` copies the image, `yp` its path, `?` lists keys. |
+| `view` | Browses every generation in the terminal with image previews. `yi` copies the image, `yp` its path, `?` lists keys. Without a terminal it exits `1`; use `--json`. |
 
 ## genimg cost { data-toc-label="cost" }
 
@@ -189,9 +197,12 @@ genimg skills path [SKILL]
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | Usage or config error: bad flag combination, unknown model or profile |
-| `2` | The parser rejected an option, or a generation failed |
+| `1` | Usage or config error: bad flag combination, unknown model or profile, auth not ready on `--dry-run` |
+| `2` | The parser rejected the command line, or a generation failed |
 
+- A one-word prompt that reads as a command (`help`, `list`, a typo of `models`) exits `2` instead
+  of generating. `genimg -- WORD` generates it.
+- An empty prompt exits `2`.
 - A `2` alone does not prove a request reached the provider.
 - `--json` forms print only JSON. Other output is for people and may shorten your home directory to
   `~`.
