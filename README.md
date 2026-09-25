@@ -5,7 +5,11 @@
 [![PyPI](https://img.shields.io/pypi/v/genimg)](https://pypi.org/project/genimg/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
-One simple CLI, made with both humans and agents in mind. Generate images with OpenAI and
+One simple CLI, made with both humans and agents in mind. The agent-native design is inspired
+by [kenn-io](https://github.com/kenn-io) and the tools they put out, especially
+[roborev](https://github.com/kenn-io/roborev) and [agentsview](https://github.com/kenn-io/agentsview).
+
+Generate images with OpenAI and
 Google DeepMind models in a unified interface, via API or via Codex with a ChatGPT
 subscription. It bundles one HTML grid artefact and a drawing sketchpad for image generation,
 as well as several skills for productive image generation workflows.
