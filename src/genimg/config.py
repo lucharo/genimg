@@ -15,12 +15,9 @@ Schema (all optional):
 
 Secrets (API keys, service-account JSON paths) live in env, never here. A profile is
 selected with `--profile NAME`; with one profile per provider it is picked automatically.
-
-The pre-0.1.0 JSON config (`config.json`, `enabled_providers`) is migrated on first load.
 """
 from __future__ import annotations
 
-import json
 import os
 import tomllib
 from pathlib import Path
@@ -30,48 +27,6 @@ import tomli_w
 
 CONFIG_DIR = Path(os.getenv("GENIMG_CONFIG_HOME") or Path.home() / ".config" / "genimg")
 CONFIG_PATH = CONFIG_DIR / "config.toml"
-LEGACY_JSON_PATH = CONFIG_DIR / "config.json"
-
-# Legacy `enabled_providers` entries → (provider, auth mode, profile name).
-_LEGACY_MODES = {
-  "google_direct":     ("google", "direct"),
-  "google_vertex":     ("google", "vertex"),
-  "google_vertex_adc": ("google", "vertex_adc"),
-  "openai_direct":     ("openai", "direct"),
-  "openai_azure":      ("openai", "azure"),
-  "codex":             ("codex", "subscription"),
-}
-
-
-def migrate_legacy(data: dict[str, Any]) -> dict[str, Any]:
-  """Convert a config.json dict (enabled_providers + flat settings) to the TOML schema."""
-  out: dict[str, Any] = {}
-  for key in ("default_model", "default_quality", "default_aspect_ratio", "default_resolution"):
-    if data.get(key) is not None:
-      out[key] = data[key]
-  entries = [e for e in (data.get("enabled_providers", []) or []) if e in _LEGACY_MODES]
-  per_provider: dict[str, int] = {}
-  for e in entries:
-    per_provider[_LEGACY_MODES[e][0]] = per_provider.get(_LEGACY_MODES[e][0], 0) + 1
-  profiles: dict[str, dict[str, Any]] = {}
-  for entry in entries:
-    provider, mode = _LEGACY_MODES[entry]
-    table: dict[str, Any] = {"provider": provider, "auth": mode}
-    if provider == "google" and mode != "direct":
-      if data.get("gcp_project"):
-        table["project"] = data["gcp_project"]
-      if data.get("gcp_region"):
-        table["region"] = data["gcp_region"]
-    if provider == "openai" and mode == "azure":
-      if data.get("openai_base_url"):
-        table["endpoint"] = data["openai_base_url"]
-      if data.get("azure_api_version"):
-        table["api_version"] = data["azure_api_version"]
-    # One mode per provider keeps the short name; several keep the legacy entry name.
-    profiles[provider if per_provider[provider] == 1 else entry] = table
-  if profiles:
-    out["profiles"] = profiles
-  return out
 
 
 class ConfigError(RuntimeError):
@@ -88,21 +43,9 @@ def _read_toml(path: Path) -> dict[str, Any]:
 
 
 def load() -> dict[str, Any]:
-  """Load config.toml. If only the legacy config.json exists, migrate it in place."""
+  """Load config.toml; a missing file is an empty config."""
   if CONFIG_PATH.exists():
     return _read_toml(CONFIG_PATH)
-  if LEGACY_JSON_PATH.exists():
-    try:
-      legacy = json.loads(LEGACY_JSON_PATH.read_text())
-    except (json.JSONDecodeError, OSError):
-      return {}
-    data = migrate_legacy(legacy if isinstance(legacy, dict) else {})
-    try:
-      save(data)
-      LEGACY_JSON_PATH.rename(LEGACY_JSON_PATH.with_suffix(".json.migrated"))
-    except OSError:
-      pass
-    return data
   return {}
 
 

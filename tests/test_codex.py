@@ -251,7 +251,6 @@ def test_setup_drops_unavailable_codex_and_its_default():
 @pytest.mark.parametrize("available", [False, True])
 def test_setup_persists_cleanup_when_codex_was_the_only_provider(tmp_path, monkeypatch, available):
   monkeypatch.setattr(setup.config, "CONFIG_PATH", tmp_path / "config.toml")
-  monkeypatch.setattr(setup.config, "LEGACY_JSON_PATH", tmp_path / "config.json")
   setup.config.save({"profiles": {"codex": dict(_CODEX_PROFILE)}, "default_model": "codex:image"})
   with patch.object(auth, "login_status", return_value=(available, "Log in")), \
        patch.object(auth_google, "adc_token_present", return_value=False), \
