@@ -1,8 +1,8 @@
 # Workflow skills
 
 genimg ships four skills. One is the mechanics layer; the other three are use-case workflows
-that sit above it and call it. Install any of them into your agent with
-`genimg skills install [agent] [skill]` (see [For agents](../agents.md)).
+that sit above it and call it. Install them into your agent with
+`npx skills add lucharo/genimg` (see [For agents](../agents.md)).
 
 | Skill | What it lets you do | Layer |
 | --- | --- | --- |

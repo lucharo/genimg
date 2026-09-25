@@ -32,7 +32,6 @@ How genimg is built, tested, distributed and released. Users do not need this se
 Open design work is tracked as GitHub issues:
 [prompt-first `genimg ui`](https://github.com/lucharo/genimg/issues/3),
 [paperbanana-style paper figures](https://github.com/lucharo/genimg/issues/4),
-[skills install flow](https://github.com/lucharo/genimg/issues/5),
 [image tournament in the grid](https://github.com/lucharo/genimg/issues/22),
 [use-case skills above the mechanics layer](https://github.com/lucharo/genimg/issues/23).
 A hosted, multi-user Draw Studio is out of scope for now (see the

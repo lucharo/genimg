@@ -59,7 +59,7 @@ Model-specific constraints that the CLI enforces before calling a provider:
 | `grid PATHS...` | HTML grid and carousel from existing images. | `-o`, `--open` |
 | `draw [PATHS...]` | Local Draw Studio canvas server. | `--port`, `-m`, `--no-open` |
 | `config` | `show` (TOML), `path`, `edit` (`$EDITOR`). | |
-| `skills` | `list`, `path [skill]`, `install [agent] [skill] [--force]`, `update`, `uninstall`. Agents: `claude codex cursor opencode all`. | |
+| `skills` | Prints the install command, `npx skills add lucharo/genimg`. `path [skill]` prints bundled skill sources (`all` for every skill). | |
 
 ## Exit codes and output
 

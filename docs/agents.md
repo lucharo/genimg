@@ -9,14 +9,15 @@ describes the mechanics of the entire package so a coding agent can generate ima
 ## Install the skill into your agent
 
 ```bash
-genimg skills install            # all bundled skills → Claude Code (~/.claude/skills)
-genimg skills install all        # → Claude Code, Codex, Cursor and OpenCode
-genimg skills install codex genimg   # one agent, one skill
-genimg skills list               # what is linked where
+npx skills add lucharo/genimg                               # choose agents and skills interactively
+npx skills add lucharo/genimg -a claude-code codex -s '*'   # every skill, named agents
+npx skills add lucharo/genimg -s genimg -g                  # one skill, user-level instead of this project
 ```
 
-Skills are symlinked into each agent's skills directory, so they track the installed genimg.
-After `uv tool upgrade genimg`, run `genimg skills update` to refresh the links.
+Needs Node.js (for `npx`). The [skills](https://github.com/vercel-labs/skills) CLI installs
+into the current project unless you pass `-g`; `npx skills update` refreshes the skills and
+`npx skills remove` takes them out. `genimg skills path all` prints the copies bundled with
+the Python package if you would rather read them.
 
 ## What the `genimg` skill teaches
 

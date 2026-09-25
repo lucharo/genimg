@@ -12,8 +12,7 @@ macOS, Linux and Windows.
 
 !!! note "From a checkout"
     Working on genimg itself? `uv tool install --from . genimg` installs the checkout, and
-    `uv run genimg …` runs it without installing. After a `uv tool` reinstall, run
-    `genimg skills update` so agent skill links point at the new install.
+    `uv run genimg …` runs it without installing.
 
 What you get:
 
