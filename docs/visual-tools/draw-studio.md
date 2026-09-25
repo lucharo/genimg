@@ -4,12 +4,12 @@ Sketch on an image, then have a model redraw it. Draw Studio is a browser canvas
 serves from your own computer.
 
 ```bash
-genimg draw -m gdm:nb2 fox-sketch.webp
+genimg draw -m oai:gi2.5 fox-sketch.webp
 ```
 
 <figure markdown>
-  ![Draw Studio with a rough fox doodle on the canvas and a moon sketched beside it](../assets/draw-studio.webp)
-  <figcaption>The command above, with the doodle placed on the canvas and a moon added with the pen.</figcaption>
+  ![Draw Studio with a rough fox doodle on the canvas and the clean fox illustration GPT Image 2.5 made from it in the Generated panel](../assets/draw-studio.webp)
+  <figcaption>The command above: the doodle on the canvas, one <b>Generate</b> at medium quality (about $0.013), and the result on the right.</figcaption>
 </figure>
 
 1. Click a source image to put it on the canvas, or draw on a blank one.
