@@ -60,3 +60,23 @@ def test_editor_command_is_split_like_a_shell_would(config_dir, monkeypatch, edi
   monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
   config.open_in_editor()
   assert calls == [[*argv, str(config_dir / "config.toml")]]
+
+
+def test_editor_that_names_an_existing_file_is_one_argument(config_dir, monkeypatch, tmp_path):
+  editor = tmp_path / "My Editor" / "edit"
+  editor.parent.mkdir()
+  editor.touch()
+  monkeypatch.setenv("EDITOR", str(editor))
+  calls = []
+  monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
+  config.open_in_editor()
+  assert calls == [[str(editor), str(config_dir / "config.toml")]]
+
+
+@pytest.mark.parametrize("editor,argv", [
+  (r"C:\Windows\System32\notepad.exe", [r"C:\Windows\System32\notepad.exe"]),
+  (r'"C:\Program Files\Microsoft VS Code\bin\code.cmd" --wait',
+   [r"C:\Program Files\Microsoft VS Code\bin\code.cmd", "--wait"]),
+])
+def test_windows_editor_paths_keep_their_backslashes(editor, argv):
+  assert config._editor_command(editor, windows=True) == argv
