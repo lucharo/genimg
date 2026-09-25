@@ -602,6 +602,10 @@ class BootJsonTests(unittest.TestCase):
   def test_reload_or_close_warns_while_the_canvas_has_content(self) -> None:
     self.assertIn('window.addEventListener("beforeunload",(e)=>{ if(hasContent()){e.preventDefault();e.returnValue="";} });', draw.PAGE)
 
+  def test_canvas_keeps_its_centre_when_a_panel_opens_or_closes(self) -> None:
+    # Opening the Generated panel halved the canvas and left the drawing off to the right.
+    self.assertIn("S.view={...S.view,x:S.view.x+(cw-cvSize[0])/2,y:S.view.y+(ch-cvSize[1])/2}", draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)

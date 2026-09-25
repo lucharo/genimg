@@ -631,7 +631,7 @@ const BOOT = /*__BOOT__*/;
     sizeControlKey:""
   };
   let _jid=0, _iid=0; const IMGS={}; let cv=null, off=null, cur=null;
-  let drawing=false, deleting=false, panning=null, movingId=null, moveOff=null, ro=null;
+  let drawing=false, deleting=false, panning=null, movingId=null, moveOff=null, ro=null, cvSize=null;
   const $ = (id)=>document.getElementById(id);
   const esc = (s)=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -992,6 +992,11 @@ const BOOT = /*__BOOT__*/;
   // ---------- canvas world ----------
   function sizeCanvas(){
     if(!cv) return;
+    // When the canvas grows or shrinks (a panel opens or closes, the iPad rotates), keep the
+    // point at its centre where it was, so a centred drawing stays centred.
+    const cw=cv.clientWidth, ch=cv.clientHeight;
+    if(cvSize&&cw&&ch&&(cw!==cvSize[0]||ch!==cvSize[1])) S.view={...S.view,x:S.view.x+(cw-cvSize[0])/2,y:S.view.y+(ch-cvSize[1])/2};
+    if(cw&&ch) cvSize=[cw,ch];
     const dpr=window.devicePixelRatio||1;
     const w=Math.max(1,Math.round(cv.clientWidth*dpr)), h=Math.max(1,Math.round(cv.clientHeight*dpr));
     if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
