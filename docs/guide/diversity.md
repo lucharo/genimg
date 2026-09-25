@@ -1,10 +1,14 @@
 # Diverse images
 
-`-n 4` asks for four images. On a simple subject they come back nearly identical:
+`-n 4` asks for four images:
+
+```bash
+genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -g
+```
 
 <figure markdown>
   ![Four near-identical line-art fox logos](../assets/fox-plain-n.webp){ width="720" }
-  <figcaption><code>genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -g</code></figcaption>
+  <figcaption>On a simple subject the four come back nearly identical.</figcaption>
 </figure>
 
 Two flags spread them out.
