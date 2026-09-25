@@ -808,6 +808,14 @@ class DrawCommandModelTests(unittest.TestCase):
 
     self.assertEqual(hosts, {"default": "127.0.0.1", "tailnet": "100.101.102.103"})
 
+  def test_port_outside_1_to_65535_is_a_parser_error(self) -> None:
+    for port in ("0", "70000"):
+      with self.subTest(port=port), patch.object(draw, "serve") as serve:
+        result = CliRunner().invoke(cli._app, ["draw", "--no-open", "--port", port])
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn("1<=x<=65535", result.output)
+        serve.assert_not_called()
+
 
 if __name__ == "__main__":
   unittest.main()

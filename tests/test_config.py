@@ -47,3 +47,16 @@ def test_unparseable_toml_is_an_error_and_is_never_overwritten(config_dir):
 def test_save_is_atomic_and_leaves_no_temp_file(config_dir):
   config.save({"default_model": "gdm:nb2"})
   assert sorted(p.name for p in config_dir.iterdir()) == ["config.toml"]
+
+
+@pytest.mark.parametrize("editor,argv", [
+  ("code --wait", ["code", "--wait"]),
+  ('"/Applications/My Editor/bin/edit" -w', ["/Applications/My Editor/bin/edit", "-w"]),
+  ("", ["vi"]),
+])
+def test_editor_command_is_split_like_a_shell_would(config_dir, monkeypatch, editor, argv):
+  monkeypatch.setenv("EDITOR", editor)
+  calls = []
+  monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
+  config.open_in_editor()
+  assert calls == [[*argv, str(config_dir / "config.toml")]]

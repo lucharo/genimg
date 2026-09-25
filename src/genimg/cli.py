@@ -840,7 +840,8 @@ def grid_cmd(
 def draw_cmd(
   paths: Annotated[list[Path] | None, typer.Argument(
     help="Image files and/or directories to load into the studio (optional).")] = None,
-  port: Annotated[int, typer.Option("--port", help="Port to serve on (auto-bumps if busy).")] = 8788,
+  port: Annotated[int, typer.Option("--port", min=1, max=65535,
+    help="Port to serve on (auto-bumps if busy).")] = 8788,
   host: Annotated[str, typer.Option("--host",
     help="IPv4 address to serve on, e.g. your Tailscale or LAN IP for an iPad. "
          "Anyone who can reach it can generate with your credentials and open your "
