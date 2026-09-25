@@ -7,7 +7,7 @@ uv tool install genimg
 genimg --version
 ```
 
-Needs [uv](https://docs.astral.sh/uv/) and Python 3.11, 3.12 or 3.13. Upgrade with
+Needs [uv](https://docs.astral.sh/uv/) and Python 3.11 to 3.14. Upgrade with
 `uv tool upgrade genimg`.
 
 ## Which providers you can reach

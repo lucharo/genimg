@@ -1,6 +1,6 @@
 # genimg
 
-[![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](getting-started.md#install)
+[![Python 3.11 to 3.14](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](getting-started.md#install)
 [![PyPI](https://img.shields.io/pypi/v/genimg)](https://pypi.org/project/genimg/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](https://github.com/lucharo/genimg/blob/main/LICENSE)
 
