@@ -1,11 +1,11 @@
 # Models
 
-Pass `-m` an alias or the provider's model id. `genimg models` lists them with their status for
+Pass `--model` an alias or the provider's model id. `genimg models` lists them with their status for
 your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds the long names.
 
 ## Gemini
 
-| Alias | Model id | Cost per image by `-r` | Aspect ratios | `--thinking` |
+| Alias | Model id | Cost per image by `--resolution` | Aspect ratios | `--thinking` |
 | --- | --- | --- | --- | --- |
 | `gdm:nbp` | [`gemini-3-pro-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image) | 1K $0.134 · 2K $0.134 · 4K $0.24 | classic | |
 | `gdm:nb2` | [`gemini-3.1-flash-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image) | 512 $0.045 · 1K $0.067 · 2K $0.101 · 4K $0.151 | extended | `minimal` `high` |
@@ -17,7 +17,7 @@ your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds
 
 ## OpenAI
 
-| Alias | Model id | Cost per 1K square image by `-q` |
+| Alias | Model id | Cost per 1K square image by `--quality` |
 | --- | --- | --- |
 | `oai:gi2.5` | [`gpt-image-2.5-sunburst`](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst) | low $0.006 · medium $0.013 · high $0.053 · xhigh $0.094 · max $0.211 |
 | `oai:gi2.5-flare` | [`gpt-image-2.5-flare`](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare) | low $0.006 · medium $0.013 · high $0.053 · xhigh $0.094 · max $0.211 |
@@ -26,11 +26,11 @@ your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds
 | `oai:gi1` | [`gpt-image-1`](https://developers.openai.com/api/docs/models/gpt-image-1) | low $0.011 · medium $0.042 · high $0.167 |
 | `oai:gi1-mini` | [`gpt-image-1-mini`](https://developers.openai.com/api/docs/models/gpt-image-1-mini) | low $0.005 · medium $0.011 · high $0.036 |
 
-`-q` defaults to `medium`; `auto` is estimated as `medium`.
+`--quality` defaults to `medium`; `auto` is estimated as `medium`.
 
 Sizes come from one table. Any pair not in it is rejected before the request:
 
-| `-r` | `1:1` | `4:3` / `3:4` | `16:9` / `9:16` |
+| `--resolution` | `1:1` | `4:3` / `3:4` | `16:9` / `9:16` |
 | --- | --- | --- | --- |
 | 1K | 1024×1024 | 1024×768 | |
 | 2K | 2048×2048 | 2048×1536 | 2048×1152 |
@@ -42,12 +42,16 @@ models use OpenAI's 1024×1024 per-image price, scaled by pixel area at other si
 `--dry-run` prints the estimate for any combination:
 
 ```console
-$ genimg "a lighthouse at dusk" -m oai:gi2 -r 2K -a 16:9 --dry-run
+$ genimg "a lighthouse at dusk" \
+    --model oai:gi2 \
+    --resolution 2K \
+    --aspect-ratio 16:9 \
+    --dry-run
 genimg openai/direct oai:gpt-image-2 → gpt-image-2
   prompt   "a lighthouse at dusk"
   params   n=1 q=medium (default) r=2K a=16:9 → 2048x1152
-  cost     $0.0424 (estimate)  id=20260925_093313_0de395
-  output   ~/.genimg/generations/20260925_093313_0de395.png
+  cost     $0.0424 (estimate)  id=20260925_114713_d61db9
+  output   ~/.genimg/generations/20260925_114713_d61db9.png
 dry-run: no API call made.
 ```
 
@@ -58,7 +62,7 @@ Estimates exclude text input, under a cent per prompt, and apply to Azure too.
 
 | Alias | What runs | Controls | Cost |
 | --- | --- | --- | --- |
-| `codex:image` | [Codex image generation](https://learn.chatgpt.com/docs/image-generation); Codex picks the model and size | `-a` only, as a request in the prompt | Your ChatGPT plan's Codex allowance |
+| `codex:image` | [Codex image generation](https://learn.chatgpt.com/docs/image-generation); Codex picks the model and size | `--aspect-ratio` only, as a request in the prompt | Your ChatGPT plan's Codex allowance |
 
 genimg records an API-equivalent price range for Codex runs, for comparison only. See
 [Codex subscription](../guide/codex-subscription.md).
