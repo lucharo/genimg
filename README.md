@@ -14,7 +14,7 @@ Google DeepMind models in a unified interface, via API or via Codex with a ChatG
 subscription. It bundles one HTML grid artefact and a drawing sketchpad for image generation,
 as well as several skills for productive image generation workflows.
 
-**Docs: [lucharo.github.io/genimg](https://lucharo.github.io/genimg/)**
+**Docs: [genimg.luischav.es](https://genimg.luischav.es/)**
 
 ```bash
 uv tool install genimg
@@ -31,12 +31,12 @@ Pick some with `-s`, e.g. `npx skills add lucharo/genimg -s genimg genimg-infogr
 
 ## Docs
 
-- [Getting started](https://lucharo.github.io/genimg/getting-started/): install, providers, first image
-- [For agents](https://lucharo.github.io/genimg/agents/): the skills and what an agent can read
-- [Guide](https://lucharo.github.io/genimg/guide/diversity/): diverse images, input images, Codex
-- [Reference](https://lucharo.github.io/genimg/reference/cli/): CLI, models, config.toml
+- [Getting started](https://genimg.luischav.es/getting-started/): install, providers, first image
+- [For agents](https://genimg.luischav.es/agents/): the skills and what an agent can read
+- [Guide](https://genimg.luischav.es/guide/diversity/): diverse images, input images, Codex
+- [Reference](https://genimg.luischav.es/reference/cli/): CLI, models, config.toml
 
 ## Contributing
 
 `uv sync`, then `uv run pytest` and `uv run ruff check .`. See [CONTRIBUTING.md](CONTRIBUTING.md)
-and the [maintainer docs](https://lucharo.github.io/genimg/maintainers/).
+and the [maintainer docs](https://genimg.luischav.es/maintainers/).

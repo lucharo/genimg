@@ -1,5 +1,5 @@
 [project]
-site_url = "https://lucharo.github.io/genimg/"
+site_url = "https://genimg.luischav.es/"
 site_name = "genimg"
 site_description = "Multi-provider image generation CLI, built for humans and agents."
 site_author = "Luis Chaves Rodriguez"
