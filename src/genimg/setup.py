@@ -3,8 +3,8 @@
 Goals: feel automatic, never save a broken state. For each registered provider the wizard
 offers its auth modes with live detection, guides the user to any missing secret (opens the
 signup page, prompts, optionally writes `export VAR=...` to the shell rc), asks for the
-mode's non-secret settings, runs the mode's free preflight, and only then writes a
-`[profiles.<provider>]` table to config.toml.
+mode's non-secret settings, runs the mode's free preflight, and only then writes the
+provider's `[profiles.NAME]` table to config.toml (its configured one, else NAME = provider).
 
 Without a terminal on stdin (an agent, CI) it never prompts: each provider's detected auth
 mode is validated and saved, and nothing is fetched or written to a shell rc.
@@ -100,11 +100,20 @@ def _open_signup(url: str | None) -> None:
     webbrowser.open(url)
 
 
+def _validate(validate_fn: Callable[[], tuple[bool, str]]) -> tuple[bool, str]:
+  """The mode's free preflight. An SDK client that raises while it is built (a malformed Azure
+  endpoint, say) is a failed validation, not a crash that discards the other providers."""
+  try:
+    return validate_fn()
+  except Exception as e:  # noqa: BLE001 — reported as this provider's failure
+    return False, f"{type(e).__name__}: {e}"
+
+
 def _run_validation(label: str, validate_fn: Callable[[], tuple[bool, str]]) -> bool:
   """Run a live validation; allow retry/skip/cancel on failure."""
   while True:
     with console.status(f"validating {label}..."):
-      ok, err = validate_fn()
+      ok, err = _validate(validate_fn)
     if ok:
       console.print(f"[green]✓ {label} validated[/green]")
       return True
@@ -161,36 +170,40 @@ def _choice_label(text: str, ok: bool, detail: str) -> str:
 # ────────────────────── per-provider step ──────────────────────
 
 def _detect_modes(provider: providers.Provider, cfg: dict[str, Any]):
-  """(candidates, detected-by-mode, saved table): the provider's auth modes, the saved profile's
-  mode seeded with its settings, and which modes find their credentials (no network)."""
-  profiles = cfg.get("profiles") or {}
-  existing = profiles.get(provider.name) if isinstance(profiles.get(provider.name), dict) else None
-  existing_settings = {k: v for k, v in (existing or {}).items() if k not in ("provider", "auth")}
-  candidates = [cls(existing_settings if existing and existing.get("auth") == cls.mode else {},
-                    name=provider.name, source=f"profile:{provider.name}")
+  """(profile name, candidates, detected-by-mode, saved table) for the profile runs use: the
+  provider's first declared profile, as auth resolution picks it, else one named after the
+  provider. The saved mode is seeded with its settings and counts as detected when its secret is
+  in env: a saved direct OpenAI profile works with an Azure endpoint in env, which env
+  auto-detection alone reads as an Azure setup. No network."""
+  name, existing = next(iter(config.profiles_for(provider.name, cfg).items()), (provider.name, None))
+  saved_mode = existing.get("auth") if existing else None
+  saved_settings = {k: v for k, v in (existing or {}).items() if k not in ("provider", "auth")}
+  candidates = [cls(saved_settings if cls.mode == saved_mode else {}, name=name, source=f"profile:{name}")
                 for cls in provider.auth_modes]
-  return candidates, {p.mode: p.detect() for p in candidates}, existing
+  detected = {p.mode: p.detect() or (p.mode == saved_mode and p.present_env_var() is not None)
+              for p in candidates}
+  return name, candidates, detected, existing
 
 
 def _setup_provider(provider: providers.Provider, cfg: dict[str, Any]) -> bool:
-  """Offer the provider's auth modes; save a validated `[profiles.<provider>]` table.
-  Returns True when a profile was saved."""
+  """Offer the provider's auth modes; save a validated table under the provider's configured
+  profile name (see _detect_modes). Returns True when a profile was saved."""
   profiles = cfg.setdefault("profiles", {})
   console.print(f"\n[bold cyan]{provider.label}[/bold cyan]")
-  candidates, detected, existing = _detect_modes(provider, cfg)
+  name, candidates, detected, existing = _detect_modes(provider, cfg)
 
   if len(candidates) == 1 and not candidates[0].env_vars and not candidates[0].secret:
     # Login-style providers (Codex): nothing to fetch, just opt in.
     p = candidates[0]
     if not detected[p.mode]:
-      _forget_provider(provider.name, cfg)
+      _forget_provider(provider.name, name, cfg)
       console.print(f"[dim]{provider.label}: {p.detail()}[/dim]")
       return False
     use = questionary.confirm(f"Use {provider.label}?", default=existing is not None).ask()
     if not use:
-      _forget_provider(provider.name, cfg)
+      _forget_provider(provider.name, name, cfg)
       return False
-    profiles[provider.name] = {"provider": provider.name, "auth": p.mode}
+    profiles[name] = {"provider": provider.name, "auth": p.mode}
     return True
 
   pick = questionary.select(
@@ -233,20 +246,20 @@ def _setup_provider(provider: providers.Provider, cfg: dict[str, Any]) -> bool:
 
   if not _run_validation(provider.label, chosen.validate):
     return False
-  profiles[provider.name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
+  profiles[name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
   return True
 
 
 def _setup_provider_unattended(provider: providers.Provider, cfg: dict[str, Any]) -> tuple[bool, str]:
   """No prompts: save the first detected auth mode whose free validation passes (the saved
   profile's mode first, then the wizard's order). Returns (saved, summary)."""
-  candidates, detected, existing = _detect_modes(provider, cfg)
+  name, candidates, detected, existing = _detect_modes(provider, cfg)
   ordered = sorted(candidates, key=lambda p: not (existing and existing.get("auth") == p.mode))
   found = [p for p in ordered if detected[p.mode]]
   if not found:
     login_style = len(candidates) == 1 and not candidates[0].env_vars  # Codex: its hint says how
     if login_style:
-      _forget_provider(provider.name, cfg)  # as the wizard does for a logged-out Codex
+      _forget_provider(provider.name, name, cfg)  # as the wizard does for a logged-out Codex
     why = candidates[0].detail() if login_style else "`genimg auth --modes` lists the env vars"
     return False, f"skipped: no credentials detected ({why})"
   failures = []
@@ -261,23 +274,24 @@ def _setup_provider_unattended(provider: providers.Provider, cfg: dict[str, Any]
     if missing:
       failures.append(f"{chosen.label} needs `{missing[0]}`")
       continue
-    ok, err = chosen.validate()
+    ok, err = _validate(chosen.validate)
     if ok:
-      cfg.setdefault("profiles", {})[provider.name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
+      cfg.setdefault("profiles", {})[name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
       return True, f"saved ({chosen.mode})"
     failures.append(f"{chosen.label} validation failed: {err}")
   return False, "skipped: " + "; ".join(failures)
 
 
-def _forget_provider(name: str, cfg: dict[str, Any]) -> None:
+def _forget_provider(provider: str, name: str, cfg: dict[str, Any]) -> None:
+  """Drop profile `name`, and the default model once no profile covers its provider."""
   profiles = cfg.get("profiles") or {}
   profiles.pop(name, None)
   if not profiles:
     cfg.pop("profiles", None)
   default = cfg.get("default_model")
-  if default:
+  if default and not config.profiles_for(provider, cfg):
     try:
-      if registry.resolve(default)[1].provider == name:
+      if registry.resolve(default)[1].provider == provider:
         cfg.pop("default_model")
     except ValueError:
       pass
@@ -351,7 +365,7 @@ def run_setup(model: str | None = None) -> bool:
   if not cfg.get("profiles"):
     config.save(cfg)
     console.print("\n[yellow]No providers configured.[/yellow] Re-run when ready.")
-    return True
+    return _set_default_model(cfg, model) if model else True  # a requested default was not saved
 
   if model:
     default_saved = _set_default_model(cfg, model)

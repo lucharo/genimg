@@ -743,11 +743,12 @@ const BOOT = /*__BOOT__*/;
     const focusSnapshot=controlFocusSnapshot();
     $("modelSel").value = S.model;
     const meta=MM[S.model]||{};
+    // Reset an aspect this model lacks before the sizes are read: they depend on the aspect.
+    const supportedAspects=meta.aspectOptions||[];
+    if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
     const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta), thinking=meta.thinkingOptions||[];
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
     if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
-    const supportedAspects=meta.aspectOptions||[];
-    if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
     const aspects=[["auto","Auto"]].concat(supportedAspects.map(a=>[a,a]));
     S.sizeControlKey=sizeControlKey(meta);
     $("paramControls").innerHTML =
@@ -1028,7 +1029,9 @@ const BOOT = /*__BOOT__*/;
     const b=contentBounds();
     if(!b){S.view={x:0,y:0,s:1};updateZoom();redraw();return;}
     const m=48, s=Math.min(8,Math.max(.15,Math.min((cv.clientWidth-m*2)/(b[2]-b[0]),(cv.clientHeight-m*2)/(b[3]-b[1]))));
-    S.view={s,x:(cv.clientWidth-(b[0]+b[2])*s)/2,y:(cv.clientHeight-(b[1]+b[3])*s)/2}; updateZoom(); redraw();
+    S.view={s,x:(cv.clientWidth-(b[0]+b[2])*s)/2,y:(cv.clientHeight-(b[1]+b[3])*s)/2};
+    if(cv.clientWidth&&cv.clientHeight) cvSize=[cv.clientWidth,cv.clientHeight]; // fitted to this size: a pending resize callback must not shift it again
+    updateZoom(); redraw();
   }
   function updateZoom(){ const z=$("zoompct"); if(z) z.textContent=Math.round(S.view.s*100)+"%"; }
   function toWorld(e){ const r=cv.getBoundingClientRect(), v=S.view; return [((e.clientX-r.left)-v.x)/v.s, ((e.clientY-r.top)-v.y)/v.s]; }

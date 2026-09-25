@@ -60,3 +60,35 @@ def test_editor_command_is_split_like_a_shell_would(config_dir, monkeypatch, edi
   monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
   config.open_in_editor()
   assert calls == [[*argv, str(config_dir / "config.toml")]]
+
+
+def test_editor_that_names_an_existing_file_is_one_argument(config_dir, monkeypatch, tmp_path):
+  editor = tmp_path / "My Editor" / "edit"
+  editor.parent.mkdir()
+  editor.touch()
+  monkeypatch.setenv("EDITOR", str(editor))
+  calls = []
+  monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
+  config.open_in_editor()
+  assert calls == [[str(editor), str(config_dir / "config.toml")]]
+
+
+@pytest.mark.parametrize("editor", [
+  r"C:\Windows\System32\notepad.exe",
+  r'"C:\Program Files\Microsoft VS Code\bin\code.cmd" --wait',
+  r'code --wait --user-data-dir="C:\Editor Data"',
+])
+def test_windows_editor_command_line_reaches_the_editor_unsplit(editor):
+  # CreateProcess hands the editor its own command line, so Windows quoting survives intact.
+  assert config._editor_command(editor, windows=True) == editor
+
+
+def test_windows_editor_runs_as_one_command_line_with_the_config_path_quoted(config_dir, monkeypatch):
+  editor = r'code --wait --user-data-dir="C:\Editor Data"'
+  monkeypatch.setenv("EDITOR", editor)
+  monkeypatch.setattr(config, "_editor_command", lambda e: e)
+  calls = []
+  monkeypatch.setattr("subprocess.run", lambda cmd, **kw: calls.append(cmd))
+  config.open_in_editor()
+  import subprocess
+  assert calls == [f"{editor} {subprocess.list2cmdline([str(config_dir / 'config.toml')])}"]

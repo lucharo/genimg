@@ -55,7 +55,7 @@ your running Studio with your own devices for a session; there is no hosted, mul
 ## Does `--num` generate the images one after another?
 
 No. `--num 4` sends four requests in parallel, up to five at a time (two for `codex:image`), so four
-images take about as long as one, and the ones that succeed are kept if one fails. On Gemini,
+images usually take about as long as one, and the ones that succeed are kept if one fails. On Gemini,
 `--mode batch` asks for the whole set in one request instead. See
 [Diverse images](guide/diversity.md).
 

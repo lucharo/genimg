@@ -617,9 +617,23 @@ class BootJsonTests(unittest.TestCase):
     # Opening the Generated panel halved the canvas and left the drawing off to the right.
     self.assertIn("S.view={...S.view,x:S.view.x+(cw-cvSize[0])/2,y:S.view.y+(ch-cvSize[1])/2}", draw.PAGE)
 
+  def test_fit_view_records_the_canvas_size_it_fitted_to(self) -> None:
+    # A toolbar that wraps while an image loads resizes the canvas before zoomFit; the resize
+    # callback then shifted the fitted image off-centre by half the change.
+    fit = draw.PAGE[draw.PAGE.index("function zoomFit(){"):draw.PAGE.index("function updateZoom(")]
+    self.assertIn("if(cv.clientWidth&&cv.clientHeight) cvSize=[cv.clientWidth,cv.clientHeight];", fit)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
+
+  def test_model_switch_resets_the_aspect_before_reading_its_sizes(self) -> None:
+    # Gemini at 21:9 → GPT Image 2 read the sizes for 21:9, then reset to Auto, leaving a 1K
+    # button that priced and generated 2K.
+    topbar = draw.PAGE[draw.PAGE.index("function renderTopbar(){"):draw.PAGE.index("function renderToolbar(){")]
+    reset = topbar.index('if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";')
+    self.assertLess(reset, topbar.index("resolutions=resolutionOptions(meta)"))
+    self.assertLess(reset, topbar.index("S.sizeControlKey=sizeControlKey(meta);"))
 
   def test_studio_card_scrolls_and_pins_generate_when_prompt_overflows(self) -> None:
     # issue #40: body is overflow:hidden and the canvas keeps a 340px floor, so without a

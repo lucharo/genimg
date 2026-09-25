@@ -1,6 +1,7 @@
 """The setup wizard's closing summary, and the unattended run an agent drives without a terminal."""
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,7 @@ from typer.testing import CliRunner
 from genimg import cli, setup
 from genimg.auth import codex as auth_codex
 from genimg.auth import google as auth_google
+from genimg.auth import openai as auth_openai
 
 
 def test_profile_line_keeps_the_table_name_rich_would_eat():
@@ -121,3 +123,58 @@ def test_unattended_setup_drops_a_logged_out_codex_profile_like_the_wizard(unatt
 
   assert result.exit_code == 0, result.output
   assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "direct"}}}
+
+
+_AZURE_WORK = {"provider": "openai", "auth": "azure", "endpoint": "https://work.openai.azure.com"}
+
+
+def test_unattended_setup_keeps_a_named_profile_runs_would_use(unattended, monkeypatch):
+  setup.config.save({"profiles": {"work": _AZURE_WORK}})
+  monkeypatch.setenv("AZURE_OPENAI_API_KEY", "k")
+  monkeypatch.setenv("OPENAI_API_KEY", "k")  # env alone reads as a direct setup
+  with patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")), \
+       patch.object(auth_openai.OpenAIAzure, "validate", return_value=(True, "")), \
+       patch.object(auth_openai.OpenAIDirect, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"work": _AZURE_WORK,
+                                              "google": {"provider": "google", "auth": "direct"}}}
+
+
+def test_unattended_setup_keeps_a_saved_direct_openai_profile_beside_an_azure_env(unattended, monkeypatch):
+  setup.config.save({"profiles": {"openai": {"provider": "openai", "auth": "direct"}}})
+  monkeypatch.setenv("OPENAI_API_KEY", "k")
+  monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://x.openai.azure.com")
+  with patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")), \
+       patch.object(auth_openai.OpenAIAzure, "validate", return_value=(True, "")), \
+       patch.object(auth_openai.OpenAIDirect, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"openai": {"provider": "openai", "auth": "direct"},
+                                              "google": {"provider": "google", "auth": "direct"}}}
+
+
+def test_unattended_setup_saves_the_providers_that_validate_when_one_client_raises(unattended, monkeypatch):
+  monkeypatch.setenv("AZURE_OPENAI_API_KEY", "k")
+  monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "not a url")
+  with patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")), \
+       patch.object(auth_openai, "AzureOpenAI", side_effect=ValueError("invalid endpoint")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "direct"}}}
+  assert ("OpenAI: skipped: OpenAI via Azure validation failed: ValueError: invalid endpoint"
+          in " ".join(result.output.split()))
+
+
+def test_interactive_setup_with_every_provider_skipped_does_not_claim_the_model(unattended, monkeypatch):
+  monkeypatch.setattr(setup, "_interactive", lambda: True)
+  monkeypatch.setattr(setup.questionary, "select", lambda *a, **k: SimpleNamespace(ask=lambda: "skip"))
+  result = CliRunner().invoke(cli._app, ["setup", "--model", "oai:gi2"])
+
+  assert result.exit_code == 1, result.output
+  assert setup.config.load() == {}
+  assert ("default model not saved: oai:gpt-image-2 needs a openai profile, and there is none."
+          in " ".join(result.output.split()))

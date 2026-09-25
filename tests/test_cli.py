@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -229,6 +230,25 @@ class StandaloneGridTests(unittest.TestCase):
       self.assertIn("not an image", result.output)
       self.assertFalse(out.exists())
 
+  def test_an_image_name_on_bytes_that_are_not_an_image_is_refused(self) -> None:
+    import io
+
+    from PIL import Image
+    png = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 80, 20)).save(png, format="PNG")
+    truncated = png.getvalue()[: len(png.getvalue()) // 2]  # valid header, corrupt pixel data
+    for content in (b"", b"not a png", truncated):
+      with self.subTest(content=content), tempfile.TemporaryDirectory() as td:
+        (Path(td) / "good.webp").write_bytes(self.FOX.read_bytes())
+        bad = Path(td) / "bad.png"
+        bad.write_bytes(content)
+        out = Path(td) / "grid.html"
+        result = CliRunner().invoke(cli._app, ["grid", td, "--output", str(out)])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertEqual(" ".join(result.output.split()), f"error: not a readable image: {bad.resolve()}")
+        self.assertFalse(out.exists())
+
   def test_a_directory_without_images_is_refused_cleanly(self) -> None:
     with tempfile.TemporaryDirectory() as td:
       out = Path(td) / "grid.html"
@@ -265,6 +285,14 @@ class CommandLikePromptTests(unittest.TestCase):
           f"error: unknown command '{word}'; did you mean '{suggestion}'? "
           f'To generate an image of that word, run genimg -- "{word}"',
         )
+        run_generate.assert_not_called()
+
+  def test_surrounding_whitespace_does_not_slip_past_the_guard(self) -> None:
+    for word, suggestion in {"help ": "genimg --help", " modles\t": "genimg models"}.items():
+      with self.subTest(word=word):
+        result, run_generate = self._invoke(word)
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn(f"did you mean '{suggestion}'?", " ".join(result.output.split()))
         run_generate.assert_not_called()
 
   def test_double_dash_makes_the_word_a_prompt(self) -> None:
@@ -400,15 +428,36 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(f"no config yet at {config_home}/config.toml.", result.stdout)
 
-  def test_history_output_path_is_not_folded(self) -> None:
-    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+  def _record_generation(self, out: str,
+                         prompt: str = "a red fox curled up asleep in fresh snow under a pine tree") -> None:
     meta_dir = self.home / ".genimg" / "metadata"
-    meta_dir.mkdir(parents=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
     (meta_dir / "20260925_120000_abcdef.json").write_text(json.dumps({
       "id": "20260925_120000_abcdef", "time": "2026-09-25T12:00:00", "alias": "oai:gi2",
-      "model_id": "gpt-image-2", "prompt": "a red fox curled up asleep in fresh snow under a pine tree",
+      "model_id": "gpt-image-2", "prompt": prompt,
       "n": 1, "cost_usd_estimated": 0.0527, "outputs": [{"path": out}],
     }))
+
+  def _output_column(self, stdout: str) -> str:
+    lines = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in stdout.splitlines()]
+    body = lines[next(i for i, line in enumerate(lines) if line.startswith("┡")) + 1:]
+    rows = [line for line in body if line.startswith("│")]
+    self.assertTrue(all(line.rstrip().endswith("│") for line in rows), "table cropped at the right edge")
+    return "".join(line.split("│")[-2].strip() for line in rows)
+
+  def test_history_output_path_near_the_console_width_is_never_cropped(self) -> None:
+    # roborev 5516: at COLUMNS=160 a path around 87 cells used to switch on no_wrap and get cropped.
+    for n in (70, 80, 85, 87, 90, 95, 100):
+      with self.subTest(path_cells=n):
+        out = "/tmp/" + "x" * (n - len("/tmp/") - len(".png")) + ".png"
+        self._record_generation(out, prompt="a fox in a hat")
+        result = self._run("history", "-n", "1", COLUMNS="160")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._output_column(result.stdout), str(Path(out).resolve()))
+
+  def test_history_output_path_is_not_folded(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+    self._record_generation(out)
     result = self._run("history", "-n", "1")
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(out, result.stdout)
@@ -417,6 +466,20 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(narrow.returncode, 0, narrow.stderr)
     for header in ("time", "prompt", "made/req", "output"):
       self.assertIn(header, narrow.stdout)
+
+  def test_history_output_path_wider_than_the_console_folds_instead_of_being_cropped(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 10) + "/20260925_120000_abcdef.png"
+    self._record_generation(out)
+    result = self._run("history", "-n", "1")
+    self.assertEqual(result.returncode, 0, result.stderr)
+
+    lines = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in result.stdout.splitlines()]
+    body = lines[next(i for i, line in enumerate(lines) if line.startswith("┡")) + 1:]
+    cells = [line.split("│")[1:-1] for line in body if line.startswith("│")]
+    # Every character, in order (history shows the resolved path: /tmp is /private/tmp on macOS).
+    self.assertEqual("".join(row[-1].strip() for row in cells), str(Path(out).resolve()))
+    self.assertEqual(" ".join(" ".join(row[3].split()) for row in cells if row[3].strip()),
+                     "a red fox curled up asleep in fresh snow under a pine tree")
 
   def test_auth_modes_env_var_names_are_not_truncated(self) -> None:
     result = self._run("auth", "--modes")

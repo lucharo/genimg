@@ -1,7 +1,7 @@
 # Diverse images
 
-- `--num 4` makes four images at once: four requests run in parallel, so four take about as long
-  as one.
+- `--num 4` makes four images at once: four requests run in parallel, so four usually take about
+  as long as one. `codex:image` runs two at a time, so four take two rounds.
 - On a simple subject, plain `--num 4` returns four near-copies.
 - `--deltas` or `--diverse` makes each take look different.
 
@@ -62,7 +62,7 @@ The built-in pool suits illustrations and logos.
 - One request asks Gemini for the whole set, so the model sees every take and makes them differ
   as a set, instead of genimg adding a style to each.
 - The model decides how many images to return, so you may get fewer than `--num`; the default
-  parallel mode always returns `--num` images.
+  parallel mode returns `--num` images unless a request fails.
 
 ```bash
 genimg "a minimal fox logo, NOT a grid" \

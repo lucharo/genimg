@@ -293,6 +293,8 @@ class OpenAIProvider(Provider):
       client = get_client(profile=profile)
     except RuntimeError as e:  # no usable credentials; "auth" rows are never cached
       return error_results(entries, "auth", str(e))
+    except Exception as e:  # the SDK client itself failed (e.g. a bad SSL_CERT_FILE): this provider's rows only
+      return error_results(entries, "error", f"{type(e).__name__}: {e}")
     try:
       return results_from_model_ids(entries, listed_model_ids(client.models.list()))
     except AuthenticationError as e:

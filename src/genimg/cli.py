@@ -81,7 +81,7 @@ class _DefaultGroup(typer.core.TyperGroup):
     """Exit 2 when a one-word prompt is a reserved word or close to a subcommand."""
     if len(word.split()) != 1:
       return
-    lowered = word.lower()
+    lowered = word.strip().lower()  # `genimg "help "` is still the word help
     suggestion = _COMMAND_WORDS.get(lowered)
     if suggestion is None:
       visible = [name for name, cmd in self.commands.items() if not cmd.hidden]
@@ -716,6 +716,26 @@ history_app = typer.Typer(
 _app.add_typer(history_app, name="history")
 
 
+def _keep_paths_whole_if_they_fit(table: Table) -> None:
+  """Print the last (output path) column unwrapped when every path then renders whole, so the
+  prompt wraps first and each path can be copied in one piece. A path that cannot fit keeps
+  folding: an unwrapped column that is too wide gets cropped. Rich's column allocation near the
+  console width is not predictable from minimum widths, so render once and look."""
+  import io
+
+  from rich.cells import cell_len
+  from rich.text import Text
+
+  paths = table.columns[-1]
+  wanted = [Text.from_markup(str(cell)).plain for cell in paths.cells]
+  paths.no_wrap = True
+  probe = Console(width=console.width, file=io.StringIO(), color_system=None, force_terminal=False)
+  probe.print(table, crop=False)  # uncropped, so a table wider than the console shows as such
+  rendered = probe.file.getvalue()
+  paths.no_wrap = (all(cell_len(line) <= console.width for line in rendered.splitlines())
+                   and all(path in rendered for path in wanted))
+
+
 @history_app.callback(invoke_without_command=True)
 def _history_root(
   ctx: typer.Context,
@@ -760,8 +780,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   table.add_column("prompt", ratio=3, overflow="fold")
   table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  # On a wide console the prompt wraps first so the path stays whole; a narrow terminal folds it.
-  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=console.width >= _PIPED_WIDTH)
+  table.add_column("output", style="dim", ratio=2, overflow="fold")
   for e in entries:
     paths = e.get("outputs", [])
     first = paths[0] if paths else None
@@ -785,6 +804,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       if cost.billing_label(e) == "subscription" else cost.format_usd(e.get("cost_usd_estimated")) + "\nAPI",
       _rich_escape(out_short),
     )
+  _keep_paths_whole_if_they_fit(table)
   console.print(table)
   if skipped:
     console.print(f"[yellow]{skipped} unreadable metadata sidecars skipped.[/yellow]")
@@ -838,6 +858,14 @@ def grid_cmd(
   if not images:
     console.print("[red]error:[/red] no images found in the given path(s).")
     raise typer.Exit(1)
+  from PIL import Image
+  for image in images:  # the extension is a name, not the content: an empty bad.png would be a broken card
+    try:
+      with Image.open(image) as im:
+        im.load()  # decode the pixels: a valid header over a truncated or corrupt payload is broken too
+    except (OSError, SyntaxError, ValueError):
+      console.print(f"[red]error:[/red] not a readable image: {_rich_escape(str(image))}", soft_wrap=True)
+      raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
   # No cost_total — provenance of arbitrary input files is unknown, so any estimate
   # would be misleading. The footer is omitted rather than guessed.
