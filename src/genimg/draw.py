@@ -959,10 +959,11 @@ const BOOT = /*__BOOT__*/;
   function costEstimate(){
     const meta=MM[S.model]||{};
     if (meta.subscription) return (providerLabel(meta.provider)||"Subscription")+" · model/size automatic";
-    // prices: quality ("" when n/a) → resolution ("" when n/a) → USD, built server-side per model.
+    // prices: quality ("" when n/a) → resolution ("" when n/a) → USD, built server-side per model;
+    // a "resolution|aspect" key overrides the default-aspect figure where size changes the price.
     const byQ=meta.prices||{}, row=byQ[(meta.qualityOptions||[]).length?S.quality:""]||{};
     const res=(meta.resolutionOptions||[]).length?effectiveResolution():"";
-    let usd=row[res]; if(usd==null) usd=row["1K"]; if(usd==null) usd=row[""];
+    let usd=row[res+"|"+selectedAspect()]; if(usd==null) usd=row[res]; if(usd==null) usd=row["1K"]; if(usd==null) usd=row[""];
     if(usd==null) return "cost unknown";
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
   }

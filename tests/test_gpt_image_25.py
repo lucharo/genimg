@@ -78,9 +78,11 @@ def test_cli_routes_generation_and_edit_to_exact_model(tmp_path, alias, variant,
   with Image.open(output) as image:
     assert image.size == (16, 16)
   saved = json.loads((tmp_path / "meta" / "test-25.json").read_text())
-  assert saved["cost_usd_estimated"] is None
+  # 1024x1024: max = 7024 tokens, xhigh = 3122 tokens at $30/M, saved rounded to 4 places.
+  assert saved["cost_usd_estimated"] == {"max": 0.2107, "xhigh": 0.0937}[quality]
   assert saved["model_id"] == f"gpt-image-2.5-{variant}"
-  assert "unknown" in result.output
+  assert f"${saved['cost_usd_estimated']:.4f} (estimate)" in result.output
+  assert "unknown (estimate)" not in result.output
 
 
 @pytest.mark.parametrize("model", ["gpt-image-2", "gpt-image-1.5", "gpt-image-2.5-unknown"])
@@ -94,12 +96,12 @@ def test_extended_quality_rejected_before_api_for_other_models(tmp_path, model):
 
 
 @pytest.mark.parametrize("variant", ["sunburst", "flare"])
-def test_snapshot_quality_and_unpriced_preview(variant):
+def test_snapshot_quality_is_priced_like_its_family(variant):
   model = f"gpt-image-2.5-{variant}-2026-09-08"
   result = CliRunner().invoke(cli._app, ["circle", "-m", model, "-q", "max", "--dry-run"])
   assert result.exit_code == 0, result.output
-  assert "unknown" in result.output
-  assert cost.estimate(provider="openai", model_id=model, quality="max") is None
+  assert "$0.2107" in result.output
+  assert cost.estimate(provider="openai", model_id=model, quality="max") == pytest.approx(0.21072)
 
 
 def test_models_and_studio_discover_both_variants():

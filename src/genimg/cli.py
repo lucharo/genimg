@@ -269,7 +269,7 @@ def _run(
 
   resolved_size = caps.resolved_size(resolution, aspect_ratio)
   est_cost = cost.estimate(provider=spec.provider, model_id=spec.model_id, n=n,
-                           quality=effective_q, resolution=resolution)
+                           quality=effective_q, resolution=resolution, aspect_ratio=aspect_ratio)
   auth_mode_str = auth_info.mode + (f"@{auth_info.profile}" if auth_info.profile else "")
   cost_label = (f"{provider.label} (usage limits apply)" if provider.billing == "subscription"
                 else f"{cost.format_usd(est_cost)} (estimate)")

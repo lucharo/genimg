@@ -172,7 +172,8 @@ def build(*, gen_id: str, prompt: str, alias: str, spec, paths: list[Path],
     }
     entry.update(provenance.inspect_image(absolute))
     entry["api_equivalent_cost"] = cost.api_equivalent(
-      provider=spec.provider, model_id=spec.model_id, output=entry, quality=quality, resolution=resolution)
+      provider=spec.provider, model_id=spec.model_id, output=entry, quality=quality,
+      resolution=resolution, aspect_ratio=aspect_ratio)
     if prompt_deltas is not None:
       entry["prompt_delta"] = prompt_deltas[i]
       entry["prompt_effective"] = diversify.apply(prompt, prompt_deltas[i])

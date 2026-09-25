@@ -7,6 +7,7 @@ split into n parallel n=1 calls via the IImageGen base template.
 from __future__ import annotations
 
 import base64
+import math
 import re
 from contextlib import ExitStack
 from pathlib import Path
@@ -47,19 +48,93 @@ _INPUT_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _MAX_INPUT_MB = 50
 _MAX_INPUTS = 16
 
-# Per 1024x1024 image, by quality.
-# https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
-# GPT Image 2.5 has the same token rates as 2 but different token consumption; no per-image
-# row until documented (never copy GPT Image 2's estimates).
-# https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
-_BASE_PER_IMAGE = {
-  "gpt-image-2":      {"low": 0.006, "medium": 0.053, "high": 0.211, "auto": 0.053},
-  "gpt-image-1.5":    {"low": 0.009, "medium": 0.034, "high": 0.133, "auto": 0.034},
-  "gpt-image-1":      {"low": 0.011, "medium": 0.042, "high": 0.167, "auto": 0.042},
-  "gpt-image-1-mini": {"low": 0.004, "medium": 0.015, "high": 0.060, "auto": 0.015},
+# GPT Image 2 and 2.5 are priced per image-output token. The count comes from OpenAI's own
+# calculator (the script behind
+# https://developers.openai.com/api/docs/guides/image-generation#calculating-costs, served as
+# /_astro/GptImageTokenCalculator.react.<hash>.js; read 2026-09-24): edge * round(edge / aspect)
+# tokens, scaled by pixel count, see output_tokens(). Real `usage` fields measured against
+# api.openai.com on 2026-09-19 match it exactly for both families. The rate is
+# https://developers.openai.com/api/docs/pricing; text input ($5 per million tokens, a few
+# hundred per prompt) is not included. Azure is priced at the native rate: the Azure retail
+# price API listed no gpt-image-2/2.5 meters on 2026-09-24 and its gpt-image-1 meter matched.
+_TOKEN_GRID = {
+  "gpt-image-2":   {"low": 16, "medium": 48, "high": 96},
+  "gpt-image-2.5": {"low": 16, "medium": 24, "high": 48, "xhigh": 64, "max": 96},
 }
-# Rough resolution multipliers (2K ≈ 2x, 4K ≈ 4x token-metered).
-_RESOLUTION_MULT = {None: 1.0, "1K": 1.0, "2K": 2.5, "4K": 6.0}
+OUTPUT_USD_PER_M = 30.0
+# Pixel-count range the API accepts; an output outside it was not produced at that size.
+_PIXEL_RANGE = (655_360, 8_294_400)
+# Older models: the image guide's legacy per-image table ("Earlier GPT Image models"), by size.
+_LEGACY_PER_IMAGE = {
+  "gpt-image-1.5": {
+    "1024x1024": {"low": 0.009, "medium": 0.034, "high": 0.133},
+    "1024x1536": {"low": 0.013, "medium": 0.05, "high": 0.2},
+    "1536x1024": {"low": 0.013, "medium": 0.05, "high": 0.2},
+  },
+  "gpt-image-1": {
+    "1024x1024": {"low": 0.011, "medium": 0.042, "high": 0.167},
+    "1024x1536": {"low": 0.016, "medium": 0.063, "high": 0.25},
+    "1536x1024": {"low": 0.016, "medium": 0.063, "high": 0.25},
+  },
+  "gpt-image-1-mini": {
+    "1024x1024": {"low": 0.005, "medium": 0.011, "high": 0.036},
+    "1024x1536": {"low": 0.006, "medium": 0.015, "high": 0.052},
+    "1536x1024": {"low": 0.006, "medium": 0.015, "high": 0.052},
+  },
+}
+_GPT_IMAGE_25 = re.compile(r"gpt-image-2\.5-(sunburst|flare)(-\d{4}-\d{2}-\d{2})?")
+_GPT_IMAGE_2 = re.compile(r"gpt-image-2(-\d{4}-\d{2}-\d{2})?")
+
+
+def token_family(model_id: str) -> str | None:
+  """Calculator family for a model id (dated snapshots included), or None."""
+  if _GPT_IMAGE_25.fullmatch(model_id):
+    return "gpt-image-2.5"
+  if _GPT_IMAGE_2.fullmatch(model_id):
+    return "gpt-image-2"
+  return None
+
+
+def _effective_quality(quality: str | None) -> str:
+  # `auto` is estimated as `medium`; the real count depends on the generated image.
+  return "medium" if quality in (None, "auto") else quality
+
+
+def output_tokens(model_id: str, width: int, height: int, quality: str | None = None) -> int | None:
+  """Image output tokens for one image, exactly as OpenAI's calculator counts them."""
+  family = token_family(model_id)
+  if family is None:
+    return None
+  edge = _TOKEN_GRID[family].get(_effective_quality(quality))
+  if edge is None or width <= 0 or height <= 0:
+    return None
+  raw = edge / (max(width, height) / min(width, height))
+  floor = math.floor(raw)
+  # A half rounds to even, as the calculator does; everything else rounds to nearest.
+  short_tokens = floor + floor % 2 if raw - floor == 0.5 else round(raw)
+  return math.ceil(edge * short_tokens * (2_000_000 + width * height) / 4_000_000)
+
+
+def price_at(model_id: str, width: int, height: int, quality: str | None = None) -> float | None:
+  """USD for one image at an exact WxH, output tokens only."""
+  tokens = output_tokens(model_id, width, height, quality)
+  if tokens is not None:
+    return tokens * OUTPUT_USD_PER_M / 1_000_000
+  legacy = _LEGACY_PER_IMAGE.get(model_id)
+  if legacy is None:
+    return None
+  quality = _effective_quality(quality)
+  documented = legacy.get(f"{width}x{height}", {}).get(quality)
+  if documented is not None:
+    return documented
+  # Undocumented sizes: scale the square row by pixel area (rough).
+  square = legacy["1024x1024"].get(quality)
+  return None if square is None else square * width * height / 1024**2
+
+
+def api_size(width: int | None, height: int | None) -> bool:
+  """True when WxH is a size the API can have produced."""
+  return bool(width and height and _PIXEL_RANGE[0] <= width * height <= _PIXEL_RANGE[1])
 
 
 def quality_options(model_id: str) -> list[str]:
@@ -186,15 +261,13 @@ class OpenAIProvider(Provider):
       return ModelSpec("openai", model_id, region=None, quality_rank=0)
     return None
 
-  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None) -> float | None:
-    base = _BASE_PER_IMAGE.get(model_id, {}).get(quality or "medium")
-    if base is None:
+  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None,
+            aspect: str | None = None) -> float | None:
+    size = _SIZE_MAP.get((resolution or "1K", aspect or "1:1"))
+    if size is None:
       return None
-    return base * _RESOLUTION_MULT.get(resolution, 1.0)
-
-  def base_prices(self) -> dict[str, dict[str, float]]:
-    """Per-1024² reference table (low..high), used for C2PA-inferred equivalents."""
-    return _BASE_PER_IMAGE
+    width, height = (int(v) for v in size.split("x"))
+    return price_at(model_id, width, height, quality)
 
   def make(self, profile: AuthProfile | None = None, **kw: Any) -> IImageGen:
     return OpenAIImageGen(profile=profile, **kw)
