@@ -11,7 +11,7 @@ description: Generate, edit, and iterate on images with the genimg CLI (OpenAI G
 
 Before generating, load the `genimg-preferences` skill if it exists. Its taste overrides this skill's defaults; the current request overrides both.
 
-The first time the user states a lasting preference about their images (a style, a palette, "always sober"), create that skill and record the preference in the user's words; add later ones to the same file. Put it where the agent loads user-level skills, next to the installed `genimg` skill: `~/.claude/skills/genimg-preferences/SKILL.md` for Claude Code, `~/.agents/skills/genimg-preferences/SKILL.md` for agents that read `~/.agents/skills/`. Use the user level even when genimg is installed in a project, so the preferences follow the user.
+The first time the user states a lasting preference for all their images (a style, a palette, "always sober"), create that skill and record the preference in the user's words; add later ones to the same file. Put it where the agent loads user-level skills, next to the installed `genimg` skill: `~/.claude/skills/genimg-preferences/SKILL.md` for Claude Code, `~/.agents/skills/genimg-preferences/SKILL.md` for agents that read `~/.agents/skills/`. Use the user level even when genimg is installed in a project, so the preferences follow the user. When a new preference replaces or retracts an entry, edit or delete that entry instead of appending a contradiction. A preference for one project or brand belongs in that project's own agent instructions, not here.
 
 ```markdown
 ---
@@ -84,7 +84,7 @@ Keep stable candidate IDs (`gemini-01`, `gpt-02`) across every shortlist and gri
 
 - **Show before you ask.** Open the candidates and let the user look before any "which do you want?"; a pick-one question with nothing on screen gets rejected.
 - **Prefer the native grid.** `genimg grid a.png b.png … -o comparison.html --open` covers candidates from several runs or providers, with the carousel and selection affordances. An arbitrary-file grid shows filenames, not per-run metadata, so the manifest stays the source of truth.
-- **Many strong candidates? Point the user at Tournament.** Grids of 3 to 20 images have a Tournament button: pairwise picks, N−1 for a winner and one more for a top 3. Ask the user to paste back **Copy result (JSON)**: winner, ranking and every pick, by grid number (`#3`), filename, and model when a genimg sidecar knows it.
+- **Many strong candidates? Point the user at Tournament.** Grids of 3 to 20 images have a Tournament button: pairwise picks, N−1 for a winner and one more for a top 3 (none with exactly three images). Ask the user to paste back **Copy result (JSON)**: winner, ranking and every pick, by grid number (`#3`), filename, and model when a genimg sidecar knows it.
 - **Hand back a clickable link.** Give any local HTML as a markdown `file://` link, `[grid.html](file:///abs/path/grid.html)`; users reopen it.
 - **For the Claude Code preview panel, embed images as base64.** The panel sandboxes the page, so a relative `<img src="sibling.png">` renders blank there. Inline `data:image/png;base64,…`. A normal browser tab loads relative paths fine.
 - **Crop a chosen PNG with Pillow** by scanning rows for the first and last dark pixels (`r/g/b < ~210`) plus a margin. `getbbox()` fails on anti-aliased near-white edges.
