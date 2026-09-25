@@ -114,7 +114,7 @@ class HistoryCliTests(unittest.TestCase):
     self.assertIn("2 unreadable metadata sidecars skipped", " ".join(result.output.split()))
 
   def test_history_view_dispatches_to_the_tui(self) -> None:
-    with patch("genimg.history_view.run") as run:
+    with patch("genimg.history_view.run") as run, patch.object(cli, "_is_interactive", return_value=True):
       result = self.runner.invoke(cli._app, ["history", "view"])
 
     self.assertEqual(result.exit_code, 0, result.output)

@@ -780,6 +780,8 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
 
 @history_app.command("view", help="Interactively browse all generated images and their metadata.")
 def history_view_cmd():
+  if not _is_interactive():
+    _die("history view is interactive; use genimg history --json")
   from . import history_view
 
   history_view.run()
@@ -1117,6 +1119,11 @@ def _validate_provider_flags(
       mb = p.stat().st_size / 1_048_576
       if mb > caps.max_input_mb:
         _die(f"input {p.name} is {mb:.1f}MB, exceeds {provider.label} cap {caps.max_input_mb}MB")
+
+
+def _is_interactive() -> bool:
+  """A person at a terminal: both stdin and stdout are TTYs (not an agent's shell, CI or a pipe)."""
+  return sys.stdin.isatty() and sys.stdout.isatty()
 
 
 def _die(msg: str) -> NoReturn:

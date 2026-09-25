@@ -105,7 +105,7 @@ genimg history view
 | `--limit`, `-n` | Rows, 1 to 200. Default 20. |
 | `--summary` | Total estimated spend instead of rows. |
 | `--json` | JSON output. |
-| `view` | Browses every generation in the terminal with image previews. `yi` copies the image, `yp` its path, `?` lists keys. |
+| `view` | Browses every generation in the terminal with image previews. `yi` copies the image, `yp` its path, `?` lists keys. Without a terminal it exits `1`; use `--json`. |
 
 ## genimg cost { data-toc-label="cost" }
 

@@ -340,6 +340,16 @@ class DryRunAuthPreflightTests(unittest.TestCase):
     self.assertTrue(output.endswith("dry-run: no API call made."), output)
 
 
+class HistoryViewTests(unittest.TestCase):
+  def test_history_view_refuses_to_start_without_a_terminal(self) -> None:
+    with patch("genimg.history_view.run") as run:
+      result = CliRunner().invoke(cli._app, ["history", "view"])  # CliRunner streams are not TTYs
+    self.assertEqual(result.exit_code, 1, result.output)
+    self.assertEqual(" ".join(result.output.split()),
+                     "error: history view is interactive; use genimg history --json")
+    run.assert_not_called()
+
+
 class ModelsFailureDetailTests(unittest.TestCase):
   HINT = "No google auth detected. Run `genimg setup` or set GEMINI_API_KEY."
 
