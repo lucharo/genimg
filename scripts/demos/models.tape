@@ -1,4 +1,4 @@
-# List the models your credentials reach (free). Render: scripts/demos/render.sh models
+# List the models your credentials reach (free). Render: CROP_HEIGHT=630 scripts/demos/render.sh models
 Output ".vhs/models-frames/"
 Set Width 1470
 Set Height 760
