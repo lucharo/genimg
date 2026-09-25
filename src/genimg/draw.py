@@ -361,14 +361,18 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 def _host_allowed(host: str | None, bound: tuple[str, int] | None = None) -> bool:
   """Anti-DNS-rebinding guard for ALL routes: the Host header must name an explicit loopback
-  address, or exactly the `ADDR:port` the server is bound to (`genimg draw --host ADDR`). A
-  rebinding page (Host: attacker.example) is rejected even though it resolves to the server's
-  address, so it can't reach /generate or read /history, /gen, /src."""
+  address, or exactly the `ADDR:port` the server is bound to (`genimg draw --host ADDR`); on
+  port 80 a bare `ADDR` counts too, because browsers omit the default port. A rebinding page
+  (Host: attacker.example) is rejected even though it resolves to the server's address, so it
+  can't reach /generate or read /history, /gen, /src."""
   if not host:
     return False
   if urlparse("//" + host).hostname in _LOCAL_HOSTS:
     return True
-  return bound is not None and host == f"{bound[0]}:{bound[1]}"
+  if bound is None:
+    return False
+  addr, port = bound
+  return host == f"{addr}:{port}" or (port == 80 and host == addr)
 
 
 def _origin_allowed(origin: str | None, host: str | None) -> bool:
@@ -524,11 +528,13 @@ def serve(sources: list[Path], *, port: int = 8788, model: str = "gdm:nb2",
   if httpd is None:
     raise RuntimeError(f"no free port in {port}..{port + 24}")
 
-  url = f"http://{'localhost' if ip.is_loopback else ip}:{chosen}"
+  # Only 127.0.0.1 is `localhost`; another 127/8 address must keep its own number in the URL.
+  url = f"http://{'localhost' if str(ip) == '127.0.0.1' else ip}:{chosen}"
   n = len(sources)
   print(f"genimg draw studio → {url}  ({n} source image{'' if n == 1 else 's'})", flush=True)
   if not ip.is_loopback:
-    print(f"  warning: anyone who can reach {ip}:{chosen} can generate with your credentials.", flush=True)
+    print(f"  warning: anyone who can reach {ip}:{chosen} can generate with your credentials "
+          "and open every image in ~/.genimg/generations and the images you loaded.", flush=True)
   print("  Ctrl-C to stop.", flush=True)
   if open_browser:
     threading.Timer(0.6, lambda: webbrowser.open(url)).start()

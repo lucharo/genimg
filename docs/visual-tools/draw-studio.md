@@ -54,8 +54,9 @@ URL on the iPad.
 genimg draw --host "$(ipconfig getifaddr en0)"
 ```
 
-Anyone who can reach a `--host` address can generate with your credentials, so press Ctrl-C
-when you finish.
+Anyone who can reach a `--host` address can generate with your credentials and open every image
+in `~/.genimg/generations` and the images you loaded. There is no login, so press Ctrl-C when you
+finish.
 
 ## Draw Studio or the CLI?
 
@@ -69,6 +70,9 @@ when you finish.
 ## Security boundary
 
 - The server binds to `127.0.0.1`, or to the one address given with `--host`. It refuses
-  `0.0.0.0`, any Host header naming another address, and cross-site POSTs.
+  `0.0.0.0`, a Host header naming anything but a loopback name or that address, and cross-site
+  POSTs.
+- There is no login. With `--host`, anyone who can reach the address can generate, list your
+  generation history, and open those images and the ones you loaded.
 - Provider keys stay with genimg; the page never receives them.
 - The model runs at the provider, which receives your prompt and canvas.

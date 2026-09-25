@@ -298,6 +298,15 @@ class HostGuardTests(unittest.TestCase):
       "100.101.102.103:8788": True, "localhost:8788": True, "100.101.102.103:9999": False,
       "100.101.102.103": False, "attacker.example:8788": False})
 
+  def test_bound_port_80_accepts_the_host_browsers_send_without_a_port(self) -> None:
+    bound = ("100.101.102.103", 80)
+    verdicts = {h: draw._host_allowed(h, bound) for h in (
+      "100.101.102.103", "100.101.102.103:80", "100.101.102.103:8788", "attacker.example")}
+
+    self.assertEqual(verdicts, {
+      "100.101.102.103": True, "100.101.102.103:80": True, "100.101.102.103:8788": False,
+      "attacker.example": False})
+
 
 class BoundHostHttpTests(unittest.TestCase):
   """A studio started with `--host ADDR` serves Host: ADDR:port and nothing foreign.
@@ -391,7 +400,16 @@ class ServeBindTests(unittest.TestCase):
     server_cls.assert_called_once_with(("100.101.102.103", 8788), "handler")
     self.assertEqual(out.splitlines()[:2], [
       "genimg draw studio → http://100.101.102.103:8788  (0 source images)",
-      "  warning: anyone who can reach 100.101.102.103:8788 can generate with your credentials."])
+      "  warning: anyone who can reach 100.101.102.103:8788 can generate with your credentials "
+      "and open every image in ~/.genimg/generations and the images you loaded."])
+
+  def test_other_loopback_address_is_advertised_by_number(self) -> None:
+    # localhost resolves to 127.0.0.1, where a 127.0.0.2 server is not listening.
+    server_cls, out = self._serve("127.0.0.2")
+
+    server_cls.assert_called_once_with(("127.0.0.2", 8788), "handler")
+    self.assertEqual(out.splitlines()[:2], [
+      "genimg draw studio → http://127.0.0.2:8788  (0 source images)", "  Ctrl-C to stop."])
 
   def test_wildcard_host_is_refused(self) -> None:
     with (
