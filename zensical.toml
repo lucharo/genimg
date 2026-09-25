@@ -25,7 +25,6 @@ nav = [
   { "Workflow skills" = [
     { "Overview" = "skills/index.md" },
     { "genimg-infographic" = "skills/genimg-infographic.md" },
-    { "genimg-agent-refinement" = "skills/genimg-agent-refinement.md" },
     { "image-to-app" = "skills/image-to-app.md" },
   ] },
   { "Reference" = [

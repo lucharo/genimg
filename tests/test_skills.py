@@ -20,7 +20,7 @@ class BundledSkillTests(unittest.TestCase):
 
     self.assertEqual(
       set(sources),
-      {"genimg", "genimg-agent-refinement", "genimg-infographic", "image-to-app"},
+      {"genimg", "genimg-infographic", "image-to-app"},
     )
     self.assertTrue((sources["genimg-infographic"] / "SKILL.md").is_file())
     self.assertTrue(
