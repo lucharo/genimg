@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.1](https://github.com/lucharo/genimg/compare/genimg-v0.1.0...genimg-v0.1.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* post-release RoboRev findings (prompt guard, setup profiles, model probes, history, grid, draw, docs) ([#105](https://github.com/lucharo/genimg/issues/105)) ([adae9d1](https://github.com/lucharo/genimg/commit/adae9d19d9c0352ba334233250e225952b52dd1f))
+
+
+### Documentation
+
+* FAQ and maintainer answers from the launch-day questions ([#104](https://github.com/lucharo/genimg/issues/104)) ([3e61340](https://github.com/lucharo/genimg/commit/3e613409524ff4f1bee78667b7f03de2f27875b9))
+* link previews show the robot painter logo instead of the typeset card ([#102](https://github.com/lucharo/genimg/issues/102)) ([60b0317](https://github.com/lucharo/genimg/commit/60b0317564b67d2e181ac2fc75451621b4e8e7a3))
+
 ## 0.1.0 (2026-09-25)
 
 
