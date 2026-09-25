@@ -1,92 +1,92 @@
 # Model-specific options
 
-`--num`, `--diverse`, `--deltas`, `--output` and `--grid` work with every model. The flags below
-depend on the model family. genimg rejects a flag the model cannot use before it sends anything,
-even on `--dry-run`.
+- **Gemini can return a whole set in one request** with `--mode batch`.
+- **Gemini 3.1 can think harder before it draws** with `--thinking high`.
+- **Gemini can reply with text.** genimg prints it but does not save it.
+- **Only GPT Image 2.5 has `xhigh` and `max` quality.**
+- **Codex picks the model and size for you.** `--aspect-ratio` is only a request.
+
+`--num`, `--diverse`, `--deltas`, `--output` and `--grid` work with every model. genimg rejects a
+flag the model can't use, even on `--dry-run`.
 
 | Flag | Gemini (`gdm:`) | OpenAI (`oai:`) | Codex (`codex:image`) |
 | --- | --- | --- | --- |
-| `--mode batch` | yes | no | no |
-| `--thinking` | `minimal` or `high`, on `gdm:nb2` and `gdm:nb2-lite` | no | no |
-| `--quality` | no | `low medium high auto`, plus `xhigh max` on 2.5 | no |
-| `--resolution` | by model, see [Models](models.md#gemini) | from the [size table](models.md#openai); `1K` only on GPT Image 1.x | no |
-| `--aspect-ratio` | 10 ratios; `gdm:nb2` and `gdm:nb2-lite` add `1:4 4:1 1:8 8:1` | `1:1 4:3 3:4 16:9 9:16`, by resolution; `1:1` only on GPT Image 1.x | 10 ratios, as a request in the prompt |
-| `--input` and reference images | yes | up to 16 PNG, JPEG or WebP files, 50 MB each | yes |
-| `--region`, `--project` | yes | no | no |
-| `--auth` | no | `azure` or `direct` | no |
-| Text from the model | printed, not saved | none | dropped |
+| `--mode batch` | ✅ | ❌ | ❌ |
+| `--thinking` | ✅ `gdm:nb2`, `gdm:nb2-lite` only | ❌ | ❌ |
+| `--quality` | ❌ | ✅ `xhigh`, `max` on 2.5 only | ❌ |
+| `--resolution` | ✅ [by model](models.md#gemini) | ✅ [size table](models.md#openai), `1K` only on GPT Image 1.x | ❌ |
+| `--aspect-ratio` | ✅ 10 ratios, 14 on `gdm:nb2`, `gdm:nb2-lite` | ✅ 5 ratios, `1:1` only on GPT Image 1.x | ✅ as a prompt request |
+| `--input`, reference images | ✅ | ✅ up to 16 files | ✅ |
+| `--region` | ✅ | ❌ | ❌ |
+| `--project` | ✅ | ❌ | ❌ |
+| `--auth` | ❌ | ✅ `azure` or `direct` | ❌ |
+| Text reply | ✅ printed, not saved | ❌ | ❌ dropped |
 
 ## Gemini
 
-`--mode batch` sends one request for all `--num` images. With `--diverse`, the model varies its own
-takes. It decides how many images to return, so genimg keeps what arrives and warns when the set
-is short. `--deltas` needs the default parallel mode. More in [Diverse images](../guide/diversity.md).
-
-Gemini 3 image models always think before they draw. On `gdm:nb2` and `gdm:nb2-lite`, `--thinking`
-sets how hard:
-`minimal` (Google's default) or `high`. Google bills thinking tokens; genimg's estimate leaves
-them out.
+- **With `--mode batch --diverse`, the model varies its own takes.** See
+  [Diverse images](../guide/diversity.md).
+- **A batch can come back short.** The model picks the count. genimg keeps what arrives and warns.
+- **`--thinking high` costs more than the estimate.** Google bills thinking tokens, and genimg leaves
+  them out.
+- **Only text before the image is printed.** genimg drops the rest, and all text in batch mode.
 
 ```console
-$ genimg "a minimal fox logo, NOT a grid" --model gdm:nb2 --num 4 --diverse --mode batch --thinking high --dry-run
+$ genimg "a minimal fox logo" \
+    --model gdm:nb2 \
+    --num 4 \
+    --diverse \
+    --mode batch \
+    --thinking high \
+    --dry-run
 genimg google/direct gdm:nb2 → gemini-3.1-flash-image
-  prompt   "a minimal fox logo, NOT a grid"
+  prompt   "a minimal fox logo"
   params   n=4 mode=batch diverse thinking=high
-  cost     $0.2680 (estimate)  id=20260925_114016_104c51
-  outputs  ~/.genimg/generations/20260925_114016_104c51_1.png
-           ~/.genimg/generations/20260925_114016_104c51_2.png
-           ~/.genimg/generations/20260925_114016_104c51_3.png
-           ~/.genimg/generations/20260925_114016_104c51_4.png
+  cost     $0.2680 (estimate)  id=20260925_115942_6af52e
+  outputs  ~/.genimg/generations/20260925_115942_6af52e_1.png
+           …
   diverse  model-coordinated: the single batched request asks for deliberately different takes
 dry-run: no API call made.
 ```
 
-Every Gemini image model can answer with text as well as images. genimg prints text that arrives
-before the image and drops the rest. It saves no text to the metadata sidecar, drops all of it with
-`--mode batch`, and does not request the model's thought summaries. A real line from a `gdm:nb2`
-run, trimmed:
-
-```text
-[genimg/google] model said: Here is the high-fidelity product UI mockup for the
-London flight-noise analysis, designed within a precise 12-column fixed grid. I
-have integrated …
-```
-
 ## OpenAI
 
-`--quality` defaults to `medium`. GPT Image 2.5 adds `xhigh` and `max`, and every other model
-rejects them. `--input` and reference images go to OpenAI's edits endpoint. `--num` sends separate
-requests; genimg rejects `--mode batch` because the takes come back as near-duplicates.
-
-The [Image API](https://developers.openai.com/api/reference/resources/images/methods/generate)
-returns images and token counts. It has no text or reasoning output, and its `revised_prompt` field
-is for `dall-e-3` only. genimg keeps the image and prices it with its own estimate.
-
-GPT Image 1, 1.5 and 1 mini support only 1024×1024 of genimg's sizes, so genimg rejects any other
-`--resolution` or `--aspect-ratio` for them.
+- **`--quality` defaults to `medium`.** GPT Image 2.5 adds `xhigh` and `max`.
+- **`--num` sends one request per image.** A batch returns near-duplicates, so genimg rejects it.
+- **GPT Image 1, 1.5 and 1 mini take 1024×1024 only.**
+- **Up to 16 input and reference images.** PNG, JPEG or WebP, 50 MB each.
 
 ```console
-$ genimg "a lighthouse at dusk" --model oai:gi2.5 --quality xhigh --resolution 2K --aspect-ratio 16:9 --dry-run
+$ genimg "a lighthouse at dusk" \
+    --model oai:gi2.5 \
+    --quality xhigh \
+    --resolution 2K \
+    --aspect-ratio 16:9 \
+    --dry-run
 genimg openai/direct oai:gpt-image-2.5-sunburst → gpt-image-2.5-sunburst
   prompt   "a lighthouse at dusk"
   params   n=1 q=xhigh r=2K a=16:9 → 2048x1152
-  cost     $0.0753 (estimate)  id=20260925_114017_96a2ec
-  output   ~/.genimg/generations/20260925_114017_96a2ec.png
+  cost     $0.0753 (estimate)  id=20260925_115943_ca5e9a
+  output   ~/.genimg/generations/20260925_115943_ca5e9a.png
 dry-run: no API call made.
 ```
 
 ## Codex
 
-Codex picks the model and size. `--aspect-ratio` becomes a line in the prompt, so check the result.
-genimg keeps the PNG and ignores Codex's messages. When the image's C2PA manifest names a GPT Image
-version, the sidecar records that model for an API-equivalent price range. From a real Codex
-sidecar, trimmed:
+- **`--aspect-ratio` is only a request.** genimg adds it to the prompt, so check the result.
+- **Runs use your Codex allowance.** genimg's API-equivalent price is for comparison, not a charge.
+  See [Codex subscription](../guide/codex-subscription.md).
 
-```json
-"model_selection": "runtime",
-"aspect_ratio_mode": "prompt",
-"dimensions": { "width": 1326, "height": 1186 },
-"api_equivalent_cost": { "model_id": "gpt-image-2", "basis": "reported_c2pa_generator" }
+```console
+$ genimg "a lighthouse at dusk" \
+    --model codex:image \
+    --aspect-ratio 16:9 \
+    --dry-run
+genimg codex/subscription codex:image → codex:image
+  prompt   "a lighthouse at dusk"
+  params   n=1 a=16:9
+  cost     Codex subscription (usage limits apply)  id=20260925_115944_aa2c84
+  runtime  Codex subscription selects the image model and size; aspect ratio is a prompt request.
+  output   ~/.genimg/generations/20260925_115944_aa2c84.png
+dry-run: no API call made.
 ```
-
-See [Codex subscription](../guide/codex-subscription.md) for setup and limits.
