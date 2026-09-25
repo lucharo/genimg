@@ -422,14 +422,32 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(f"no config yet at {config_home}/config.toml.", result.stdout)
 
-  def _record_generation(self, out: str) -> None:
+  def _record_generation(self, out: str,
+                         prompt: str = "a red fox curled up asleep in fresh snow under a pine tree") -> None:
     meta_dir = self.home / ".genimg" / "metadata"
-    meta_dir.mkdir(parents=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
     (meta_dir / "20260925_120000_abcdef.json").write_text(json.dumps({
       "id": "20260925_120000_abcdef", "time": "2026-09-25T12:00:00", "alias": "oai:gi2",
-      "model_id": "gpt-image-2", "prompt": "a red fox curled up asleep in fresh snow under a pine tree",
+      "model_id": "gpt-image-2", "prompt": prompt,
       "n": 1, "cost_usd_estimated": 0.0527, "outputs": [{"path": out}],
     }))
+
+  def _output_column(self, stdout: str) -> str:
+    lines = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in stdout.splitlines()]
+    body = lines[next(i for i, line in enumerate(lines) if line.startswith("┡")) + 1:]
+    rows = [line for line in body if line.startswith("│")]
+    self.assertTrue(all(line.rstrip().endswith("│") for line in rows), "table cropped at the right edge")
+    return "".join(line.split("│")[-2].strip() for line in rows)
+
+  def test_history_output_path_near_the_console_width_is_never_cropped(self) -> None:
+    # roborev 5516: at COLUMNS=160 a path around 87 cells used to switch on no_wrap and get cropped.
+    for n in (70, 80, 85, 87, 90, 95, 100):
+      with self.subTest(path_cells=n):
+        out = "/tmp/" + "x" * (n - len("/tmp/") - len(".png")) + ".png"
+        self._record_generation(out, prompt="a fox in a hat")
+        result = self._run("history", "-n", "1", COLUMNS="160")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._output_column(result.stdout), str(Path(out).resolve()))
 
   def test_history_output_path_is_not_folded(self) -> None:
     out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"

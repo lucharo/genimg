@@ -717,17 +717,23 @@ _app.add_typer(history_app, name="history")
 
 
 def _keep_paths_whole_if_they_fit(table: Table) -> None:
-  """Print the last (output path) column unwrapped when every path fits beside the other columns
-  at their narrowest, so the prompt wraps first and each path can be copied in one piece.
-  A path that cannot fit keeps folding: an unwrapped column that is too wide gets cropped."""
+  """Print the last (output path) column unwrapped when every path then renders whole, so the
+  prompt wraps first and each path can be copied in one piece. A path that cannot fit keeps
+  folding: an unwrapped column that is too wide gets cropped. Rich's column allocation near the
+  console width is not predictable from minimum widths, so render once and look."""
+  import io
+
+  from rich.cells import cell_len
   from rich.text import Text
 
   paths = table.columns[-1]
-  paths.min_width = max((Text.from_markup(str(cell)).cell_len for cell in paths.cells), default=0)
-  # The table's own measure: Measurement.get would cap the minimum at the console width.
-  fits = table.__rich_measure__(console, console.options).minimum <= console.width
-  paths.min_width = None
-  paths.no_wrap = fits
+  wanted = [Text.from_markup(str(cell)).plain for cell in paths.cells]
+  paths.no_wrap = True
+  probe = Console(width=console.width, file=io.StringIO(), color_system=None, force_terminal=False)
+  probe.print(table, crop=False)  # uncropped, so a table wider than the console shows as such
+  rendered = probe.file.getvalue()
+  paths.no_wrap = (all(cell_len(line) <= console.width for line in rendered.splitlines())
+                   and all(path in rendered for path in wanted))
 
 
 @history_app.callback(invoke_without_command=True)
