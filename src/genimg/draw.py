@@ -834,6 +834,12 @@ const BOOT = /*__BOOT__*/;
     }
     document.querySelector('[data-act="promptDefault"]')?.classList.toggle("on",S.prompt===BOOT.defaultPrompt);
   }
+  // A "Start with" chip swaps freely between templates, but asks before discarding typed text.
+  function replacePrompt(text,label){
+    const templates=(BOOT.promptStarters||[]).map(p=>p.prompt).concat(BOOT.defaultPrompt);
+    if(S.prompt.trim()&&!templates.includes(S.prompt)&&!confirm(`Replace your prompt with the ${label} starter? What you typed will be lost.`))return false;
+    S.prompt=text; S.promptExpanded=true; renderPrompt(); return true;
+  }
   function renderCost(){ const el=$("costtext"); if(el) el.textContent = "· " + costEstimate(); }
   function nearestAspect(w,h,aspects){const options=aspects&&aspects.length?aspects:["1:1"];const r=h?w/h:1;let best=options[0],bd=1e9;for(const a of options){const parts=a.split(":").map(Number),ar=parts[0]/parts[1],d=Math.abs(ar-r);if(d<bd){bd=d;best=a;}}return best;}
   function renderGrid(){
@@ -1188,9 +1194,9 @@ const BOOT = /*__BOOT__*/;
     else if(a==="togglePrompt"){S.promptExpanded=!S.promptExpanded;renderPrompt();}
     else if(a==="promptStarter"){
       const p=(BOOT.promptStarters||[])[parseInt(t.dataset.idx,10)];
-      if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
+      if(p&&replacePrompt(p.prompt,p.label)){requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
     }
-    else if(a==="promptDefault"){S.prompt=BOOT.defaultPrompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>$("promptta")?.focus());}
+    else if(a==="promptDefault"){if(replacePrompt(BOOT.defaultPrompt,"Default"))requestAnimationFrame(()=>$("promptta")?.focus());}
     else if(a==="toggleControls"){S.controlsCollapsed=!S.controlsCollapsed;renderControlsVisibility();}
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}

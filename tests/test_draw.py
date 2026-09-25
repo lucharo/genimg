@@ -594,6 +594,11 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn('segmentedControl("resolution","Image size",resolutions,selectedResolution(),"sizefield")', draw.PAGE)
     self.assertIn('const res=(meta.resolutionOptions||[]).length?selectedResolution():"";', draw.PAGE)
 
+  def test_start_with_chips_ask_before_replacing_typed_text(self) -> None:
+    self.assertIn("if(S.prompt.trim()&&!templates.includes(S.prompt)&&!confirm(", draw.PAGE)
+    self.assertIn("if(p&&replacePrompt(p.prompt,p.label))", draw.PAGE)
+    self.assertIn('if(replacePrompt(BOOT.defaultPrompt,"Default"))', draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)
