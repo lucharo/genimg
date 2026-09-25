@@ -412,6 +412,11 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(out, result.stdout)
 
+    narrow = self._run("history", "-n", "1", COLUMNS="80")  # a small terminal still gets every column
+    self.assertEqual(narrow.returncode, 0, narrow.stderr)
+    for header in ("time", "prompt", "made/req", "output"):
+      self.assertIn(header, narrow.stdout)
+
   def test_auth_modes_env_var_names_are_not_truncated(self) -> None:
     result = self._run("auth", "--modes")
     self.assertEqual(result.returncode, 0, result.stderr)

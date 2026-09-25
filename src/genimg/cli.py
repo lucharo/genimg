@@ -33,12 +33,14 @@ from .auth import resolve as auth_resolve
 from .generate import generate as run_generate
 from .interfaces import GenerateRequest, IImageGen
 
+_PIPED_WIDTH = 200
+
 
 def _console() -> Console:
   """Piped output with no COLUMNS (an agent's shell) gets 200 columns, not Rich's fallback of
   80, which cuts model ids, env-var names and paths mid-word."""
   piped = not sys.stdout.isatty() and not os.environ.get("COLUMNS")
-  return Console(width=200 if piped else None)
+  return Console(width=_PIPED_WIDTH if piped else None)
 
 
 console = _console()
@@ -758,7 +760,8 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   table.add_column("prompt", ratio=3, overflow="fold")
   table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=True)  # prompt wraps first
+  # On a wide console the prompt wraps first so the path stays whole; a narrow terminal folds it.
+  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=console.width >= _PIPED_WIDTH)
   for e in entries:
     paths = e.get("outputs", [])
     first = paths[0] if paths else None
