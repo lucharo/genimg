@@ -27,8 +27,8 @@ genimg draw --model oai:gi2.5 fox-sketch.webp
 
 <!-- Zensical rewrites a video's src relative to this file but leaves poster relative to the page URL. -->
 <figure>
-  <video src="../assets/demos/draw-ipad.mp4" poster="../../assets/demos/draw-ipad.webp" autoplay loop muted playsinline controls title="Draw Studio in Safari on an iPad in landscape: load the fox sketch, draw a party hat on it, add a line to the prompt"></video>
-  <figcaption>The iPad Pro 13-inch simulator, which shares the Mac's localhost. Everything was done by touch; the clip stops before <b>Generate</b>.</figcaption>
+  <video src="../assets/demos/draw-ipad.mp4" poster="../../assets/demos/draw-ipad.webp" autoplay loop muted playsinline controls title="Draw Studio in Safari on an iPad in landscape: draw a party hat on the fox, press Generate, and the fox comes back wearing it"></video>
+  <figcaption>Draw, don't write: a hat drawn by touch, no prompt typed, one <b>Generate</b> at medium quality (about $0.013). The model's 45-second wait is cut. Recorded on the iPad Pro 13-inch simulator, which shares the Mac's localhost.</figcaption>
 </figure>
 
 | Method | Requires | Pros | Cons |
