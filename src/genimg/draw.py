@@ -140,9 +140,6 @@ PROMPT_STARTERS = [
   )},
 ]
 
-# Aspect ratio → numeric ratio, for snapping the flattened canvas to a supported aspect.
-_ASPECTS = {"1:1": 1.0, "4:3": 4 / 3, "3:4": 3 / 4, "16:9": 16 / 9, "9:16": 9 / 16}
-
 
 def discover_images(paths: list[Path]) -> list[Path]:
   """Expand CLI paths into a sorted, de-duplicated list of image files.
@@ -169,12 +166,12 @@ def discover_images(paths: list[Path]) -> list[Path]:
   return found
 
 
-def _nearest_aspect(w: int, h: int, aspect_options: list[str] | None = None) -> str:
+def _nearest_aspect(w: int, h: int, aspect_options: list[str]) -> str:
+  """Snap the flattened canvas to the closest of the model's declared aspect ratios."""
   ratio = (w / h) if h else 1.0
-  options = aspect_options or list(_ASPECTS)
   ratios = {
     aspect: int(aspect.split(":", 1)[0]) / int(aspect.split(":", 1)[1])
-    for aspect in options
+    for aspect in aspect_options
   }
   return min(ratios, key=lambda aspect: abs(ratios[aspect] - ratio))
 
@@ -190,14 +187,15 @@ def _provider_of(model: str) -> str:
 def pick_size(provider: str, w: int, h: int, resolution: str | None,
               aspect: str | None = None,
               aspect_options: list[str] | None = None,
-              model_id: str | None = None) -> tuple[str, str | None]:
+              model_id: str | None = None) -> tuple[str | None, str | None]:
   """Choose a valid (aspect, resolution) for the flattened composite, from the provider's
   declared capabilities.
 
   - Free-size providers (Gemini) pass the selected image_size when the model exposes one.
   - Table-size providers (OpenAI) snap unsupported aspect/resolution pairs to 2K, or to the
     first valid size when the model has no 2K (GPT Image 1.x).
-  - Runtime-selected providers (Codex) pass only the aspect as a prompt request.
+  - Runtime-selected providers (Codex) pass only a chosen aspect, as a prompt request; Auto
+    (aspect None) sends no aspect, as the CLI does without -a.
   """
   prov = providers.get(provider)
   caps = prov.capabilities(model_id or "")
@@ -210,9 +208,9 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
       requested = "2K" if "2K" in valid else valid[0]
     return aspect, requested
   aspects = aspect_options or _aspect_sort(caps.aspect_ratios if model_id is not None else ALL_ASPECTS)
-  aspect = aspect if aspect in aspects else _nearest_aspect(w, h, aspects)
   if prov.runtime_selects_model:
-    return aspect, None
+    return (aspect if aspect in aspects else None), None
+  aspect = aspect if aspect in aspects else _nearest_aspect(w, h, aspects)
   if model_id is None:
     return aspect, resolution or None  # unknown model: trust the caller's size
   return aspect, resolution if resolution in caps.resolutions else None
@@ -310,12 +308,16 @@ class Studio:
     cmd = _genimg_cmd() + ["_run", "-m", model]
     if draft:
       cmd += ["-i", str(draft)]
-    cmd += ["-a", aspect, "-o", str(out)]
+    if aspect:
+      cmd += ["-a", aspect]
+    cmd += ["-o", str(out)]
     if res:
       cmd += ["-r", res]
-    if quality and (model_info or {}).get("qualityOptions"):
+    # Only values this model offers; anything else (a control left over from another model)
+    # falls back to the CLI's default rather than failing the job.
+    if quality in (model_info or {}).get("qualityOptions", ()):
       cmd += ["-q", quality]
-    if thinking and (model_info or {}).get("thinkingOptions"):
+    if thinking in (model_info or {}).get("thinkingOptions", ()):
       cmd += ["--thinking", thinking]
     cmd += ["--", prompt]
 
@@ -745,7 +747,7 @@ const BOOT = /*__BOOT__*/;
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
     if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
     if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
-    const supportedAspects=meta.aspectOptions||["1:1","4:3","3:4","16:9","9:16"];
+    const supportedAspects=meta.aspectOptions||[];
     if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
     const aspects=[["auto","Auto"]].concat(supportedAspects.map(a=>[a,a]));
     S.sizeControlKey=sizeControlKey(meta);
@@ -1138,13 +1140,13 @@ const BOOT = /*__BOOT__*/;
     }
     try{
       const d=await apiJson("/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:S.quality,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,thinking:(meta.thinkingOptions||[]).includes(S.thinking)?S.thinking:null,w:flat?flat.w:1024,h:flat?flat.h:1024})});
+        body:JSON.stringify({image:flat?flat.url:null,prompt:S.prompt,model:S.model,quality:(meta.qualityOptions||[]).includes(S.quality)?S.quality:null,resolution:selectedResolution(),aspect:S.aspect==="auto"?null:S.aspect,thinking:(meta.thinkingOptions||[]).includes(S.thinking)?S.thinking:null,w:flat?flat.w:1024,h:flat?flat.h:1024})});
       S.jobs.push({id:d.job_id,model:S.model,status:"queued",createdAt:Date.now()});
       if(S.trayCollapsed){S.trayCollapsed=false;renderGrid();}
       renderTray();
     }catch(err){ S.jobs.push({id:"e"+(++_jid),model:S.model,status:"error",error:err.message||String(err),createdAt:Date.now()}); renderTray(); }
   }
-  function retry(jid){ const j=S.jobs.find(x=>x.id===jid); const m=j?j.model:S.model; S.model=m; generate(); }
+  function retry(jid){ const j=S.jobs.find(x=>x.id===jid); const m=j?j.model:S.model; S.model=m; renderTopbar(); renderCost(); generate(); }
 
   // ---------- poll loop ----------
   setInterval(async ()=>{

@@ -151,6 +151,90 @@ class StartJobArgvTests(unittest.TestCase):
     self.assertEqual(argv.index("--"), len(argv) - 2)  # prompt is the sole token after --
 
 
+class StudioCliParityTests(unittest.TestCase):
+  """Every argv the Studio can spawn must pass the CLI's own validation (`--dry-run`)."""
+
+  # Canvas shapes that make "Auto" land on wide, square and tall aspects.
+  CANVASES = ((1920, 1080), (1000, 1000), (1080, 1920))
+
+  def setUp(self) -> None:
+    self.tmp = Path(tempfile.mkdtemp())
+    self._patches = [
+      patch.object(metadata, "GENIMG_HOME", self.tmp),
+      patch.object(metadata, "GEN_DIR", self.tmp / "generations"),
+      patch.object(draw, "_genimg_cmd", return_value=["genimg"]),
+      patch.object(cli.config, "load", return_value={}),  # an empty GENIMG_CONFIG_HOME
+      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("direct", "env", "-", "KEY", True)),
+    ]
+    for p in self._patches:
+      p.start()
+      self.addCleanup(p.stop)
+    self.studio = draw.Studio([], default_model="gdm:nb2")
+
+  def _argv(self, model: str, *, image: bool = True, w: int = 1000, h: int = 1000, **kw) -> list[str]:
+    kw = {"quality": None, "resolution": None, "aspect": None, "thinking": None, **kw}
+    with patch.object(draw.subprocess, "Popen", return_value=MagicMock()) as popen:
+      self.studio.start_job(image_b64=_IMG_DATAURL if image else None, prompt="p", model=model,
+                            w=w, h=h, **kw)
+    return popen.call_args.args[0]
+
+  def _cli_error(self, argv: list[str]) -> str | None:
+    """None when `genimg <argv> --dry-run` is accepted, else the CLI's error output."""
+    args = argv[1:]  # drop the interpreter prefix
+    args = args[:args.index("--")] + ["--dry-run"] + args[args.index("--"):]
+    result = CliRunner().invoke(cli._app, args)
+    if result.exit_code == 0 and "dry-run: no API call made" in result.output:
+      return None
+    return result.output.strip() or repr(result.exception)
+
+  def _studio_requests(self, m: dict) -> list[dict]:
+    """One request per option the Studio offers for `m`, varying one control at a time."""
+    reqs = [{"quality": q} for q in m["qualityOptions"]]
+    reqs += [{"thinking": t} for t in m["thinkingOptions"]]
+    for aspect in m["aspectOptions"]:
+      for res in m["resolutionOptionsByAspect"].get(aspect, m["resolutionOptions"]) or [None]:
+        reqs.append({"aspect": aspect, "resolution": res})
+    for w, h in self.CANVASES:  # "Auto" aspect with each offered size
+      reqs += [{"w": w, "h": h, "resolution": res} for res in m["resolutionOptions"] or [None]]
+    reqs.append({"image": False})  # prompt-only first image
+    return reqs
+
+  def test_every_studio_option_passes_cli_validation(self) -> None:
+    rejected = []
+    for m in draw.STUDIO_MODELS:
+      for req in self._studio_requests(m):
+        argv = self._argv(m["alias"], **req)
+        error = self._cli_error(argv)
+        if error is not None:
+          rejected.append((m["alias"], req, error))
+    self.assertEqual(rejected, [])
+
+  def test_quality_left_over_from_another_model_is_not_sent(self) -> None:
+    # Retry re-targets an older job's model without re-rendering the controls, so the page can
+    # post GPT Image 2.5's xhigh for gpt-image-2, which the CLI rejects.
+    argv = self._argv("oai:gpt-image-2", quality="xhigh")
+    self.assertNotIn("-q", argv)
+    self.assertIsNone(self._cli_error(argv))
+
+  def test_thinking_level_the_model_lacks_is_not_sent(self) -> None:
+    argv = self._argv("gdm:nb2", thinking="max")
+    self.assertNotIn("--thinking", argv)
+    self.assertIsNone(self._cli_error(argv))
+
+  def test_codex_auto_aspect_sends_no_aspect_request(self) -> None:
+    # The CLI's codex default is no aspect request; Auto must reach it rather than asking for
+    # the canvas's nearest ratio in the prompt.
+    for image in (True, False):
+      argv = self._argv("codex:image", image=image, w=1920, h=1080)
+      self.assertNotIn("-a", argv)
+      self.assertIsNone(self._cli_error(argv))
+
+  def test_codex_chosen_aspect_is_sent_as_a_request(self) -> None:
+    argv = self._argv("codex:image", aspect="16:9")
+    self.assertEqual(argv[argv.index("-a") + 1], "16:9")
+    self.assertIsNone(self._cli_error(argv))
+
+
 class StatusTests(unittest.TestCase):
   def setUp(self) -> None:
     self.tmp = Path(tempfile.mkdtemp())
