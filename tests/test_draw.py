@@ -64,6 +64,9 @@ class PickSizeTests(unittest.TestCase):
     for aspect in ("1:4", "1:8", "4:1", "8:1", "21:9"):
       self.assertEqual(draw.pick_size("google", 1024, 1024, "1K", aspect), (aspect, "1K"))
 
+  def test_gpt_image_1_snaps_to_its_only_size(self) -> None:
+    self.assertEqual(draw.pick_size("openai", 1920, 1080, "2K", model_id="gpt-image-1"), ("1:1", "1K"))
+
   def test_openai_snaps_resolution_to_valid_aspect_pair(self) -> None:
     self.assertEqual(draw.pick_size("openai", 1920, 1080, "1K"), ("16:9", "2K"))
     self.assertEqual(draw.pick_size("openai", 1200, 900, "4K"), ("4:3", "2K"))

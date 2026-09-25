@@ -162,7 +162,7 @@ def _run(
   quality: Annotated[str | None, typer.Option("-q", "--quality", rich_help_panel=_PANEL_OPENAI,
     help="low | medium (default) | high | auto; GPT Image 2.5 also supports xhigh | max.")] = None,
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
-    help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
+    help="minimal | high. Gemini 3.1 Flash Image and Flash Lite Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
     help="azure | direct — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
@@ -1003,7 +1003,8 @@ def _validate_provider_flags(
     if thinking_level not in {"minimal", "high"}:
       _die(f"--thinking must be minimal or high, got {thinking_level!r}")
     if not caps.thinking_levels:
-      _die("--thinking is supported only by Gemini 3.1 Flash Image (-m gdm:nb2).")
+      _die("--thinking is supported only by Gemini 3.1 Flash Image and Flash Lite Image "
+           "(-m gdm:nb2, gdm:nb2-lite).")
 
   if resolution is not None and resolution not in _RESOLUTION_VALUES:
     _die(f"--resolution must be one of {sorted(_RESOLUTION_VALUES)}, got {resolution!r}")
@@ -1015,7 +1016,7 @@ def _validate_provider_flags(
 
   if caps.sizes:
     if not caps.supports_size(resolution, aspect_ratio):
-      _die(provider.size_error(resolution, aspect_ratio))
+      _die(provider.size_error(resolution, aspect_ratio, model_id or ""))
   else:
     if resolution is not None and resolution not in caps.resolutions:
       shown = ", ".join(sorted(caps.resolutions, key=providers.base._res_order)) or "provider default only"

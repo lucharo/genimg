@@ -139,9 +139,9 @@ class Provider(ABC):
     """(model_id, region) for `genimg auth --check`'s tiny live probe."""
     raise NotImplementedError
 
-  def size_error(self, resolution: str | None, aspect: str | None) -> str:
-    """Explain a (resolution, aspect) pair outside the explicit size table."""
-    supported = ", ".join(f"{r}+{a}" for r, a in sorted(self.capabilities("").sizes))
+  def size_error(self, resolution: str | None, aspect: str | None, model_id: str = "") -> str:
+    """Explain a (resolution, aspect) pair outside `model_id`'s explicit size table."""
+    supported = ", ".join(f"{r}+{a}" for r, a in sorted(self.capabilities(model_id).sizes))
     return f"{self.label}: unsupported ({resolution or '-'}, {aspect or '-'}) size combo. Supported: {supported}."
 
   # ── auth helpers ──

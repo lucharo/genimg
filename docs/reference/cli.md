@@ -24,7 +24,7 @@ the installed version.
 | `--aspect-ratio` | `-a` | `1:1 16:9 9:16 4:3 3:4 …` | Model dependent; see [Models](models.md). |
 | `--resolution` | `-r` | `512 1K 2K 4K` | Model dependent; see [Models](models.md). |
 | `--quality` | `-q` | `low medium high auto`; GPT Image 2.5 adds `xhigh max` | OpenAI only. Default `medium`. |
-| `--thinking` | | `minimal` \| `high` | Gemini 3.1 Flash Image only. |
+| `--thinking` | | `minimal` \| `high` | Gemini 3.1 Flash Image and Flash Lite Image only. |
 | `--auth` | | `azure` \| `direct` | Force an OpenAI auth mode for this run. |
 | `--region` | | e.g. `global`, `us-central1` | Google only; overrides the registry region. |
 | `--project` | | GCP project id | Google Vertex only. |

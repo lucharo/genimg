@@ -9,7 +9,7 @@ your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds
 | --- | --- | --- | --- | --- |
 | `gdm:nbp` | [`gemini-3-pro-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image) | 1K $0.134 · 2K $0.134 · 4K $0.24 | classic | |
 | `gdm:nb2` | [`gemini-3.1-flash-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image) | 512 $0.045 · 1K $0.067 · 2K $0.101 · 4K $0.151 | extended | `minimal` `high` |
-| `gdm:nb2-lite` | [`gemini-3.1-flash-lite-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image) | 1K $0.034 | extended | |
+| `gdm:nb2-lite` | [`gemini-3.1-flash-lite-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image) | 1K $0.034 | extended | `minimal` `high` |
 
 - **Classic** aspect ratios: `1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9`. **Extended** adds
   `1:4 4:1 1:8 8:1`.
@@ -28,7 +28,8 @@ your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds
 
 `-q` defaults to `medium`; `auto` is estimated as `medium`.
 
-Sizes come from one table. Any pair not in it is rejected before the request:
+GPT Image 2 and 2.5 take any size in this table; GPT Image 1, 1.5 and 1 mini take only 1K `1:1`.
+genimg rejects any other pair before the request:
 
 | `-r` | `1:1` | `4:3` / `3:4` | `16:9` / `9:16` |
 | --- | --- | --- | --- |
@@ -38,7 +39,7 @@ Sizes come from one table. Any pair not in it is rejected before the request:
 
 Cost follows pixel count and quality. GPT Image 2 and 2.5 count output tokens the way
 OpenAI's calculator does, so a wide 2K image can cost less than a 1K square. The older
-models use OpenAI's 1024×1024 per-image price, scaled by pixel area at other sizes.
+models use OpenAI's per-image price for 1024×1024.
 `--dry-run` prints the estimate for any combination:
 
 ```console

@@ -171,7 +171,10 @@ class GoogleProvider(Provider):
   def capabilities(self, model_id: str) -> Capabilities:
     mid = _stable_id(model_id)
     if mid.startswith("gemini-3.1-flash-lite-image"):
-      return Capabilities(resolutions=frozenset({"1K"}), aspect_ratios=ALL_ASPECTS, batch=True)
+      # Thinking levels: https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image
+      # ("Thinking: Supported (minimal and high)", read 2026-09-25).
+      return Capabilities(resolutions=frozenset({"1K"}), aspect_ratios=ALL_ASPECTS,
+                          thinking_levels=("minimal", "high"), batch=True)
     if mid.startswith("gemini-3.1-flash-image"):
       return Capabilities(resolutions=frozenset({"512", "1K", "2K", "4K"}), aspect_ratios=ALL_ASPECTS,
                           thinking_levels=("minimal", "high"), batch=True)

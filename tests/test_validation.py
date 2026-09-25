@@ -59,8 +59,9 @@ class ValidationMatrixTests(unittest.TestCase):
     _validate(provider="google", resolution="1K", aspect_ratio="1:8",
               model_id="gemini-3.1-flash-lite-image")
 
-  def test_thinking_level_is_flash_image_only(self) -> None:
+  def test_thinking_level_is_flash_and_flash_lite_image_only(self) -> None:
     _validate(provider="google", thinking_level="high", model_id="gemini-3.1-flash-image")
+    _validate(provider="google", thinking_level="high", model_id="gemini-3.1-flash-lite-image")
     with self.assertRaises(typer.Exit):
       _validate(provider="google", thinking_level="high", model_id="gemini-3-pro-image")
 

@@ -195,7 +195,8 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
   declared capabilities.
 
   - Free-size providers (Gemini) pass the selected image_size when the model exposes one.
-  - Table-size providers (OpenAI) snap unsupported aspect/resolution pairs to 2K.
+  - Table-size providers (OpenAI) snap unsupported aspect/resolution pairs to 2K, or to the
+    first valid size when the model has no 2K (GPT Image 1.x).
   - Runtime-selected providers (Codex) pass only the aspect as a prompt request.
   """
   prov = providers.get(provider)
@@ -206,7 +207,7 @@ def pick_size(provider: str, w: int, h: int, resolution: str | None,
     valid = by_aspect[aspect]
     requested = resolution or caps.default_resolution or "1K"
     if requested not in valid:
-      requested = "2K"
+      requested = "2K" if "2K" in valid else valid[0]
     return aspect, requested
   aspects = aspect_options or _aspect_sort(caps.aspect_ratios if model_id is not None else ALL_ASPECTS)
   aspect = aspect if aspect in aspects else _nearest_aspect(w, h, aspects)

@@ -95,8 +95,10 @@ class CostEstimateTests(unittest.TestCase):
     self.assertAlmostEqual(
       oai.price_at("gpt-image-1", width=1536, height=1024, quality="low"), 0.016
     )
-    # Undocumented sizes scale the square row by pixel area.
-    self.assertAlmostEqual(cost.estimate(provider="openai", model_id="gpt-image-1.5", resolution="2K"), 0.034 * 4)
+    # Undocumented output sizes (a Codex image's real dimensions) scale the square row by area.
+    self.assertAlmostEqual(oai.price_at("gpt-image-1.5", width=2048, height=2048), 0.034 * 4)
+    # A requested size the model cannot produce has no price.
+    self.assertIsNone(cost.estimate(provider="openai", model_id="gpt-image-1.5", resolution="2K"))
 
   def test_google_resolution_keyed(self) -> None:
     self.assertAlmostEqual(
