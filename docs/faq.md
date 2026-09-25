@@ -20,7 +20,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 can call it directly in its conversation. Standalone genimg accesses it through the local
 Codex CLI; it does not expose a separate subscription image API. A host tool call made
 outside genimg does not create a genimg history record. See the
-[runtime contract](guide/codex-subscription.md#runtime-contract).
+[Codex subscription guide](guide/codex-subscription.md).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: Codex CLI 0.153.4 integration; recheck after runtime changes_
 
@@ -28,7 +28,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: Co
 
 No model/version selector is exposed through `codex:image`; Codex selects it. Use a named
 API model when explicit model, quality and size controls are needed. See
-[controls and billing](guide/codex-subscription.md#controls-and-billing).
+[what you don't control](guide/codex-subscription.md#what-you-dont-control).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: current integration; recheck the host tool schema after upgrades_
 
@@ -39,7 +39,7 @@ Availability still depends on the account and deployment; a successful generatio
 the exact model is the check. `codex:image` does not promise either variant. Embedded
 generator/version claims describe the returned image, and cannot establish which model
 the next native generation will use. See [model maintenance](maintainers/maintaining-models.md)
-and [provenance](guide/codex-subscription.md#provenance-and-theoretical-api-cost).
+and [Codex subscription](guide/codex-subscription.md).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12 · Scope: genimg catalogue and routing; recheck serving with an exact-model generation_
 
@@ -50,7 +50,7 @@ version, actions and signing information alongside dimensions and SHA-256. Crede
 are extracted offline, not signature-verified. Subscription/API billing comes from the
 generation route; the theoretical API-cost comparison is separate and remains unknown
 when the model or pricing is unknown. See the
-[provenance and billing guide](guide/codex-subscription.md#provenance-and-theoretical-api-cost).
+[Codex cost and limits](guide/codex-subscription.md#cost-and-limits).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 
@@ -59,7 +59,7 @@ _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 Images are added automatically to history when genimg creates them. History is read-only:
 `genimg history` lists saved generations, `genimg history view` opens the existing TUI
 picker, and `genimg history --json` reads the saved records. There is no manual recording
-step. See [generate, then browse](guide/codex-subscription.md#generate-then-browse).
+step. See [Codex subscription](guide/codex-subscription.md#generate).
 
 _Created: 2026-09-12 · Updated: 2026-09-12 · Verified: 2026-09-12_
 

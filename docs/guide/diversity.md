@@ -1,78 +1,56 @@
 # Diverse images
 
-Sometimes you want several different images for one prompt. `-n` asks for several:
+`-n 4` asks for four images:
 
 ```bash
-genimg "a minimal fox logo" -m oai:gi2 -n 4 -g --open
+genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -g
 ```
 
-Because of the randomness of autoregressive models, the four will be slightly different from
-each other, but not very different. For simple subjects (logos, icons, single objects) plain
-`-n` converges on near-duplicates.
+<figure markdown>
+  ![Four near-identical line-art fox logos](../assets/fox-plain-n.webp){ width="720" }
+  <figcaption>On a simple subject the four come back nearly identical.</figcaption>
+</figure>
 
-If you are looking for a particular image with quite notable differences, there are two ways
-of doing it. Pick by intent; they are different tools, not better or worse.
+Two flags spread them out.
 
-## Name the styles yourself: `--deltas`
-
-You explicitly define the directions. Take `#1` keeps the base prompt as the anchor, and
-takes `#2..#n` each get one of your deltas in order, so supply `n-1` of them:
+## Name the styles: `--deltas`
 
 ```bash
 genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
   --deltas "line art, block print, brush stroke" -g --open
-genimg "…" -m oai:gi2.5-flare -n 5 --deltas @styles.txt      # one delta per line
 ```
-
-`--deltas` implies `-d`. It works on every provider and is the right choice when you know how
-the takes should differ, or when the subject is a diagram or photo where the built-in pool
-would be a poor fit.
 
 <figure markdown>
   ![Four fox logos: base prompt, line art, block print, brush stroke](../assets/fox-deltas.webp){ width="720" }
-  <figcaption>The four takes from the command above with <code>-m oai:gi2.5-flare</code>: #1 is the base prompt, #2 to #4 got one delta each.</figcaption>
+  <figcaption>Take #1 keeps the base prompt. Takes #2 to #4 get one delta each, in order.</figcaption>
 </figure>
 
-## Let genimg or the model spread them: `-d`
+Pass one delta fewer than `-n`, comma-separated or as `--deltas @styles.txt` with one per line.
+It works on every provider. Use it for diagrams and photos too.
 
-`-d` (`--diverse`) asks for deliberate variety without you naming it. It behaves differently
-by provider:
+## Let genimg pick: `-d`
 
-=== "Gemini models (`gdm:`)"
+```bash
+genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d -g --open
+```
 
-    Gemini can reason over a batch and generate multiple images at once. With `--mode batch`,
-    genimg sends **one** request asking for `n` deliberately different takes and the model
-    differentiates palettes, compositions and techniques itself:
+<figure markdown>
+  ![Four varied fox logos: a wordmark, a copper close-up, a neon sign, a white cut-out on slate](../assets/fox-diverse.webp){ width="720" }
+  <figcaption>Takes #2 to #4 drew close-up framing, neon glow and dramatic lighting from the built-in pool.</figcaption>
+</figure>
 
-    ```bash
-    genimg "a minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d --mode batch -g --open
-    ```
+`-d` picks deltas from a built-in pool that suits illustrations and logos, so each run differs.
+On Gemini, `--mode batch` sends one request instead and the model varies its own takes:
 
-    Slower than parallel (one request instead of four) but the most coherent varied set. The
-    model may return fewer than `n`; partial results are kept with a warning. Without
-    `--mode batch`, `-d` on Gemini uses the parallel mechanism below.
-
-=== "GPT Image models (`oai:`)"
-
-    GPT Image generates one image at a time, and a batched request returns near-duplicate
-    independent samples, so genimg rejects `--mode batch` on OpenAI as wasted spend. `-d`
-    runs `n` parallel requests and gives takes `#2..#n` a distinct style or composition delta
-    from a curated built-in pool:
-
-    ```bash
-    genimg "a minimal fox logo, NOT a grid" -m oai:gi2 -n 4 -d -g --open
-    ```
-
-    The pool suits illustrations and logos; for diagrams or photos prefer `--deltas`.
-
-The deltas used are recorded in the metadata sidecar and shown under each card in the
-[grid](../surfaces/grid.md), so you can see which direction produced which image.
+```bash
+genimg "a minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d --mode batch -g --open
+```
 
 ## Rules of thumb
 
-- Both mechanisms need `-n >= 2`.
-- `--deltas` and `--mode batch` do not combine: under batch the model does its own
-  differentiation, so pick one path.
-- Add `-g --open` to review the set in a grid with a carousel and copy-the-winner buttons.
-- Once you have a winner, iterate on it with `-i` (see [Input and reference images](input-images.md))
-  rather than regenerating from scratch.
+- Both need `-n 2` or more.
+- `--mode batch` is Gemini only. On OpenAI genimg rejects it, because batched takes come back as
+  near-duplicates.
+- `--deltas` and `--mode batch` do not combine.
+- `-g --open` opens the set in the [grid](../surfaces/grid.md), with each card's delta under it.
+- Found a winner? Edit it with `-i` ([Input and reference images](input-images.md)).
