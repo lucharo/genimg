@@ -42,6 +42,10 @@ The wizard finds credentials already in your environment and checks each provide
 live call. It saves a profile only when that check passes. Keys stay in your environment; only
 settings such as an Azure endpoint go to [config.toml](reference/config.md).
 
+Without a terminal (your agent, CI) `genimg setup` asks nothing: it saves each provider whose key
+is in the environment and passes the check, and exits `1` if none does. `--model gdm:nb2` also
+saves a default.
+
 Check the result at any time. Neither command generates an image:
 
 ```bash

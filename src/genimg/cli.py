@@ -591,9 +591,19 @@ def models_clear_default():
 
 # ────────────────────── setup command ──────────────────────
 
-@_app.command("setup", help="Interactive wizard: detect creds, pick providers, save config.")
-def setup_cmd():
-  setup_module.run_setup()
+@_app.command("setup", help="Interactive wizard: detect creds, pick providers, save config. "
+             "Without a terminal it never prompts: it saves each provider whose env credentials validate.")
+def setup_cmd(
+  model: Annotated[str | None, typer.Option("-m", "--model",
+    help="Save this default model (alias or model id) instead of asking for one.")] = None,
+):
+  if model is not None:
+    try:
+      model = registry.resolve(model)[0]
+    except ValueError as e:
+      _die(_rich_escape(str(e)))
+  if not setup_module.run_setup(model=model):
+    raise typer.Exit(1)
 
 
 # ────────────────────── auth command ──────────────────────

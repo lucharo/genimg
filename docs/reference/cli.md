@@ -44,8 +44,15 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
   profile and, if you pick one, a default model. Walkthrough in [Getting started](../getting-started.md).
 
 ```text
-genimg setup
+genimg setup [--model ALIAS]
 ```
+
+| Flag | Effect |
+| --- | --- |
+| `--model`, `-m` | Saves this default model instead of asking for one. |
+
+- Without a terminal on stdin it never prompts: it saves each provider whose credentials are
+  already in the environment and pass the check, and exits `1` if none does.
 
 ## genimg auth { data-toc-label="auth" }
 

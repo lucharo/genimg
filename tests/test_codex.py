@@ -254,6 +254,7 @@ def test_setup_persists_cleanup_when_codex_was_the_only_provider(tmp_path, monke
   setup.config.save({"profiles": {"codex": dict(_CODEX_PROFILE)}, "default_model": "codex:image"})
   with patch.object(auth, "login_status", return_value=(available, "Log in")), \
        patch.object(auth_google, "adc_token_present", return_value=False), \
+       patch.object(setup, "_interactive", return_value=True), \
        patch.object(setup.questionary, "select") as select, \
        patch.object(setup.questionary, "confirm") as confirm:
     select.return_value.ask.return_value = "skip"
