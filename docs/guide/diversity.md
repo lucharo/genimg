@@ -1,5 +1,7 @@
 # Diverse images
 
+- `--num 4` makes four images at once: four requests run in parallel, so four take about as long
+  as one.
 - On a simple subject, plain `--num 4` returns four near-copies.
 - `--deltas` or `--diverse` makes each take look different.
 
@@ -53,8 +55,14 @@ genimg "a SINGLE minimal fox logo, NOT a grid" \
   <figcaption>Takes #2 to #4 drew close-up framing, neon glow and dramatic lighting from the built-in pool.</figcaption>
 </figure>
 
-The built-in pool suits illustrations and logos. On Gemini, `--mode batch` sends one request
-instead and the model varies its own takes:
+The built-in pool suits illustrations and logos.
+
+## Let the model pick: `--mode batch` (Gemini)
+
+- One request asks Gemini for the whole set, so the model sees every take and makes them differ
+  as a set, instead of genimg adding a style to each.
+- The model decides how many images to return, so you may get fewer than `--num`; the default
+  parallel mode always returns `--num` images.
 
 ```bash
 genimg "a minimal fox logo, NOT a grid" \
@@ -69,6 +77,8 @@ genimg "a minimal fox logo, NOT a grid" \
 ## Rules of thumb
 
 - Both need `--num 2` or more.
+- Parallel mode runs up to five requests at a time (two for `codex:image`), and keeps the images
+  that succeed if one fails.
 - `--mode batch` is Gemini only. On OpenAI genimg rejects it, because batched takes come back as
   near-duplicates.
 - `--deltas` and `--mode batch` do not combine.
