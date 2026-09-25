@@ -5,7 +5,7 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]      generate (the default action)
 genimg <verb> [...]                           utilities
 ```
 
-`genimg -h` lists every generation flag, and each verb has its own `-h`. `--version` prints
+`genimg --help` lists every generation flag, and each verb has its own `--help`. `--version` prints
 the installed version.
 
 ## Generate
@@ -14,10 +14,10 @@ the installed version.
 | --- | --- | --- | --- |
 | `--model` | `-m` | alias or model id | Required unless a default is saved. `gdm:nb2`, `oai:gi2`, `codex:image`, `gpt-image-2`, … |
 | `--profile` | | profile name | A `[profiles.NAME]` table from config.toml. Default: the provider's first profile, else env detection. |
-| `--output` | `-o` | path | Output PNG. Default `~/.genimg/generations/<id>.png`; `_1.._n` suffixes for `-n > 1`. |
+| `--output` | `-o` | path | Output PNG. Default `~/.genimg/generations/<id>.png`; `_1.._n` suffixes for `--num > 1`. |
 | `--num` | `-n` | 1–10 | Number of variants; `n > 1` runs in parallel. |
-| `--diverse` | `-d` | | Deliberate variety across the `n` takes. Needs `-n >= 2`. See [Diverse images](../guide/diversity.md). |
-| `--deltas` | | `"a, b, c"` or `@file` | Your own per-take deltas for takes `#2..#n`; implies `-d`; parallel mode only. |
+| `--diverse` | `-d` | | Deliberate variety across the `n` takes. Needs `--num >= 2`. See [Diverse images](../guide/diversity.md). |
+| `--deltas` | | `"a, b, c"` or `@file` | Your own per-take deltas for takes `#2..#n`; implies `--diverse`; parallel mode only. |
 | `--mode` | | `parallel` \| `batch` | `batch` = one n-image request, Gemini only. |
 | `--input` | `-i` | path | Image to edit (image-to-image). |
 | `REF_PATHS` | | paths after the prompt | Reference images, order preserved, not edited. |
@@ -29,7 +29,7 @@ the installed version.
 | `--region` | | e.g. `global`, `us-central1` | Google only; overrides the registry region. |
 | `--project` | | GCP project id | Google Vertex only. |
 | `--name` | | text | Human-readable label recorded in history. |
-| `--grid` | `-g` | | With `-n >= 2`, also write an HTML grid. |
+| `--grid` | `-g` | | With `--num >= 2`, also write an HTML grid. |
 | `--open` | | | Open the grid (or the image) in the browser. |
 | `--dry-run` | | | Print model, size, cost and output path; no API call. |
 
@@ -44,13 +44,13 @@ default the model cannot use is skipped; an explicit flag is never dropped.
 | `setup` | Wizard: detect credentials, ask for missing ones, test them, save a profile and optionally a default model. | |
 | `auth` | Auth status per provider: mode, source, endpoint, credential, ready. | `--json`, `--check` (tiny live probe), `--modes` (every mode and its env vars) |
 | `models` | Registry with each model's listed/missing status, cached for 5 days. | `--refresh`, `--aliases`, `--json` |
-| `models set-default ALIAS` | Save a default so `-m` can be omitted. | |
+| `models set-default ALIAS` | Save a default so `--model` can be omitted. | |
 | `models get-default` / `clear-default` | Show or remove it. | |
-| `history` | Recent generations: time, name, model, prompt, images, cost, output. | `-n/--limit`, `--summary`, `--json` |
+| `history` | Recent generations: time, name, model, prompt, images, cost, output. | `--limit/-n`, `--summary`, `--json` |
 | `history view` | Interactive browser with in-terminal previews. `yi` copies the image, `yp` its path, `?` lists keys. | |
 | `cost` | Total estimated spend (`history --summary`). | `--json` |
-| `grid PATHS...` | HTML grid from existing images. | `-o`, `--open` |
-| `draw [PATHS...]` | Local Draw Studio canvas. `--host IP` serves it to other devices, and anyone who can reach that IP can generate with your credentials and open your generated and loaded images. | `--port`, `--host`, `-m`, `--no-open` |
+| `grid PATHS...` | HTML grid from existing images. | `--output/-o`, `--open` |
+| `draw [PATHS...]` | Local Draw Studio canvas. `--host IP` serves it to other devices, and anyone who can reach that IP can generate with your credentials and open your generated and loaded images. | `--port`, `--host`, `--model/-m`, `--no-open` |
 | `config` | `show`, `path`, `edit`. See [config.toml](config.md). | |
 | `skills` | Prints `npx skills add lucharo/genimg`. `path [skill]` prints bundled skill sources. | |
 

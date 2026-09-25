@@ -10,6 +10,9 @@ How genimg is built, tested and shipped. You only need this section to contribut
 | Build the wheel and sdist | `uv build` |
 | Build the docs | `uv run --only-group docs zensical build --strict` |
 
+Docs examples use long flag names (`--model`, not `-m`); only the
+[CLI reference](../reference/cli.md) lists short aliases.
+
 ## Code layout
 
 | Path | Holds |

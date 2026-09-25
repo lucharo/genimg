@@ -1,12 +1,13 @@
 # Input and reference images
 
-An image can go back in two ways. `-i` edits it. A path after the prompt steers a new image.
+An image can go back in two ways. `--input` edits it. A path after the prompt steers a new image.
 
-## Edit an image: `-i`
+## Edit an image: `--input`
 
 ```bash
 genimg "same logo, same style, but at dusk: deep indigo background, warm orange rim light on the fox, keep everything else" \
-  -i fox_1.png -m oai:gi2.5-flare
+  --input fox_1.png \
+  --model oai:gi2.5-flare
 ```
 
 <div class="grid" markdown>
@@ -21,7 +22,8 @@ feed the last output back in; `genimg history` records each input.
 
 ```bash
 genimg "a raccoon character in exactly this paper-cut style and palette, one centred mark" \
-  fox_1.png -m oai:gi2.5-flare
+  fox_1.png \
+  --model oai:gi2.5-flare
 ```
 
 <div class="grid" markdown>
@@ -37,7 +39,11 @@ Edit one image and steer it with others. `--dry-run` shows which role each file 
 
 ```console
 $ genimg "preserve this room; apply the approved design direction" \
-    approved-concept.png palette.png -i original-room.png -m gdm:nb2 -o room-v2.png --dry-run
+    approved-concept.png palette.png \
+    --input original-room.png \
+    --model gdm:nb2 \
+    --output room-v2.png \
+    --dry-run
   input    original-room.png
   refs     #1 approved-concept.png
            #2 palette.png

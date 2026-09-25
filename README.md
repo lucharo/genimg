@@ -20,15 +20,20 @@ bundles an [image review tool](https://genimg.luischav.es/visual-tools/grid/) an
 ```bash
 uv tool install genimg
 genimg setup                      # connect a provider and save a profile
-genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
-  --deltas "line art, block print, brush stroke" -o fox.png -g --open
+genimg "a minimal fox logo, NOT a grid" \
+  --model oai:gi2.5-flare \
+  --num 4 \
+  --deltas "line art, block print, brush stroke" \
+  --output fox.png \
+  --grid \
+  --open
 ```
 
 ![The HTML grid genimg opened: four fox logos labelled base prompt, line art, block print and brush stroke](docs/assets/grid.webp)
 
 Add the skills to Claude Code, Codex, Cursor or OpenCode with `npx skills add lucharo/genimg`:
 `genimg` plus workflows for infographics, visual exploration, visual review and image-to-app.
-Pick some with `-s`, e.g. `npx skills add lucharo/genimg -s genimg genimg-infographic`.
+Pick some with `--skill`, e.g. `npx skills add lucharo/genimg --skill genimg genimg-infographic`.
 
 ## Docs
 

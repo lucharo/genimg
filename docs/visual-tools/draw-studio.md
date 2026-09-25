@@ -4,7 +4,7 @@ Sketch on an image, then have a model redraw it. Draw Studio is a browser canvas
 serves from your own computer.
 
 ```bash
-genimg draw -m oai:gi2.5 fox-sketch.webp
+genimg draw --model oai:gi2.5 fox-sketch.webp
 ```
 
 <figure markdown>
@@ -62,10 +62,10 @@ finish.
 
 | Need | Draw Studio | CLI |
 | --- | --- | --- |
-| Sketch or annotate | Yes | Pass a file with `-i` |
-| Several variants | One per Generate | `-n` |
-| Deliberate diversity | No | `-d`, `--deltas` |
-| Review grid | Generated panel | `-g`, `genimg grid` |
+| Sketch or annotate | Yes | Pass a file with `--input` |
+| Several variants | One per Generate | `--num` |
+| Deliberate diversity | No | `--diverse`, `--deltas` |
+| Review grid | Generated panel | `--grid`, `genimg grid` |
 
 ## Security boundary
 

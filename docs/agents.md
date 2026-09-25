@@ -9,9 +9,9 @@ npx skills add lucharo/genimg
 ```
 
 Needs Node.js. The [skills](https://github.com/vercel-labs/skills) CLI asks which agents and
-skills to install into this project; add `-g` to install for your user instead.
-`npx skills update` refreshes them. To pick skills up front, name them after `-s`:
-`npx skills add lucharo/genimg -s genimg genimg-infographic`.
+skills to install into this project; add `--global` to install for your user instead.
+`npx skills update` refreshes them. To pick skills up front, name them after `--skill`:
+`npx skills add lucharo/genimg --skill genimg genimg-infographic`.
 
 You get the `genimg` skill plus four workflows built on it:
 [infographics](skills/genimg-infographic.md),
@@ -20,8 +20,8 @@ You get the `genimg` skill plus four workflows built on it:
 
 ## What the `genimg` skill teaches
 
-- Real variation: `-n` with `-d` or `--deltas`, and Gemini batch mode.
-- Edit versus reference: `-i` changes an image; images after the prompt steer its style.
+- Real variation: `--num` with `--diverse` or `--deltas`, and Gemini batch mode.
+- Edit versus reference: `--input` changes an image; images after the prompt steer its style.
 - Model and quality choice by task, with logo, icon and favicon recipes.
 - Diagrams and infographics, where model choice and prompting differ from illustrations.
 - Every flag and its model limits, so the agent never parses `--help`.

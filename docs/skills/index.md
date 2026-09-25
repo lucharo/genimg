@@ -4,7 +4,7 @@
 # all of them (needs Node.js)
 npx skills add lucharo/genimg
 # only the ones you name
-npx skills add lucharo/genimg -s genimg genimg-visual-exploration
+npx skills add lucharo/genimg --skill genimg genimg-visual-exploration
 ```
 
 The main `genimg` skill holds the mechanics; workflow skills sit on top and call it.

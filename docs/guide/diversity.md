@@ -1,9 +1,12 @@
 # Diverse images
 
-`-n 4` asks for four images:
+`--num 4` asks for four images:
 
 ```bash
-genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -g
+genimg "a SINGLE minimal fox logo, NOT a grid" \
+  --model gdm:nb2 \
+  --num 4 \
+  --grid
 ```
 
 <figure markdown>
@@ -16,8 +19,12 @@ Two flags spread them out.
 ## Name the styles: `--deltas`
 
 ```bash
-genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
-  --deltas "line art, block print, brush stroke" -g --open
+genimg "a minimal fox logo, NOT a grid" \
+  --model oai:gi2.5-flare \
+  --num 4 \
+  --deltas "line art, block print, brush stroke" \
+  --grid \
+  --open
 ```
 
 <figure markdown>
@@ -25,13 +32,18 @@ genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
   <figcaption>Take #1 keeps the base prompt. Takes #2 to #4 get one delta each, in order.</figcaption>
 </figure>
 
-Pass one delta fewer than `-n`, comma-separated or as `--deltas @styles.txt` with one per line.
+Pass one delta fewer than `--num`, comma-separated or as `--deltas @styles.txt` with one per line.
 It works on every provider. Use it for diagrams and photos too.
 
-## Let genimg pick: `-d`
+## Let genimg pick: `--diverse`
 
 ```bash
-genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d -g --open
+genimg "a SINGLE minimal fox logo, NOT a grid" \
+  --model gdm:nb2 \
+  --num 4 \
+  --diverse \
+  --grid \
+  --open
 ```
 
 <figure markdown>
@@ -39,19 +51,25 @@ genimg "a SINGLE minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d -g --open
   <figcaption>Takes #2 to #4 drew close-up framing, neon glow and dramatic lighting from the built-in pool.</figcaption>
 </figure>
 
-`-d` picks deltas from a built-in pool that suits illustrations and logos, so each run differs.
+`--diverse` picks deltas from a built-in pool that suits illustrations and logos, so each run differs.
 On Gemini, `--mode batch` sends one request instead and the model varies its own takes:
 
 ```bash
-genimg "a minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d --mode batch -g --open
+genimg "a minimal fox logo, NOT a grid" \
+  --model gdm:nb2 \
+  --num 4 \
+  --diverse \
+  --mode batch \
+  --grid \
+  --open
 ```
 
 ## Rules of thumb
 
-- Both need `-n 2` or more.
+- Both need `--num 2` or more.
 - `--mode batch` is Gemini only. On OpenAI genimg rejects it, because batched takes come back as
   near-duplicates.
 - `--deltas` and `--mode batch` do not combine.
-- `-g --open` opens the set in the [grid](../visual-tools/grid.md), with each card's delta under it.
+- `--grid --open` opens the set in the [grid](../visual-tools/grid.md), with each card's delta under it.
   A `--mode batch` set has no per-card deltas; its info panel says model-diversified instead.
-- Found a winner? Edit it with `-i` ([Input and reference images](input-images.md)).
+- Found a winner? Edit it with `--input` ([Input and reference images](input-images.md)).

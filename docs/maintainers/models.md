@@ -1,6 +1,6 @@
 # Adding or updating a model
 
-Most new models need no code change. genimg resolves `-m` in this order:
+Most new models need no code change. genimg resolves `--model` in this order:
 
 1. A curated alias in `registry.py`, such as `gdm:nb2`.
 2. A model id already in the registry, such as `gpt-image-2`.
@@ -9,7 +9,7 @@ Most new models need no code change. genimg resolves `-m` in this order:
 So a new model works straight away with its full id:
 
 ```bash
-genimg "a robot" -m gemini-4.0-flash-image
+genimg "a robot" --model gemini-4.0-flash-image
 ```
 
 ## When to edit the registry
