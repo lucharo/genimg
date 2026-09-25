@@ -52,5 +52,5 @@ genimg "a minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d --mode batch -g --ope
 - `--mode batch` is Gemini only. On OpenAI genimg rejects it, because batched takes come back as
   near-duplicates.
 - `--deltas` and `--mode batch` do not combine.
-- `-g --open` opens the set in the [grid](../surfaces/grid.md), with each card's delta under it.
+- `-g --open` opens the set in the [grid](../visual-tools/grid.md), with each card's delta under it.
 - Found a winner? Edit it with `-i` ([Input and reference images](input-images.md)).

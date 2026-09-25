@@ -18,9 +18,9 @@ nav = [
     { "Input and reference images" = "guide/input-images.md" },
     { "Codex subscription" = "guide/codex-subscription.md" },
   ] },
-  { "Specialised surfaces" = [
-    { "Grid and carousel" = "surfaces/grid.md" },
-    { "Draw Studio" = "surfaces/draw-studio.md" },
+  { "Visual tools" = [
+    { "Grid and carousel" = "visual-tools/grid.md" },
+    { "Draw Studio" = "visual-tools/draw-studio.md" },
   ] },
   { "Skills" = [
     { "Overview" = "skills/index.md" },

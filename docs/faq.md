@@ -44,7 +44,7 @@ controls the selected model accepts.
 ## Can I use Draw Studio from an iPad?
 
 Yes, by showing your Mac's screen on the iPad with Sidecar or a screen-sharing app. iPad Safari
-cannot open the Mac's `localhost` address. See [Draw Studio](surfaces/draw-studio.md).
+cannot open the Mac's `localhost` address. See [Draw Studio](visual-tools/draw-studio.md).
 
 ## Does Draw Studio work offline? Can I host it?
 
