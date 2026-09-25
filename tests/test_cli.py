@@ -192,3 +192,46 @@ class CorruptConfigTests(unittest.TestCase):
         result = CliRunner().invoke(cli._app, ["models", "set-default", "gdm:nb2"], catch_exceptions=True)
       self.assertIsInstance(result.exception, cli.config.ConfigError)
       self.assertEqual(config_path.read_text(), "default_model = ")
+
+
+class StandaloneGridTests(unittest.TestCase):
+  FOX = Path(__file__).resolve().parents[1] / "docs" / "assets" / "fox-1.webp"
+
+  def test_a_directory_expands_to_the_images_inside_it(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      folder = Path(td) / "takes"
+      folder.mkdir()
+      for name in ("a.webp", "b.webp"):
+        (folder / name).write_bytes(self.FOX.read_bytes())
+      (folder / "notes.txt").write_text("not an image")
+      out = Path(td) / "grid.html"
+      result = CliRunner().invoke(cli._app, ["grid", str(folder), "--output", str(out)])
+
+      self.assertEqual(result.exit_code, 0, result.output)
+      self.assertIn("(2 images)", " ".join(result.output.split()))
+      html = out.read_text()
+      self.assertIn("a.webp", html)
+      self.assertIn("b.webp", html)
+      self.assertNotIn("notes.txt", html)
+
+  def test_a_file_that_is_not_an_image_is_refused_cleanly(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      script = Path(td) / "mk.py"
+      script.write_text("print('hi')\n")
+      out = Path(td) / "grid.html"
+      result = CliRunner().invoke(cli._app, ["grid", str(script), "--output", str(out)])
+
+      self.assertEqual(result.exit_code, 1)
+      self.assertIsInstance(result.exception, SystemExit)
+      self.assertIn("not an image", result.output)
+      self.assertFalse(out.exists())
+
+  def test_a_directory_without_images_is_refused_cleanly(self) -> None:
+    with tempfile.TemporaryDirectory() as td:
+      out = Path(td) / "grid.html"
+      result = CliRunner().invoke(cli._app, ["grid", td, "--output", str(out)])
+
+      self.assertEqual(result.exit_code, 1)
+      self.assertIsInstance(result.exception, SystemExit)
+      self.assertIn("no images found", result.output)
+      self.assertFalse(out.exists())

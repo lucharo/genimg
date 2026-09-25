@@ -738,10 +738,12 @@ def cost_cmd(
 
 @_app.command("grid", help="Render an HTML grid from existing image files.")
 def grid_cmd(
-  paths: Annotated[list[Path], typer.Argument(help="Image paths to include in the grid.")],
+  paths: Annotated[list[Path], typer.Argument(help="Image files and/or directories to include in the grid.")],
   output: Annotated[Path | None, typer.Option("-o", "--output", help="Output HTML path. Default: ~/.genimg/grids/<timestamp>.html")] = None,
   open_after: Annotated[bool, typer.Option("--open", help="Open the grid in the browser.")] = False,
 ):
+  from . import draw as draw_module
+
   if not paths:
     console.print("[red]error:[/red] need at least one image path.")
     raise typer.Exit(1)
@@ -749,11 +751,19 @@ def grid_cmd(
     if not p.exists():
       console.print(f"[red]error:[/red] not found: {p}")
       raise typer.Exit(1)
+    if p.is_file() and p.suffix.lower() not in draw_module.IMAGE_EXTS:
+      console.print(f"[red]error:[/red] not an image: {p}")
+      raise typer.Exit(1)
+  # Directories expand to the images directly inside them, as `genimg draw` does.
+  images = draw_module.discover_images(paths)
+  if not images:
+    console.print("[red]error:[/red] no images found in the given path(s).")
+    raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
   # No cost_total — provenance of arbitrary input files is unknown, so any estimate
   # would be misleading. The footer is omitted rather than guessed.
-  written, _total = grid_module.render(paths, target)
-  console.print(f"[green]wrote[/green] {written} [dim]({len(paths)} images)[/dim]")
+  written, _total = grid_module.render(images, target)
+  console.print(f"[green]wrote[/green] {written} [dim]({len(images)} images)[/dim]")
   if open_after:
     grid_module.open_in_browser(written)
 
