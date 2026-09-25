@@ -17,7 +17,9 @@ from genimg.providers import openai as openai_provider
 
 class DiscoveryCacheTests(unittest.TestCase):
   def test_uses_cache_before_refresh_interval(self) -> None:
-    with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"):
+    entries = {"oai:gpt-image-2": discovery.ModelSpec("openai", "gpt-image-2")}
+    with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"), \
+         patch.object(discovery, "all_canonical", return_value=entries):
       cached_probe = ProbeResult(model="gpt-image-2", status="listed")
       discovery.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
       discovery.CACHE_PATH.write_text(json.dumps({
@@ -47,6 +49,25 @@ class DiscoveryCacheTests(unittest.TestCase):
       probe_all.assert_called_once_with()
       self.assertEqual(age, 0.0)
       self.assertEqual(probes["oai:gpt-image-2"].status, "listed")
+
+  def test_auth_failures_are_not_cached_so_new_credentials_are_picked_up(self) -> None:
+    entries = {"oai:listed": discovery.ModelSpec("openai", "gpt-image-listed")}
+    client = SimpleNamespace(models=SimpleNamespace(list=lambda: [SimpleNamespace(id="gpt-image-listed")]))
+    hint = "No openai auth detected. Run `genimg setup` or set OPENAI_API_KEY."
+    with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"), \
+         patch.object(discovery, "all_canonical", return_value=entries):
+      with patch.object(openai_provider, "get_client", side_effect=RuntimeError(hint)):
+        first, _ = discovery.get_or_probe()
+      first_saved = json.loads(discovery.CACHE_PATH.read_text())
+      with patch.object(openai_provider, "get_client", return_value=client):
+        second, _ = discovery.get_or_probe()
+      second_saved = json.loads(discovery.CACHE_PATH.read_text())
+
+    self.assertEqual(first["oai:listed"], ProbeResult(model="gpt-image-listed", status="auth", detail=hint))
+    self.assertEqual(first_saved["probes"], {})
+    self.assertEqual(second["oai:listed"].status, "listed")
+    self.assertEqual(second_saved, {"timestamp": first_saved["timestamp"],
+                                    "probes": {"oai:listed": second["oai:listed"].model_dump()}})
 
 
 class DiscoveryProbeTests(unittest.TestCase):

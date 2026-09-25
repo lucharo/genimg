@@ -42,18 +42,20 @@ def load_fresh_cache() -> dict[str, Any] | None:
   return None
 
 
-def save_cache(probes: dict[str, ProbeResult]) -> None:
+def save_cache(probes: dict[str, ProbeResult], timestamp: float | None = None) -> None:
+  """Auth failures are left out, so the next run re-probes them once credentials exist."""
   CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
   payload = {
-    "timestamp": time.time(),
-    "probes": {alias: p.model_dump() for alias, p in probes.items()},
+    "timestamp": time.time() if timestamp is None else timestamp,
+    "probes": {alias: p.model_dump() for alias, p in probes.items() if p.status != "auth"},
   }
   CACHE_PATH.write_text(json.dumps(payload, indent=2))
 
 
-def probe_all(parallel: int | None = None) -> dict[str, ProbeResult]:
-  """Check registry entries against free provider model-list endpoints."""
-  entries = list(all_canonical().items())
+def probe_all(parallel: int | None = None,
+              entries: list[tuple[str, ModelSpec]] | None = None) -> dict[str, ProbeResult]:
+  """Check registry entries (default: all) against free provider model-list endpoints."""
+  entries = list(all_canonical().items()) if entries is None else entries
   if not entries:
     return {}
   groups = _probe_groups(entries)
@@ -87,6 +89,11 @@ def get_or_probe(refresh: bool = False, cached: dict[str, Any] | None = None) ->
     cached = cached if cached is not None else load_cache()
     if cached and not is_cache_stale(cached):
       probes = {a: ProbeResult.model_validate(p) for a, p in cached["probes"].items()}
+      # Rows a fresh cache lacks (auth failures, new registry entries) are probed now.
+      unprobed = [(a, spec) for a, spec in all_canonical().items() if a not in probes]
+      if unprobed:
+        probes.update(probe_all(entries=unprobed))
+        save_cache(probes, timestamp=float(cached.get("timestamp", 0)))
       return probes, cache_age_seconds(cached)
   probes = probe_all()
   save_cache(probes)

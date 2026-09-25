@@ -66,7 +66,8 @@ genimg auth \
 
 ## genimg models { data-toc-label="models" }
 
-- Lists every model, its alias, and whether the provider's model list includes it. Cached for 5 days.
+- Lists every model, its alias, and whether the provider's model list includes it. Cached for 5 days,
+  except rows that failed on auth, which are probed again on the next run.
 
 ```text
 genimg models \

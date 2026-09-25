@@ -291,6 +291,9 @@ class OpenAIProvider(Provider):
   def probe_listed(self, entries, profile: AuthProfile | None = None) -> dict[str, ProbeResult]:
     try:
       client = get_client(profile=profile)
+    except RuntimeError as e:  # no usable credentials; "auth" rows are never cached
+      return error_results(entries, "auth", str(e))
+    try:
       return results_from_model_ids(entries, listed_model_ids(client.models.list()))
     except AuthenticationError as e:
       return error_results(entries, "auth", str(e))

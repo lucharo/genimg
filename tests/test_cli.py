@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 
 from genimg import cli, metadata
 from genimg.auth.base import AuthInfo
-from genimg.interfaces import GenerateResult
+from genimg.interfaces import GenerateResult, ProbeResult
 
 
 class ModelDefaultTests(unittest.TestCase):
@@ -338,6 +338,31 @@ class DryRunAuthPreflightTests(unittest.TestCase):
     self.assertEqual(exit_code, 0, output)
     self.assertNotIn("auth ✗", output)
     self.assertTrue(output.endswith("dry-run: no API call made."), output)
+
+
+class ModelsFailureDetailTests(unittest.TestCase):
+  HINT = "No google auth detected. Run `genimg setup` or set GEMINI_API_KEY."
+
+  def _invoke(self, *args: str):
+    probes = {alias: ProbeResult(model=spec.model_id, status="auth", detail=self.HINT)
+              if spec.provider == "google" else ProbeResult(model=spec.model_id, status="listed")
+              for alias, spec in cli.registry.all_canonical().items()}
+    with patch.object(cli.config, "load", return_value={}), \
+         patch.object(cli.discovery, "load_cache", return_value=None), \
+         patch.object(cli.discovery, "get_or_probe", return_value=(probes, 0.0)):
+      return CliRunner().invoke(cli._app, ["models", *args])
+
+  def test_table_explains_failed_rows_once_per_provider(self) -> None:
+    result = self._invoke()
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertEqual(result.output.count(f"google · {self.HINT}"), 1, result.output)
+
+  def test_json_carries_each_rows_detail(self) -> None:
+    result = self._invoke("--json")
+    self.assertEqual(result.exit_code, 0, result.output)
+    details = {row["alias"]: row["detail"] for row in json.loads(result.output)}
+    self.assertEqual(details["gdm:nb2"], self.HINT)
+    self.assertEqual(details["oai:gpt-image-2"], "")
 
 
 class PipedOutputTests(unittest.TestCase):

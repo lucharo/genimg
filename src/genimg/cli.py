@@ -509,6 +509,7 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
       payload.append({
         "alias": alias, "model_id": spec.model_id, "provider": spec.provider,
         "region": spec.region, "status": p.status if p else "unknown",
+        "detail": p.detail if p else "",
         "is_default": alias == config.get_default_model(),
       })
     typer.echo(_json.dumps(payload, indent=2))
@@ -536,6 +537,13 @@ def _list_models(refresh: bool, show_aliases: bool, json_out: bool = False) -> N
     table.add_row(*row)
 
   console.print(table)
+  # Why rows failed, once per provider and reason (a provider's rows share one list call).
+  reasons = dict.fromkeys(
+    (spec.provider, p.detail) for alias, spec in registry.all_canonical().items()
+    if (p := probes.get(alias)) and p.detail and p.status not in ("listed", "ready", "missing")
+  )
+  for provider_name, detail in reasons:
+    console.print(f"  [yellow]{provider_name}[/yellow] · {_rich_escape(detail)}", soft_wrap=True)
   console.print("[dim]★ = current default. Change with `genimg models set-default <alias>`.[/dim]")
   if any((p.status if p else "") == "missing" for p in probes.values()):
     console.print(
