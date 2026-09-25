@@ -578,7 +578,7 @@ def models_get_default():
         "`genimg models set-default gdm:nb2`, or remove it with "
         "`genimg models clear-default`."
       )
-    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]")
+    console.print(f"[bold]{canonical}[/bold]  ({spec.provider} / {spec.model_id})  [dim]from {config.CONFIG_PATH}[/dim]", soft_wrap=True)
   else:
     console.print("[dim]no default model set. Pass -m each run, or set one with `genimg models set-default <alias>`.[/dim]")
 
@@ -900,10 +900,10 @@ def _config_root(ctx: typer.Context):
 def config_show():
   data = config.load()
   if not data:
-    console.print(f"[dim]no config yet at {config.CONFIG_PATH}. Run `genimg setup` to create one.[/dim]")
+    console.print(f"[dim]no config yet at {config.CONFIG_PATH}. Run `genimg setup` to create one.[/dim]", soft_wrap=True)
     return
   console.print(config.dumps(data).rstrip(), markup=False, highlight=False)
-  console.print(f"[dim]{config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]{config.CONFIG_PATH}[/dim]", soft_wrap=True)
 
 
 @config_app.command("path", help="Print the config file path.")
@@ -914,7 +914,7 @@ def config_path():
 @config_app.command("edit", help="Open the config file in $EDITOR.")
 def config_edit():
   config.open_in_editor()
-  console.print(f"[dim]edited {config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]edited {config.CONFIG_PATH}[/dim]", soft_wrap=True)
 
 
 # ────────────────────── skills sub-typer ──────────────────────
