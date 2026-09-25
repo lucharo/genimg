@@ -394,7 +394,8 @@ class PipedOutputTests(unittest.TestCase):
                           text=True, stdin=subprocess.DEVNULL, timeout=60)
 
   def test_config_path_longer_than_the_console_stays_on_one_line(self) -> None:
-    config_home = str(self.home / ("very-long-config-folder-name-" * 10))
+    # Longer than the 200-column console, in parts shorter than any filesystem's name limit.
+    config_home = str(self.home.joinpath(*["very-long-config-folder-name"] * 8))
     result = self._run("config", "show", GENIMG_CONFIG_HOME=config_home)
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(f"no config yet at {config_home}/config.toml.", result.stdout)
