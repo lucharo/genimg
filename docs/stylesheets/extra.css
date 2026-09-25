@@ -42,3 +42,6 @@
   --md-default-bg-color--light: rgba(28, 25, 23, .54);
 }
 .md-header .md-search__button:focus-visible { outline: 2px solid #f5efe6; outline-offset: 2px; }
+/* A picture or clip that stands alone in its paragraph sits centred in the column. */
+.md-typeset p > img:only-child,
+.md-typeset video { display: block; margin-left: auto; margin-right: auto; max-width: 100%; }
