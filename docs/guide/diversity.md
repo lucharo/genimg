@@ -53,4 +53,5 @@ genimg "a minimal fox logo, NOT a grid" -m gdm:nb2 -n 4 -d --mode batch -g --ope
   near-duplicates.
 - `--deltas` and `--mode batch` do not combine.
 - `-g --open` opens the set in the [grid](../visual-tools/grid.md), with each card's delta under it.
+  A `--mode batch` set has no per-card deltas; its info panel says model-diversified instead.
 - Found a winner? Edit it with `-i` ([Input and reference images](input-images.md)).

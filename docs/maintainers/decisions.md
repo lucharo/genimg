@@ -18,9 +18,12 @@ be wrong for every user but its author.
 ## Providers are plugins, auth lives in profiles
 
 Each backend is a `Provider` that owns its auth modes, model capabilities, prices and model-id
-inference. No other module branches on a provider name, so the CLI, the grid and Draw Studio read
-the same tables. Each provider and auth mode pair is an `AuthProfile`. Users pin one as a
-`[profiles.NAME]` table in `config.toml`, which never holds secrets. Without one, genimg uses the
-first mode whose environment variables are set.
+inference, so the CLI, the grid and Draw Studio read the same tables. A few provider-name branches
+remain outside the providers: OpenAI pricing in `cost.py`, the OpenAI `--mode batch` error in
+`cli.py`, the suggested model in `setup.py` and Draw Studio's offline fallback in `draw.py`.
+
+Each provider and auth mode pair is an `AuthProfile`. Users pin one as a `[profiles.NAME]` table in
+`config.toml`, which never holds secrets. Without one, genimg uses the first mode whose detection
+succeeds: an API key in the environment, a gcloud ADC token, or a Codex login.
 
 The full records are in `internal/adr/` in the repository.

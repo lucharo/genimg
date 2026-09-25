@@ -1,7 +1,7 @@
 # Models
 
-Pass `-m` an alias or the provider's model id. `genimg models` lists them with a live status
-for your credentials; `--aliases` adds the long names.
+Pass `-m` an alias or the provider's model id. `genimg models` lists them with their status for
+your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds the long names.
 
 ## Gemini
 

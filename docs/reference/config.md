@@ -42,7 +42,8 @@ OpenAI runs through its own API or Azure. Google runs through a Gemini API key o
 | `codex` | `subscription` | ChatGPT plan | `codex login` | |
 
 Without `endpoint`, genimg reads `AZURE_OPENAI_ENDPOINT`. Without `project`, it reads
-`GOOGLE_CLOUD_PROJECT`, then the service-account JSON, then gcloud.
+`GOOGLE_CLOUD_PROJECT`, then the service-account JSON's `project_id` (`vertex`) or gcloud's active
+project (`vertex_adc`).
 
 ## Which profile runs
 

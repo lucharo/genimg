@@ -28,7 +28,8 @@ This is the file the command above wrote. Switch views, or use the arrow keys.
 ## Can't decide? Run a tournament
 
 With 3 to 20 images, **Tournament** shows two at a time. Click the one you prefer, or press ← or →,
-until one is left: eight images take seven picks. Tick **Top 3** for one more match, for third place.
+until one is left: eight images take seven picks. Tick **Top 3** for third place: one more match
+from four images up, none with three, where the semifinal loser is already third.
 
 ![Match 1 of 7: fox-3 against fox-dusk, with Top 3, Undo and Reshuffle](../assets/grid-tournament.webp)
 
