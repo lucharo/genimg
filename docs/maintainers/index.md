@@ -32,6 +32,13 @@ Docs examples use long flag names (`--model`, not `-m`); only the
 | `docs.yml` | A strict docs build; deploys to GitHub Pages from `main` |
 | `release.yml` | release-please and PyPI publishing |
 
+## Docs demos
+
+Commands that show progress are [VHS](https://github.com/charmbracelet/vhs) clips: each has a tape
+in `scripts/demos/<clip>.tape`, and `scripts/demos/render.sh <clip>` records it. Clips sit collapsed
+under the snippet they prove. Output that does not change over time, such as `genimg models`, is a
+screenshot instead. A clip that calls a paid model is recorded once, after the cost is agreed.
+
 ## Releases
 
 Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`,

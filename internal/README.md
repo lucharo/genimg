@@ -12,8 +12,8 @@ sdist (`/internal` is in the sdist `exclude` list in `pyproject.toml`).
 
 Moved out of the public FAQ on 25 September 2026.
 
-- Draw Studio on iPad: the Sidecar and VNC routes are documented, but Apple Pencil and VNC input
-  have not been checked on a real device.
+- Draw Studio on iPad: the Sidecar, Tailscale and same-network routes are documented, but Apple
+  Pencil input has not been checked on a real device.
 - `codex:image` was verified with Codex CLI 0.153.4. Recheck after Codex upgrades, including
   whether the host exposes a model or version selector.
 - Content credentials in generation records are extracted offline, not signature-verified.
