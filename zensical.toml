@@ -25,6 +25,8 @@ nav = [
   { "Skills" = [
     { "Overview" = "skills/index.md" },
     { "genimg-infographic" = "skills/genimg-infographic.md" },
+    { "genimg-visual-exploration" = "skills/genimg-visual-exploration.md" },
+    { "genimg-visual-review" = "skills/genimg-visual-review.md" },
     { "image-to-app" = "skills/image-to-app.md" },
   ] },
   { "Reference" = [

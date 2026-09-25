@@ -10,10 +10,13 @@ npx skills add lucharo/genimg
 
 Needs Node.js. The [skills](https://github.com/vercel-labs/skills) CLI asks which agents and
 skills to install into this project; add `-g` to install for your user instead.
-`npx skills update` refreshes them.
+`npx skills update` refreshes them. To pick skills up front, name them after `-s`:
+`npx skills add lucharo/genimg -s genimg genimg-infographic`.
 
-You get the `genimg` skill plus two workflows built on it:
-[infographics](skills/genimg-infographic.md) and [image-to-app](skills/image-to-app.md).
+You get the `genimg` skill plus four workflows built on it:
+[infographics](skills/genimg-infographic.md),
+[visual exploration](skills/genimg-visual-exploration.md),
+[visual review](skills/genimg-visual-review.md) and [image-to-app](skills/image-to-app.md).
 
 ## What the `genimg` skill teaches
 

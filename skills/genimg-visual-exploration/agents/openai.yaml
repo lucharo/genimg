@@ -1,0 +1,4 @@
+interface:
+  display_name: "GenIMG Visual Exploration"
+  short_description: "Explore distinct visual directions and pick one"
+  default_prompt: "Use $genimg-visual-exploration to explore a few different directions for this visual before we pick one."

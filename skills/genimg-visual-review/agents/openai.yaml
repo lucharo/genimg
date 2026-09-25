@@ -1,0 +1,4 @@
+interface:
+  display_name: "GenIMG Visual Review"
+  short_description: "One-page HTML review of what changed, with real evidence"
+  default_prompt: "Use $genimg-visual-review to show me what changed and the evidence that it works."
