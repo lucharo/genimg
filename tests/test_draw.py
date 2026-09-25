@@ -580,6 +580,28 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("function updatePromptChipState", draw.PAGE)
     self.assertIn("updatePromptChipState();", draw.PAGE)
 
+  def test_loading_a_source_over_a_drawing_asks_first(self) -> None:
+    self.assertIn("if(hasContent()&&!confirm(`Replace the canvas with ${name}? Your drawing will be lost.`))return;", draw.PAGE)
+
+  def test_drawing_tools_drop_the_image_selection_and_clear_asks_first(self) -> None:
+    self.assertIn('function setTool(t){ S.tool=t; if(t!=="move")S.selectedId=null;', draw.PAGE)
+    self.assertNotIn('S.tool="pen"', draw.PAGE)  # every switch to Pen goes through setTool
+    self.assertIn('if(hasContent()&&!confirm("Clear the canvas? Your drawing will be lost."))return;', draw.PAGE)
+
+  def test_image_size_keeps_the_users_pick_and_derives_the_shown_and_priced_size(self) -> None:
+    # A wide stroke used to overwrite 1K with 2K for good, doubling the estimate unasked.
+    self.assertNotIn("S.resolution=", draw.PAGE)  # only the size control's own click sets it
+    self.assertIn('segmentedControl("resolution","Image size",resolutions,selectedResolution(),"sizefield")', draw.PAGE)
+    self.assertIn('const res=(meta.resolutionOptions||[]).length?selectedResolution():"";', draw.PAGE)
+
+  def test_start_with_chips_ask_before_replacing_typed_text(self) -> None:
+    self.assertIn("if(S.prompt.trim()&&!templates.includes(S.prompt)&&!confirm(", draw.PAGE)
+    self.assertIn("if(p&&replacePrompt(p.prompt,p.label))", draw.PAGE)
+    self.assertIn('if(replacePrompt(BOOT.defaultPrompt,"Default"))', draw.PAGE)
+
+  def test_reload_or_close_warns_while_the_canvas_has_content(self) -> None:
+    self.assertIn('window.addEventListener("beforeunload",(e)=>{ if(hasContent()){e.preventDefault();e.returnValue="";} });', draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)

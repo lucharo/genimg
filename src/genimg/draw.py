@@ -745,7 +745,6 @@ const BOOT = /*__BOOT__*/;
     const meta=MM[S.model]||{};
     const qualities=meta.qualityOptions||[], resolutions=resolutionOptions(meta), thinking=meta.thinkingOptions||[];
     if(qualities.length&&!qualities.includes(S.quality))S.quality="medium";
-    if(resolutions.length&&!resolutions.includes(S.resolution))S.resolution=resolutions.includes("2K")?"2K":resolutions[0];
     if(thinking.length&&!thinking.includes(S.thinking))S.thinking=thinking[0];
     const supportedAspects=meta.aspectOptions||[];
     if(S.aspect!=="auto"&&!supportedAspects.includes(S.aspect))S.aspect="auto";
@@ -753,7 +752,7 @@ const BOOT = /*__BOOT__*/;
     S.sizeControlKey=sizeControlKey(meta);
     $("paramControls").innerHTML =
       (qualities.length?segmentedControl("quality","Quality",qualities,S.quality,"qualityfield"):"")+
-      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,S.resolution,"sizefield"):"")+
+      (resolutions.length>1?segmentedControl("resolution","Image size",resolutions,selectedResolution(),"sizefield"):"")+
       `<div class="controlfield aspectfield"><label class="toplbl" for="aspectSel">Aspect ratio</label><select id="aspectSel" aria-label="Aspect ratio" style="width:100%">${aspects.map(a=>`<option value="${a[0]}"${S.aspect===a[0]?" selected":""}>${a[1]}</option>`).join("")}</select></div>`+
       (thinking.length?segmentedControl("thinking","Thinking",thinking,S.thinking,"thinkingfield"):"");
     renderControlsVisibility();
@@ -771,7 +770,7 @@ const BOOT = /*__BOOT__*/;
       button.addEventListener("click",()=>selectSegment(button.dataset.segKey,button.dataset.segValue));
       button.addEventListener("keydown",e=>{
         const key=button.dataset.segKey, options=optionSets[key]||[];
-        let idx=options.indexOf(S[key]);
+        let idx=options.indexOf(key==="resolution"?selectedResolution():S[key]);
         if(e.key==="ArrowRight"||e.key==="ArrowDown")idx=(idx+1)%options.length;
         else if(e.key==="ArrowLeft"||e.key==="ArrowUp")idx=(idx-1+options.length)%options.length;
         else if(e.key==="Home")idx=0;
@@ -834,6 +833,12 @@ const BOOT = /*__BOOT__*/;
       button.classList.toggle("on",Boolean(starter&&S.prompt.startsWith(starter.prompt)));
     }
     document.querySelector('[data-act="promptDefault"]')?.classList.toggle("on",S.prompt===BOOT.defaultPrompt);
+  }
+  // A "Start with" chip swaps freely between templates, but asks before discarding typed text.
+  function replacePrompt(text,label){
+    const templates=(BOOT.promptStarters||[]).map(p=>p.prompt).concat(BOOT.defaultPrompt);
+    if(S.prompt.trim()&&!templates.includes(S.prompt)&&!confirm(`Replace your prompt with the ${label} starter? What you typed will be lost.`))return false;
+    S.prompt=text; S.promptExpanded=true; renderPrompt(); return true;
   }
   function renderCost(){ const el=$("costtext"); if(el) el.textContent = "· " + costEstimate(); }
   function nearestAspect(w,h,aspects){const options=aspects&&aspects.length?aspects:["1:1"];const r=h?w/h:1;let best=options[0],bd=1e9;for(const a of options){const parts=a.split(":").map(Number),ar=parts[0]/parts[1],d=Math.abs(ar-r);if(d<bd){bd=d;best=a;}}return best;}
@@ -961,17 +966,15 @@ const BOOT = /*__BOOT__*/;
     const byAspect=meta.resolutionOptionsByAspect||{}, options=resolutionOptions(meta);
     return (Object.keys(byAspect).length?selectedAspect()+"|":"")+options.join(",");
   }
+  // S.resolution is the user's pick and is never overwritten. The size sent and priced is derived
+  // from it: the pick while this model and aspect allow it, else the nearest allowed size.
+  const RES_ORDER=["512","1K","2K","4K"];
   function selectedResolution(){
     const options=resolutionOptions();
     if(!options.length)return null;
     if(options.includes(S.resolution))return S.resolution;
-    return options.includes("2K")?"2K":options[0];
-  }
-  function effectiveResolution(){
-    const meta=MM[S.model]||{}, byAspect=meta.resolutionOptionsByAspect||{};
-    if(!Object.keys(byAspect).length)return selectedResolution()||"1K";
-    const valid=byAspect[selectedAspect()]||[];
-    return valid.includes(S.resolution)?S.resolution:"2K";
+    const want=RES_ORDER.indexOf(S.resolution), gap=r=>Math.abs(RES_ORDER.indexOf(r)-want);
+    return options.reduce((best,r)=>gap(r)<=gap(best)?r:best);  // ascending options: a tie goes to the larger
   }
   const providerLabel=(p)=>((BOOT.providers||{})[p]||{}).label;
   function costEstimate(){
@@ -980,7 +983,7 @@ const BOOT = /*__BOOT__*/;
     // prices: quality ("" when n/a) → resolution ("" when n/a) → USD, built server-side per model;
     // a "resolution|aspect" key overrides the default-aspect figure where size changes the price.
     const byQ=meta.prices||{}, row=byQ[(meta.qualityOptions||[]).length?S.quality:""]||{};
-    const res=(meta.resolutionOptions||[]).length?effectiveResolution():"";
+    const res=(meta.resolutionOptions||[]).length?selectedResolution():"";
     let usd=row[res+"|"+selectedAspect()]; if(usd==null) usd=row[res]; if(usd==null) usd=row["1K"]; if(usd==null) usd=row[""];
     if(usd==null) return "cost unknown";
     return "~$"+usd.toFixed(3).replace(/0+$/,"").replace(/\.$/,".0");
@@ -1065,14 +1068,12 @@ const BOOT = /*__BOOT__*/;
     ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(off,0,0);
     const sel=S.items.find(it=>it.id===S.selectedId);
     if(sel){ctx.setTransform(dpr*v.s,0,0,dpr*v.s,dpr*v.x,dpr*v.y);ctx.strokeStyle="#4CAF50";ctx.lineWidth=1.5/v.s;ctx.setLineDash([6/v.s,4/v.s]);ctx.strokeRect(sel.x,sel.y,sel.w,sel.h);ctx.setLineDash([]);ctx.setTransform(1,0,0,1,0,0);}
-    const resolution=selectedResolution();
-    if(sizeControlKey()!==S.sizeControlKey||(resolution&&resolution!==S.resolution)){
-      if(resolution)S.resolution=resolution;
-      renderTopbar();
-    }
+    if(sizeControlKey()!==S.sizeControlKey)renderTopbar();
     renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
+  // Drawing tools drop the image selection, so Backspace in Pen mode can't delete the photo.
+  function setTool(t){ S.tool=t; if(t!=="move")S.selectedId=null; renderToolbar(); redraw(); }
 
   // ---------- images ----------
   function addImage(url, at, fit){
@@ -1096,7 +1097,12 @@ const BOOT = /*__BOOT__*/;
     const files=(e.dataTransfer&&e.dataTransfer.files)?Array.from(e.dataTransfer.files):[];
     files.filter(f=>f.type.startsWith("image/")).forEach((f,i)=>{const rd=new FileReader();rd.onload=()=>addImage(rd.result,at?[at[0]+i*40,at[1]+i*40]:null);rd.readAsDataURL(f);});
   }
-  function loadSource(idx){ S.strokes=[]; S.items=[]; S.selectedId=null; renderToolbar(); addImage("/src/"+idx,null,true); }
+  function hasContent(){ return S.items.length>0||S.strokes.length>0; }
+  function loadSource(idx){
+    const name=(BOOT.sources[idx]||{}).name||"this image";
+    if(hasContent()&&!confirm(`Replace the canvas with ${name}? Your drawing will be lost.`))return;
+    S.strokes=[]; S.items=[]; S.selectedId=null; renderToolbar(); addImage("/src/"+idx,null,true);
+  }
 
   const SERVER_UNREACHABLE = "Draw Studio server is no longer reachable. Relaunch `genimg draw`, then Retry.";
   async function apiJson(url,options){
@@ -1173,12 +1179,12 @@ const BOOT = /*__BOOT__*/;
   document.addEventListener("click",(e)=>{
     const t=e.target.closest("[data-act]"); if(!t)return;
     const a=t.dataset.act;
-    if(a==="tool"){S.tool=t.dataset.tool;renderToolbar();redraw();}
-    else if(a==="swatch"){S.color=t.dataset.color;S.tool="pen";renderToolbar();}
+    if(a==="tool"){setTool(t.dataset.tool);}
+    else if(a==="swatch"){S.color=t.dataset.color;setTool("pen");}
     else if(a==="brushDown"){S.brushLevel=Math.max(0,S.brushLevel-1);renderToolbar();}
     else if(a==="brushUp"){S.brushLevel=Math.min(4,S.brushLevel+1);renderToolbar();}
     else if(a==="undo"){if(S.strokes.length){S.strokes.pop();redraw();}}
-    else if(a==="clear"){S.strokes=[];S.items=[];S.selectedId=null;renderToolbar();redraw();const h=$("hint");if(h)h.style.display="flex";}
+    else if(a==="clear"){if(hasContent()&&!confirm("Clear the canvas? Your drawing will be lost."))return;S.strokes=[];S.items=[];S.selectedId=null;renderToolbar();redraw();const h=$("hint");if(h)h.style.display="flex";}
     else if(a==="removeSel"){S.items=S.items.filter(it=>it.id!==S.selectedId);S.selectedId=null;renderToolbar();redraw();}
     else if(a==="zoomIn"){zoomAt(1.25);} else if(a==="zoomOut"){zoomAt(.8);}
     else if(a==="zoomReset"){S.view={x:0,y:0,s:1};updateZoom();redraw();} else if(a==="zoomFit"){zoomFit();}
@@ -1188,9 +1194,9 @@ const BOOT = /*__BOOT__*/;
     else if(a==="togglePrompt"){S.promptExpanded=!S.promptExpanded;renderPrompt();}
     else if(a==="promptStarter"){
       const p=(BOOT.promptStarters||[])[parseInt(t.dataset.idx,10)];
-      if(p){S.prompt=p.prompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
+      if(p&&replacePrompt(p.prompt,p.label)){requestAnimationFrame(()=>{const ta=$("promptta");if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}});}
     }
-    else if(a==="promptDefault"){S.prompt=BOOT.defaultPrompt;S.promptExpanded=true;renderPrompt();requestAnimationFrame(()=>$("promptta")?.focus());}
+    else if(a==="promptDefault"){if(replacePrompt(BOOT.defaultPrompt,"Default"))requestAnimationFrame(()=>$("promptta")?.focus());}
     else if(a==="toggleControls"){S.controlsCollapsed=!S.controlsCollapsed;renderControlsVisibility();}
     else if(a==="generate"){generate();}
     else if(a==="toggleTray"){S.trayCollapsed=!S.trayCollapsed;renderGrid();renderTray();}
@@ -1202,7 +1208,7 @@ const BOOT = /*__BOOT__*/;
     else if(a==="tweak"){addImage(t.dataset.url);}
     else if(a==="retry"){retry(t.dataset.id);}
   });
-  document.addEventListener("change",(e)=>{ if(e.target.dataset&&e.target.dataset.act==="custom"){S.customColor=e.target.value;S.color=e.target.value;S.tool="pen";renderToolbar();} });
+  document.addEventListener("change",(e)=>{ if(e.target.dataset&&e.target.dataset.act==="custom"){S.customColor=e.target.value;S.color=e.target.value;setTool("pen");} });
   document.addEventListener("dragstart",(e)=>{ const t=e.target.closest("[data-drag]"); if(!t)return; const url=t.getAttribute("src")||t.dataset.url; if(url){e.dataTransfer.setData("text/plain",url);e.dataTransfer.effectAllowed="copy";} });
   document.addEventListener("pointerdown",(e)=>{
     const t=e.target.closest&&e.target.closest('[data-act="split"]'); if(!t)return;
@@ -1219,12 +1225,14 @@ const BOOT = /*__BOOT__*/;
     if(e.metaKey||e.ctrlKey||e.altKey)return;
     const k=e.key.toLowerCase();
     if(e.key==="?"){S.shortcutsOpen=!S.shortcutsOpen;renderOverlays();}
-    else if(k==="v"){S.tool="move";renderToolbar();redraw();} else if(k==="p"){S.tool="pen";renderToolbar();}
-    else if(k==="e"){S.tool="eraser";renderToolbar();} else if(k==="d"){S.tool="strokeDel";renderToolbar();}
+    else if(k==="v"){setTool("move");} else if(k==="p"){setTool("pen");}
+    else if(k==="e"){setTool("eraser");} else if(k==="d"){setTool("strokeDel");}
     else if(k==="["){S.brushLevel=Math.max(0,S.brushLevel-1);renderToolbar();} else if(k==="]"){S.brushLevel=Math.min(4,S.brushLevel+1);renderToolbar();}
     else if(k==="0"){S.view={x:0,y:0,s:1};updateZoom();redraw();} else if(k==="f"){zoomFit();}
   });
   window.addEventListener("resize",sizeCanvas);
+  // The canvas lives only in this tab: warn before a reload or close discards it.
+  window.addEventListener("beforeunload",(e)=>{ if(hasContent()){e.preventDefault();e.returnValue="";} });
 
   shell();
 })();
