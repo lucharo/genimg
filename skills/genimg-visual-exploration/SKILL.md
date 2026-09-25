@@ -37,8 +37,9 @@ Done when no two directions would read as the same idea in a different style.
 
 ## 3. Generate
 
-Prompt for a SINGLE subject and let `-n` make the variety. Preflight with `--dry-run`, then run
-one call per provider:
+Prompt for a SINGLE subject and let `-n` make the variety. Set `-n` to the number of direction
+lines plus one for the base prompt (the first call assumes four lines); genimg rejects too few
+lines and silently drops extras. Preflight with `--dry-run`, then run one call per provider:
 
 ```bash
 genimg "a SINGLE poster about <claim>, NOT a grid, NOT a montage" \

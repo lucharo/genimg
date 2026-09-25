@@ -115,7 +115,7 @@ genimg "$PROMPT" [refs...] \
   -o infographic.png --dry-run
 ```
 
-Check the model, parameters, output path and estimated cost, and resolve any mismatch. Before a material batch, report the estimated cost (as information, not a request for permission), then render and inspect one candidate at the lowest resolution the exact model and aspect support (OpenAI `16:9` and `9:16` need at least `2K`). A dry-run or `genimg auth --check` proves only the provider; that first real render is what proves the model serves.
+Check the model, parameters, output path and estimated cost, and resolve any mismatch. Before a material batch, report the estimated cost (as information, not a request for permission), then render and inspect one candidate at the lowest resolution the exact model and aspect support (OpenAI `16:9` and `9:16` need at least `2K`). A dry-run checks only the local plan and calls no API; `genimg auth --check` proves each Google and OpenAI provider on its fixed canary model and checks only the login for Codex. That first real render is what proves the selected model serves.
 
 ### 7. Generate
 
@@ -128,7 +128,7 @@ genimg "$PROMPT" [refs...] \
   -o iterations/01-initial.png
 ```
 
-For alternatives, keep one subject and one information architecture. Write `prompts/style-deltas.txt` with at least `<count> - 1` subject-specific lines (candidate 1 keeps the base prompt; candidates 2 to `<count>` get the deltas in order), then make one `-n` call:
+For alternatives, keep one subject and one information architecture. Write `prompts/style-deltas.txt` with exactly `<count> - 1` subject-specific lines (candidate 1 keeps the base prompt; candidates 2 to `<count>` get the deltas in order), then make one `-n` call:
 
 ```bash
 mkdir -p candidates

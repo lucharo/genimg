@@ -23,7 +23,7 @@ Open with one grilling round: what the app is for, who uses it, and whether it i
 
 If the user brings mockups or an already chosen design, treat those as the accepted images: record them in `selection-manifest.md`, ask whether they want alternatives, and otherwise go straight to Views.
 
-Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single `-n` call; #1 keeps the plain base prompt.
+Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single call with `-n` set to the line count plus one; #1 keeps the plain base prompt. The example has three lines.
 
 ```bash
 genimg "a SINGLE mobile app home screen for <app>, one phone screen filling the frame, NOT a grid" \
