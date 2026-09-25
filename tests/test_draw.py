@@ -583,6 +583,11 @@ class BootJsonTests(unittest.TestCase):
   def test_loading_a_source_over_a_drawing_asks_first(self) -> None:
     self.assertIn("if(hasContent()&&!confirm(`Replace the canvas with ${name}? Your drawing will be lost.`))return;", draw.PAGE)
 
+  def test_drawing_tools_drop_the_image_selection_and_clear_asks_first(self) -> None:
+    self.assertIn('function setTool(t){ S.tool=t; if(t!=="move")S.selectedId=null;', draw.PAGE)
+    self.assertNotIn('S.tool="pen"', draw.PAGE)  # every switch to Pen goes through setTool
+    self.assertIn('if(hasContent()&&!confirm("Clear the canvas? Your drawing will be lost."))return;', draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)

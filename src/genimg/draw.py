@@ -1073,6 +1073,8 @@ const BOOT = /*__BOOT__*/;
     renderCost();  // aspect can change the OpenAI estimate and valid size points
   }
   function hideHint(){ const h=$("hint"); if(h&&(S.items.length||S.strokes.length||cur)) h.style.display="none"; }
+  // Drawing tools drop the image selection, so Backspace in Pen mode can't delete the photo.
+  function setTool(t){ S.tool=t; if(t!=="move")S.selectedId=null; renderToolbar(); redraw(); }
 
   // ---------- images ----------
   function addImage(url, at, fit){
@@ -1178,12 +1180,12 @@ const BOOT = /*__BOOT__*/;
   document.addEventListener("click",(e)=>{
     const t=e.target.closest("[data-act]"); if(!t)return;
     const a=t.dataset.act;
-    if(a==="tool"){S.tool=t.dataset.tool;renderToolbar();redraw();}
-    else if(a==="swatch"){S.color=t.dataset.color;S.tool="pen";renderToolbar();}
+    if(a==="tool"){setTool(t.dataset.tool);}
+    else if(a==="swatch"){S.color=t.dataset.color;setTool("pen");}
     else if(a==="brushDown"){S.brushLevel=Math.max(0,S.brushLevel-1);renderToolbar();}
     else if(a==="brushUp"){S.brushLevel=Math.min(4,S.brushLevel+1);renderToolbar();}
     else if(a==="undo"){if(S.strokes.length){S.strokes.pop();redraw();}}
-    else if(a==="clear"){S.strokes=[];S.items=[];S.selectedId=null;renderToolbar();redraw();const h=$("hint");if(h)h.style.display="flex";}
+    else if(a==="clear"){if(hasContent()&&!confirm("Clear the canvas? Your drawing will be lost."))return;S.strokes=[];S.items=[];S.selectedId=null;renderToolbar();redraw();const h=$("hint");if(h)h.style.display="flex";}
     else if(a==="removeSel"){S.items=S.items.filter(it=>it.id!==S.selectedId);S.selectedId=null;renderToolbar();redraw();}
     else if(a==="zoomIn"){zoomAt(1.25);} else if(a==="zoomOut"){zoomAt(.8);}
     else if(a==="zoomReset"){S.view={x:0,y:0,s:1};updateZoom();redraw();} else if(a==="zoomFit"){zoomFit();}
@@ -1207,7 +1209,7 @@ const BOOT = /*__BOOT__*/;
     else if(a==="tweak"){addImage(t.dataset.url);}
     else if(a==="retry"){retry(t.dataset.id);}
   });
-  document.addEventListener("change",(e)=>{ if(e.target.dataset&&e.target.dataset.act==="custom"){S.customColor=e.target.value;S.color=e.target.value;S.tool="pen";renderToolbar();} });
+  document.addEventListener("change",(e)=>{ if(e.target.dataset&&e.target.dataset.act==="custom"){S.customColor=e.target.value;S.color=e.target.value;setTool("pen");} });
   document.addEventListener("dragstart",(e)=>{ const t=e.target.closest("[data-drag]"); if(!t)return; const url=t.getAttribute("src")||t.dataset.url; if(url){e.dataTransfer.setData("text/plain",url);e.dataTransfer.effectAllowed="copy";} });
   document.addEventListener("pointerdown",(e)=>{
     const t=e.target.closest&&e.target.closest('[data-act="split"]'); if(!t)return;
@@ -1224,8 +1226,8 @@ const BOOT = /*__BOOT__*/;
     if(e.metaKey||e.ctrlKey||e.altKey)return;
     const k=e.key.toLowerCase();
     if(e.key==="?"){S.shortcutsOpen=!S.shortcutsOpen;renderOverlays();}
-    else if(k==="v"){S.tool="move";renderToolbar();redraw();} else if(k==="p"){S.tool="pen";renderToolbar();}
-    else if(k==="e"){S.tool="eraser";renderToolbar();} else if(k==="d"){S.tool="strokeDel";renderToolbar();}
+    else if(k==="v"){setTool("move");} else if(k==="p"){setTool("pen");}
+    else if(k==="e"){setTool("eraser");} else if(k==="d"){setTool("strokeDel");}
     else if(k==="["){S.brushLevel=Math.max(0,S.brushLevel-1);renderToolbar();} else if(k==="]"){S.brushLevel=Math.min(4,S.brushLevel+1);renderToolbar();}
     else if(k==="0"){S.view={x:0,y:0,s:1};updateZoom();redraw();} else if(k==="f"){zoomFit();}
   });
