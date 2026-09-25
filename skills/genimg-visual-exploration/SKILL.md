@@ -1,6 +1,6 @@
 ---
 name: genimg-visual-exploration
-description: "Explore deliberately different visual directions with genimg before committing to one: brief the claim, generate a spread across providers with stable candidate IDs, compare in a genimg grid, settle a hard choice with its Tournament, then recombine or refine. Use when the user wants options, concepts or a moodboard for a logo, poster, slide, illustration or hero image before the final is built."
+description: "Explore deliberately different visual directions with genimg before committing to one, then converge on a winner. Use when the user wants options, concepts or a moodboard for a logo, poster, slide, illustration or hero image before the final is built."
 ---
 
 # Visual exploration
@@ -53,7 +53,7 @@ the exploration is about typography; add exact wording later.
 
 **Stable IDs.** The output stem plus index (`gemini_3`, `gpt_1`) is each candidate's ID. Never
 rename or renumber a candidate once someone has seen it; a later round gets a new stem
-(`round2-gemini`). Keep `manifest.md` with one row per candidate: ID, direction, model, delta,
+(`round2-gemini`). Keep `selection-manifest.md` with one row per candidate: ID, direction, model, delta,
 status (`new`, `liked`, `rejected`, `winner`).
 
 Inspect every image at full size yourself. Reject garbled text, the wrong subject, a collage of
@@ -82,7 +82,7 @@ Done when the manifest records a winner or a shortlist and the user confirmed it
 
 ## 5. Converge
 
-Write three lists in `manifest.md`: **keep**, **combine**, **reject**. Rejected directions stay
+Write three lists in `selection-manifest.md`: **keep**, **combine**, **reject**. Rejected directions stay
 out of later rounds. Then:
 
 - **Recombine** features from several candidates by passing them as references after the prompt,
@@ -106,6 +106,6 @@ in this step.
 ## Done when
 
 - `brief.md` names the claim, and the directions differ in idea.
-- `manifest.md` lists every candidate by stable ID with a status, plus keep, combine and reject.
+- `selection-manifest.md` lists every candidate by stable ID with a status, plus keep, combine and reject.
 - The user chose a direction in the grid or the Tournament, and it was refined or recombined
   until they accepted it.
