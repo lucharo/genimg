@@ -716,6 +716,20 @@ history_app = typer.Typer(
 _app.add_typer(history_app, name="history")
 
 
+def _keep_paths_whole_if_they_fit(table: Table) -> None:
+  """Print the last (output path) column unwrapped when every path fits beside the other columns
+  at their narrowest, so the prompt wraps first and each path can be copied in one piece.
+  A path that cannot fit keeps folding: an unwrapped column that is too wide gets cropped."""
+  from rich.text import Text
+
+  paths = table.columns[-1]
+  paths.min_width = max((Text.from_markup(str(cell)).cell_len for cell in paths.cells), default=0)
+  # The table's own measure: Measurement.get would cap the minimum at the console width.
+  fits = table.__rich_measure__(console, console.options).minimum <= console.width
+  paths.min_width = None
+  paths.no_wrap = fits
+
+
 @history_app.callback(invoke_without_command=True)
 def _history_root(
   ctx: typer.Context,
@@ -760,8 +774,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   table.add_column("prompt", ratio=3, overflow="fold")
   table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  # On a wide console the prompt wraps first so the path stays whole; a narrow terminal folds it.
-  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=console.width >= _PIPED_WIDTH)
+  table.add_column("output", style="dim", ratio=2, overflow="fold")
   for e in entries:
     paths = e.get("outputs", [])
     first = paths[0] if paths else None
@@ -785,6 +798,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
       if cost.billing_label(e) == "subscription" else cost.format_usd(e.get("cost_usd_estimated")) + "\nAPI",
       _rich_escape(out_short),
     )
+  _keep_paths_whole_if_they_fit(table)
   console.print(table)
   if skipped:
     console.print(f"[yellow]{skipped} unreadable metadata sidecars skipped.[/yellow]")

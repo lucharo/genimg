@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -408,8 +409,7 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(f"no config yet at {config_home}/config.toml.", result.stdout)
 
-  def test_history_output_path_is_not_folded(self) -> None:
-    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+  def _record_generation(self, out: str) -> None:
     meta_dir = self.home / ".genimg" / "metadata"
     meta_dir.mkdir(parents=True)
     (meta_dir / "20260925_120000_abcdef.json").write_text(json.dumps({
@@ -417,6 +417,10 @@ class PipedOutputTests(unittest.TestCase):
       "model_id": "gpt-image-2", "prompt": "a red fox curled up asleep in fresh snow under a pine tree",
       "n": 1, "cost_usd_estimated": 0.0527, "outputs": [{"path": out}],
     }))
+
+  def test_history_output_path_is_not_folded(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+    self._record_generation(out)
     result = self._run("history", "-n", "1")
     self.assertEqual(result.returncode, 0, result.stderr)
     self.assertIn(out, result.stdout)
@@ -425,6 +429,20 @@ class PipedOutputTests(unittest.TestCase):
     self.assertEqual(narrow.returncode, 0, narrow.stderr)
     for header in ("time", "prompt", "made/req", "output"):
       self.assertIn(header, narrow.stdout)
+
+  def test_history_output_path_wider_than_the_console_folds_instead_of_being_cropped(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 10) + "/20260925_120000_abcdef.png"
+    self._record_generation(out)
+    result = self._run("history", "-n", "1")
+    self.assertEqual(result.returncode, 0, result.stderr)
+
+    lines = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in result.stdout.splitlines()]
+    body = lines[next(i for i, line in enumerate(lines) if line.startswith("┡")) + 1:]
+    cells = [line.split("│")[1:-1] for line in body if line.startswith("│")]
+    # Every character, in order (history shows the resolved path: /tmp is /private/tmp on macOS).
+    self.assertEqual("".join(row[-1].strip() for row in cells), str(Path(out).resolve()))
+    self.assertEqual(" ".join(" ".join(row[3].split()) for row in cells if row[3].strip()),
+                     "a red fox curled up asleep in fresh snow under a pine tree")
 
   def test_auth_modes_env_var_names_are_not_truncated(self) -> None:
     result = self._run("auth", "--modes")
