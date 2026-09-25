@@ -9,7 +9,7 @@ Source "scripts/demos/common.tape"
 
 Hide
 Type `unset AZURE_OPENAI_API_KEY AZURE_OPENAI_ENDPOINT OPENAI_BASE_URL GOOGLE_APPLICATION_CREDENTIALS CLAUDE_GCP_CRED` Enter
-Type `export GENIMG_CONFIG_HOME=/tmp/demo-home/.config/genimg && rm -rf /tmp/demo-home && clear` Enter
+Type `export GENIMG_CONFIG_HOME="$(mktemp -d /tmp/genimg-demo.XXXXXX)/.config/genimg" && clear` Enter
 Show
 
 Type "genimg setup"

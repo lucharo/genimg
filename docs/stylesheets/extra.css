@@ -50,12 +50,12 @@
 .md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) {
   --gi-cmd: #b23c17;
   --gi-flag: #1d5fa0;
-  --gi-quiet: #a3988a;
+  --gi-quiet: #72685d; /* 4.7:1 on the code background: dimmer than the command, still AA */
 }
 [data-md-color-scheme="slate"] .md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) {
   --gi-cmd: #ff9466;
   --gi-flag: #82b6ff;
-  --gi-quiet: #6f665f;
+  --gi-quiet: #968b7e; /* 4.7:1 on the slate code background */
 }
 .md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) .gi-cmd { color: var(--gi-cmd); font-weight: 600; }
 .md-typeset :is(.language-bash, .language-sh, .language-shell, .language-zsh, .language-text) .gi-flag { color: var(--gi-flag); }
