@@ -144,6 +144,27 @@ def embed_into_images(meta: dict[str, Any]) -> None:
       continue
 
 
+def outputs_index() -> dict[str, dict[str, Any]]:
+  """Map each recorded output file (resolved path) → its {model, provider, time} from the
+  sidecars, so a view of loose files can say what produced each one. (Generation *duration*
+  isn't recorded on disk.)"""
+  out: dict[str, dict[str, Any]] = {}
+  if not META_DIR.exists():
+    return out
+  # Oldest → newest so a later sidecar writing the same output path wins on collision.
+  for f in sorted(META_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime):
+    try:
+      data = normalize_paths(json.loads(f.read_text()))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
+      continue
+    info = {"model": data.get("alias") or data.get("model_id"), "provider": data.get("provider"),
+            "time": data.get("time")}
+    for o in data.get("outputs", []):
+      p = Path(o["path"] if isinstance(o, dict) else o)
+      out[str(p.resolve())] = info
+  return out
+
+
 def save(meta: dict[str, Any], gen_id: str) -> Path:
   META_DIR.mkdir(parents=True, exist_ok=True)
   path = META_DIR / f"{gen_id}.json"

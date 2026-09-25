@@ -270,26 +270,6 @@ class Studio:
       "genDir": str(self.gen_dir).replace(str(Path.home()), "~"),
     }
 
-  def _meta_by_output(self) -> dict[str, dict]:
-    """Map each generated file name → its {model, time} from the metadata sidecars, so history
-    thumbnails can show what produced them. (Generation *duration* isn't recorded on disk — that's
-    only known for this session's own jobs.)"""
-    out: dict[str, dict] = {}
-    meta_dir = Path(metadata.META_DIR)
-    if not meta_dir.exists():
-      return out
-    # Oldest → newest so a later sidecar writing the same output path wins on collision.
-    for f in sorted(meta_dir.glob("*.json"), key=lambda p: p.stat().st_mtime):
-      try:
-        data = metadata.normalize_paths(json.loads(f.read_text()))
-      except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
-        continue
-      info = {"model": data.get("alias") or data.get("model_id"), "time": data.get("time")}
-      for o in data.get("outputs", []):
-        p = Path(o["path"] if isinstance(o, dict) else o)
-        out[str(p.resolve())] = info
-    return out
-
   def history_items(self, limit: int = 80) -> list[dict]:
     """Recent images in ~/.genimg/generations/ (all past genimg output), newest first — the
     'All' history view's import library. Served via the existing /gen/<name> route; each is
@@ -297,7 +277,7 @@ class Studio:
     files = [p for p in self.gen_dir.glob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     files = files[:limit]
-    meta = self._meta_by_output()
+    meta = metadata.outputs_index()
     out = []
     for p in files:
       info = meta.get(str(p.resolve()), {})
