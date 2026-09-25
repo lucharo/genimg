@@ -25,7 +25,7 @@ How genimg is built, tested and shipped. You only need this section to contribut
 
 | Workflow | Runs |
 | --- | --- |
-| `ci.yml` | Lint and tests on Python 3.11, 3.12 and 3.13; checks pull request titles |
+| `ci.yml` | Lint and tests on Python 3.11 to 3.14; checks pull request titles |
 | `docs.yml` | A strict docs build; deploys to GitHub Pages from `main` |
 | `release.yml` | release-please and PyPI publishing |
 

@@ -1,7 +1,7 @@
 # genimg
 
 [![CI](https://img.shields.io/github/actions/workflow/status/lucharo/genimg/ci.yml?branch=main&label=CI)](https://github.com/lucharo/genimg/actions/workflows/ci.yml)
-[![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![Python 3.11 to 3.14](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](pyproject.toml)
 [![PyPI](https://img.shields.io/pypi/v/genimg)](https://pypi.org/project/genimg/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
