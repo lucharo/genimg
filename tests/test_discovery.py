@@ -9,6 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from google.auth.exceptions import DefaultCredentialsError
+from google.genai.errors import ClientError
+
 from genimg import discovery
 from genimg.interfaces import ProbeResult
 from genimg.providers import google as google_provider
@@ -69,6 +72,28 @@ class DiscoveryCacheTests(unittest.TestCase):
     self.assertEqual(second_saved, {"timestamp": first_saved["timestamp"],
                                     "probes": {"oai:listed": second["oai:listed"].model_dump()}})
 
+  def test_google_credentials_that_fail_during_listing_are_not_cached(self) -> None:
+    # Vertex loads credentials lazily: a missing key file surfaces from models.list(), not the client.
+    entries = {"gdm:listed": discovery.ModelSpec("google", "gemini-listed", region="global")}
+
+    def broken_list():
+      raise DefaultCredentialsError("File /missing/sa.json was not found.")
+
+    broken = SimpleNamespace(models=SimpleNamespace(list=broken_list))
+    working = SimpleNamespace(models=SimpleNamespace(list=lambda: [{"name": "models/gemini-listed"}]))
+    with tempfile.TemporaryDirectory() as td, patch.object(discovery, "CACHE_PATH", Path(td) / "models.json"), \
+         patch.object(discovery, "all_canonical", return_value=entries):
+      with patch.object(google_provider, "get_client", return_value=broken):
+        first, _ = discovery.get_or_probe()
+      first_saved = json.loads(discovery.CACHE_PATH.read_text())
+      with patch.object(google_provider, "get_client", return_value=working):
+        second, _ = discovery.get_or_probe()
+
+    self.assertEqual(first["gdm:listed"], ProbeResult(
+      model="gemini-listed", status="auth", detail="DefaultCredentialsError: File /missing/sa.json was not found."))
+    self.assertEqual(first_saved["probes"], {})
+    self.assertEqual(second["gdm:listed"].status, "listed")
+
 
 class DiscoveryProbeTests(unittest.TestCase):
   def test_probe_all_uses_parallel_model_list_checks(self) -> None:
@@ -109,6 +134,39 @@ class DiscoveryProbeTests(unittest.TestCase):
     self.assertEqual(probes["gdm:regional"].status, "listed")
     self.assertEqual(probes["oai:listed"].status, "listed")
     self.assertEqual(probes["oai:missing"].status, "missing")
+
+  def test_a_client_that_fails_to_build_fails_only_its_providers_rows(self) -> None:
+    entries = {
+      "gdm:listed": discovery.ModelSpec("google", "gemini-listed", region="global"),
+      "oai:listed": discovery.ModelSpec("openai", "gpt-image-listed"),
+    }
+    google_client = SimpleNamespace(models=SimpleNamespace(list=lambda: [{"name": "models/gemini-listed"}]))
+    with (
+      patch.object(discovery, "all_canonical", return_value=entries),
+      patch.object(openai_provider, "get_client", side_effect=FileNotFoundError("SSL_CERT_FILE /nope")),
+      patch.object(google_provider, "get_client", return_value=google_client),
+    ):
+      probes = discovery.probe_all()
+
+    self.assertEqual(probes, {
+      "gdm:listed": ProbeResult(model="gemini-listed", status="listed"),
+      "oai:listed": ProbeResult(model="gpt-image-listed", status="error",
+                                detail="FileNotFoundError: SSL_CERT_FILE /nope"),
+    })
+
+  def test_a_rejected_gemini_key_is_an_auth_row(self) -> None:
+    entries = [("gdm:listed", discovery.ModelSpec("google", "gemini-listed", region="global"))]
+    rejected = ClientError(400, {"error": {"code": 400, "message": "API key not valid.",
+                                           "status": "INVALID_ARGUMENT", "details": [{"reason": "API_KEY_INVALID"}]}})
+
+    def reject():
+      raise rejected
+
+    client = SimpleNamespace(models=SimpleNamespace(list=reject))
+    with patch.object(google_provider, "get_client", return_value=client):
+      probes = google_provider.GoogleProvider().probe_listed(entries)
+
+    self.assertEqual(probes["gdm:listed"].status, "auth")
 
   def test_probe_all_rejects_unknown_provider(self) -> None:
     entries = {"bad:model": discovery.ModelSpec("not-a-provider", "test-model")}  # type: ignore[arg-type]

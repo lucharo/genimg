@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from google.auth.exceptions import GoogleAuthError
 from google.genai import types
 from google.genai.errors import ClientError, ServerError
 from PIL import Image
@@ -209,14 +210,23 @@ class GoogleProvider(Provider):
       by_region.setdefault(spec.region or "global", []).append((alias, spec))
 
     def one(region: str, cohort: list) -> dict[str, ProbeResult]:
+      # Credentials that are missing, unloadable, rejected or unrefreshable are "auth" rows,
+      # which are never cached: the SDK loads Vertex credentials lazily, so they can fail
+      # during the listing as well as while the client is built.
       try:
         client = get_client(region=region, profile=profile)
-      except RuntimeError as e:  # no usable credentials; "auth" rows are never cached
+      except (RuntimeError, GoogleAuthError) as e:
         return error_results(cohort, "auth", str(e))
+      except Exception as e:  # the SDK client itself failed: this provider's rows only
+        return error_results(cohort, "error", f"{type(e).__name__}: {e}")
       try:
         return results_from_model_ids(cohort, listed_model_ids(client.models.list()))
+      except GoogleAuthError as e:
+        return error_results(cohort, "auth", f"{type(e).__name__}: {e}")
       except ClientError as e:
         code = getattr(e, "code", None)
+        if code == 401 or "API_KEY_INVALID" in str(e):
+          return error_results(cohort, "auth", f"{code}: {str(e)}")
         return error_results(cohort, str(code) if code in (403, 404) else "error", f"{code}: {str(e)}")
       except ServerError as e:
         return error_results(cohort, "error", str(e))
