@@ -267,6 +267,14 @@ class CommandLikePromptTests(unittest.TestCase):
         )
         run_generate.assert_not_called()
 
+  def test_surrounding_whitespace_does_not_slip_past_the_guard(self) -> None:
+    for word, suggestion in {"help ": "genimg --help", " modles\t": "genimg models"}.items():
+      with self.subTest(word=word):
+        result, run_generate = self._invoke(word)
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn(f"did you mean '{suggestion}'?", " ".join(result.output.split()))
+        run_generate.assert_not_called()
+
   def test_double_dash_makes_the_word_a_prompt(self) -> None:
     for word in ("modles", "models"):
       with self.subTest(word=word):

@@ -81,7 +81,7 @@ class _DefaultGroup(typer.core.TyperGroup):
     """Exit 2 when a one-word prompt is a reserved word or close to a subcommand."""
     if len(word.split()) != 1:
       return
-    lowered = word.lower()
+    lowered = word.strip().lower()  # `genimg "help "` is still the word help
     suggestion = _COMMAND_WORDS.get(lowered)
     if suggestion is None:
       visible = [name for name, cmd in self.commands.items() if not cmd.hidden]
