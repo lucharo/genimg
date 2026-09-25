@@ -43,6 +43,9 @@ genimg auth      # one row per provider: mode, credential, ready
 genimg models    # which models each provider lists for your credentials
 ```
 
+<!-- Zensical rewrites a video's src relative to this file but leaves poster relative to the page URL. -->
+<video class="demo" src="assets/demos/models.mp4" poster="../assets/demos/models.webp" width="1266" height="540" autoplay loop muted playsinline title="genimg models listing Google, OpenAI and Codex models"></video>
+
 ## Pick a model
 
 genimg has no built-in default model. Pass `-m`, or save a default.
@@ -81,8 +84,12 @@ genimg google/direct@google gdm:nb2 → gemini-3.1-flash-image
 dry-run: no API call made.
 ```
 
-The first line reads provider, auth mode, profile, alias and model id. Drop `--dry-run` to
-generate:
+The first line reads provider, auth mode, profile, alias and model id. With `-n 4` the plan
+lists every output:
+
+<video class="demo" src="assets/demos/dry-run.mp4" poster="../assets/demos/dry-run.webp" width="970" height="562" autoplay loop muted playsinline title="genimg --dry-run planning four fox logos and a grid"></video>
+
+Drop `--dry-run` to generate:
 
 ```bash
 genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png

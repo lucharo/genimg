@@ -39,3 +39,6 @@ htmlcov/
 .kata.local.toml
 site/
 .cache/
+
+# VHS raw frames and checks (scripts/demos/render.sh)
+.vhs/
