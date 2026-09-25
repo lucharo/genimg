@@ -80,3 +80,44 @@ def test_setup_rejects_an_unknown_model_before_touching_config(unattended):
   assert result.exit_code == 1, result.output
   assert "unknown model 'gdm:nope'" in result.output
   assert not unattended.exists()
+
+
+def test_unattended_setup_does_not_save_a_model_no_profile_covers(unattended):
+  with patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup", "--model", "oai:gi2"])
+
+  assert result.exit_code == 1, result.output
+  assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "direct"}}}
+  assert ("default model not saved: oai:gpt-image-2 needs a openai profile, and there is none."
+          in " ".join(result.output.split()))
+
+
+def test_unattended_setup_falls_back_to_the_next_detected_mode(unattended, monkeypatch, tmp_path):
+  monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(tmp_path / "sa.json"))
+  monkeypatch.setattr(auth_google, "_gcloud_project", lambda: "gcloud-active-project")
+  with patch.object(auth_google.GoogleVertex, "validate", return_value=(False, "403: permission denied")), \
+       patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "direct"}}}
+
+
+def test_unattended_vertex_profile_leaves_the_project_to_runtime_resolution(unattended, monkeypatch, tmp_path):
+  monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(tmp_path / "sa.json"))
+  monkeypatch.setattr(auth_google, "_gcloud_project", lambda: "gcloud-active-project")
+  with patch.object(auth_google.GoogleVertex, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "vertex"}}}
+
+
+def test_unattended_setup_drops_a_logged_out_codex_profile_like_the_wizard(unattended):
+  setup.config.save({"profiles": {"codex": {"provider": "codex", "auth": "subscription"}},
+                     "default_model": "codex:image"})
+  with patch.object(auth_google.GoogleDirect, "validate", return_value=(True, "")):
+    result = CliRunner().invoke(cli._app, ["setup"])
+
+  assert result.exit_code == 0, result.output
+  assert setup.config.load() == {"profiles": {"google": {"provider": "google", "auth": "direct"}}}

@@ -238,27 +238,35 @@ def _setup_provider(provider: providers.Provider, cfg: dict[str, Any]) -> bool:
 
 
 def _setup_provider_unattended(provider: providers.Provider, cfg: dict[str, Any]) -> tuple[bool, str]:
-  """No prompts: save the provider's detected auth mode if its free validation passes.
-  Returns (saved, summary)."""
+  """No prompts: save the first detected auth mode whose free validation passes (the saved
+  profile's mode first, then the wizard's order). Returns (saved, summary)."""
   candidates, detected, existing = _detect_modes(provider, cfg)
-  # The saved profile's mode first, then the wizard's (and env auto-detection's) order.
   ordered = sorted(candidates, key=lambda p: not (existing and existing.get("auth") == p.mode))
-  chosen = next((p for p in ordered if detected[p.mode]), None)
-  if chosen is None:
+  found = [p for p in ordered if detected[p.mode]]
+  if not found:
     login_style = len(candidates) == 1 and not candidates[0].env_vars  # Codex: its hint says how
+    if login_style:
+      _forget_provider(provider.name, cfg)  # as the wizard does for a logged-out Codex
     why = candidates[0].detail() if login_style else "`genimg auth --modes` lists the env vars"
     return False, f"skipped: no credentials detected ({why})"
-  for setting in chosen.settings_spec:
-    value = chosen.settings.get(setting.key) or (setting.detect() if setting.detect else None)
-    if value:
-      chosen.settings[setting.key] = value
-    elif setting.required:
-      return False, f"skipped: {chosen.label} needs `{setting.key}`"
-  ok, err = chosen.validate()
-  if not ok:
-    return False, f"skipped: {chosen.label} validation failed: {err}"
-  cfg.setdefault("profiles", {})[provider.name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
-  return True, f"saved ({chosen.mode})"
+  failures = []
+  for chosen in found:
+    # Required settings may come from env detection; optional ones stay to runtime resolution
+    # (a Vertex project from gcloud must not override the service-account JSON's).
+    for setting in chosen.settings_spec:
+      value = chosen.settings.get(setting.key) or (setting.detect() if setting.required and setting.detect else None)
+      if value:
+        chosen.settings[setting.key] = value
+    missing = [s.key for s in chosen.settings_spec if s.required and not chosen.settings.get(s.key)]
+    if missing:
+      failures.append(f"{chosen.label} needs `{missing[0]}`")
+      continue
+    ok, err = chosen.validate()
+    if ok:
+      cfg.setdefault("profiles", {})[provider.name] = {"provider": provider.name, "auth": chosen.mode, **chosen.settings}
+      return True, f"saved ({chosen.mode})"
+    failures.append(f"{chosen.label} validation failed: {err}")
+  return False, "skipped: " + "; ".join(failures)
 
 
 def _forget_provider(name: str, cfg: dict[str, Any]) -> None:
@@ -324,7 +332,8 @@ def _interactive() -> bool:
 
 def run_setup(model: str | None = None) -> bool:
   """`model` (a registry alias) becomes the default instead of asking for one. Returns False
-  when an unattended run (no terminal on stdin) validated no provider."""
+  when an unattended run (no terminal on stdin) validated no provider, or when no profile
+  covers `model`'s provider so it could not be saved."""
   if not _interactive():
     return _run_unattended(model)
   console.print("[bold cyan]genimg setup[/bold cyan] — detect → fetch → validate → save")
@@ -345,8 +354,9 @@ def run_setup(model: str | None = None) -> bool:
     return True
 
   if model:
-    cfg["default_model"] = model
+    default_saved = _set_default_model(cfg, model)
   else:
+    default_saved = True
     try:
       _setup_default_model(cfg)
     except KeyboardInterrupt:
@@ -354,6 +364,16 @@ def run_setup(model: str | None = None) -> bool:
 
   config.save(cfg)
   _print_saved(cfg)
+  return default_saved
+
+
+def _set_default_model(cfg: dict[str, Any], model: str) -> bool:
+  """Save `model` as the default only when a profile covers its provider, as the picker does."""
+  provider = registry.resolve(model)[1].provider
+  if provider not in {t.get("provider") for t in (cfg.get("profiles") or {}).values() if isinstance(t, dict)}:
+    console.print(f"[yellow]default model not saved:[/yellow] {model} needs a {provider} profile, and there is none.")
+    return False
+  cfg["default_model"] = model
   return True
 
 
@@ -370,11 +390,10 @@ def _run_unattended(model: str | None) -> bool:
     console.print("\n[yellow]No provider validated; config not changed.[/yellow] Put a key in the "
                   "environment (`genimg auth --modes` lists them), then re-run.")
     return False
-  if model:
-    cfg["default_model"] = model
+  default_saved = _set_default_model(cfg, model) if model else True
   config.save(cfg)
   _print_saved(cfg)
-  return True
+  return default_saved
 
 
 def _print_saved(cfg: dict[str, Any]) -> None:
