@@ -24,9 +24,10 @@ genimg "a paper-cut fox, warm palette" -m gdm:nb2 -o fox.png
 - Edit or steer. `-i` edits an image; positional paths are references for style and layout.
 - Review surfaces. `-g --open` renders a self-contained HTML grid with a carousel and copy
   buttons; `genimg draw` opens a local pen-friendly canvas.
-- Agent friendly. `genimg skills install` gives Claude Code, Codex, Cursor or OpenCode the
-  `genimg` skill plus infographic, refinement and image-to-app workflows. `auth`, `models`,
-  `history` and `cost` have `--json`; every generation leaves a metadata sidecar.
+- Agent friendly. `npx skills add lucharo/genimg` gives Claude Code, Codex, Cursor or
+  OpenCode the `genimg` skill plus infographic, refinement and image-to-app workflows.
+  `auth`, `models`, `history` and `cost` have `--json`; every generation leaves a metadata
+  sidecar.
 
 ## Guide
 
