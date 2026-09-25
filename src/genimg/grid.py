@@ -47,7 +47,7 @@ def estimate_cost(img_path: Path, provider: str | None = None, quality: str | No
 
 
 _HTML = '''<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>genimg grid</title>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>genimg grid</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1a1a1a;color:#fff;min-height:100vh;padding:20px}
