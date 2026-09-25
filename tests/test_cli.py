@@ -278,3 +278,14 @@ class CommandLikePromptTests(unittest.TestCase):
         result, _ = self._invoke(prompt, "--dry-run")
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn(f'prompt "{prompt}"', " ".join(result.output.split()))
+
+
+class BlankPromptTests(unittest.TestCase):
+  def test_blank_or_whitespace_prompt_is_rejected(self) -> None:
+    for prompt in ("", "   "):
+      with self.subTest(prompt=prompt), \
+           patch.object(cli.config, "load", return_value={}), \
+           patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH):
+        result = CliRunner().invoke(cli._app, [prompt, "-m", "gdm:nb2", "--dry-run"])
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertEqual(result.output.strip(), "error: prompt is empty")

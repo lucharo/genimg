@@ -209,6 +209,9 @@ def _run(
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
+  if not prompt.strip():
+    console.print("[red]error:[/red] prompt is empty")
+    raise typer.Exit(2)
   if name is not None:
     if "\n" in name or "\r" in name:
       _die("--name must be one line")
