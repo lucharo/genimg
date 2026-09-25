@@ -38,7 +38,8 @@ Run `genimg draw` again and open the URL it prints. The tab has probably outlive
 ## Why do Draw Studio's controls change with the model?
 
 Each model accepts different sizes, aspect ratios and quality levels. Draw Studio only shows the
-controls the selected model accepts.
+controls the selected model accepts. It runs the same `genimg` command you would type, and a test
+checks each option it offers, and each aspect and size pair, against the CLI's own validation.
 
 ## Can I use Draw Studio from an iPad?
 
@@ -50,3 +51,17 @@ Mac's Tailscale or Wi-Fi address for Safari. See
 
 No to both. It runs on your machine but sends prompts and images to the provider. `--host` shares
 your running Studio with your own devices for a session; there is no hosted, multi-user version.
+
+## Does `--num` generate the images one after another?
+
+No. `--num 4` sends four requests in parallel, up to five at a time (two for `codex:image`), so four
+images take about as long as one, and the ones that succeed are kept if one fails. On Gemini,
+`--mode batch` asks for the whole set in one request instead. See
+[Diverse images](guide/diversity.md).
+
+## Can an agent run `genimg setup` without a terminal?
+
+Yes. Without a terminal on stdin, `genimg setup` asks nothing: it saves each provider whose key is
+already in the environment and passes a free check, and exits `1` if none does. `--model gdm:nb2`
+also saves a default. Keys are never passed as arguments. See
+[Getting started](getting-started.md).

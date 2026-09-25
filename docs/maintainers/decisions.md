@@ -1,6 +1,6 @@
 # Design decisions
 
-Three choices shape the code. Keep them unless you mean to change the decision itself.
+Four choices shape the code. Keep them unless you mean to change the decision itself.
 
 ## No built-in default model
 
@@ -27,3 +27,11 @@ Each provider and auth mode pair is an `AuthProfile`. Users pin one as a `[profi
 succeeds: an API key in the environment, a gcloud ADC token, or a Codex login.
 
 The full records are in `internal/adr/` in the repository.
+
+## Skills install through `npx skills`
+
+`npx skills add lucharo/genimg` is the only install path; `genimg skills` prints that command and
+`genimg skills path` shows where the bundled copies live. genimg once had its own install, update
+and uninstall verbs, but they managed the same directory as the user's own skills, such as
+`genimg-preferences`, and could delete them. The skills CLI installs per agent and per project, and
+leaves unrelated skills alone.

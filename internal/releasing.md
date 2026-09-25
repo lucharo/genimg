@@ -27,14 +27,14 @@ summary is in `docs/maintainers/index.md`.
 
 ## First release
 
-- 0.1.0 was pinned with `Release-As: 0.1.0` in a commit body, which opened the first Release PR.
-  Write the 0.1.0 notes on that PR.
-- Merge the first Release PR by hand. The Friday 09:00 UTC auto-merge (`schedule` in
-  `release.yml`) stays commented out until then; restore it afterwards.
+- 0.1.0 shipped on 25 September 2026 by merging the first Release PR by hand.
+- The Friday 09:00 UTC auto-merge (`schedule` in `release.yml`) is still commented out. Decide
+  before restoring it: any `docs:` or `fix:` merge opens a patch Release PR (0.1.1 opened from a
+  docs-only change), and the schedule would ship it.
 
 ## Before merging a Release PR
 
-1. CI is green on the Release PR's exact head, on Python 3.11, 3.12 and 3.13.
+1. CI is green on the Release PR's exact head, on Python 3.11 to 3.14.
 2. `uv build`, then install the wheel in a fresh environment outside the checkout and run
    `genimg --version`, `genimg auth --modes`, `genimg skills path all` and one `--dry-run`.
 3. The changelog reads as release notes. Add a short summary at the top of the version block if
