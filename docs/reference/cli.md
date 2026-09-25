@@ -33,9 +33,9 @@ the installed version.
 | `--open` | | | Open the grid (or the image) in the browser. |
 | `--dry-run` | | | Print model, size, cost and output path; no API call. |
 
-genimg rejects a flag the model cannot use before it calls the provider, even on `--dry-run`.
-[Model-specific options](model-options.md) shows which flags each model family takes. A saved
-default the model cannot use is skipped; an explicit flag is never dropped.
+- A flag the model cannot use fails before any API call, even on `--dry-run`.
+  [Model-specific options](model-options.md) lists each model family's flags.
+- A saved default the model cannot use is skipped; a flag you pass is never dropped.
 
 ## Verbs
 
@@ -62,8 +62,9 @@ default the model cannot use is skipped; an explicit flag is never dropped.
 | `1` | Usage or config error: bad flag combination, unknown model or profile |
 | `2` | The parser rejected an option, or a generation failed |
 
-A `2` alone does not prove a request reached the provider. The `--json` forms print only
-JSON; the other output is for reading and may shorten your home directory to `~`.
+- A `2` alone does not prove a request reached the provider.
+- The `--json` forms print only JSON. Other output is for people and may shorten your home
+  directory to `~`.
 
 ## Files
 

@@ -5,15 +5,14 @@
 [![PyPI](https://img.shields.io/pypi/v/genimg)](https://pypi.org/project/genimg/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
-One simple CLI, made with both humans and agents in mind. The agent-native design is inspired
-by [kenn-io](https://github.com/kenn-io) and the tools they put out, especially
-[roborev](https://github.com/kenn-io/roborev) and [agentsview](https://github.com/kenn-io/agentsview).
+- One command for OpenAI and Google DeepMind [image models](https://genimg.luischav.es/reference/models/), on an API
+  key or your [ChatGPT subscription through Codex](https://genimg.luischav.es/guide/codex-subscription/).
+- Variations that actually differ, side by side in an [HTML grid](https://genimg.luischav.es/visual-tools/grid/), and a
+  [drawing studio](https://genimg.luischav.es/visual-tools/draw-studio/) to sketch what you mean.
+- [Skills](https://genimg.luischav.es/skills/) so your coding agent can do all of it.
 
-Generate images with OpenAI and Google DeepMind [models](https://genimg.luischav.es/reference/models/) in a unified
-interface, via API or via [Codex with a ChatGPT subscription](https://genimg.luischav.es/guide/codex-subscription/). It
-bundles an [image review tool](https://genimg.luischav.es/visual-tools/grid/) and a
-[drawing studio app](https://genimg.luischav.es/visual-tools/draw-studio/) for image generation, as well as several
-[skills](https://genimg.luischav.es/skills/) for productive image generation workflows.
+Made for humans and agents; the agent-native design is inspired by [kenn-io](https://github.com/kenn-io)'s
+[roborev](https://github.com/kenn-io/roborev) and [agentsview](https://github.com/kenn-io/agentsview).
 
 **Docs: [genimg.luischav.es](https://genimg.luischav.es/)**
 

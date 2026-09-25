@@ -1,6 +1,7 @@
 # Input and reference images
 
-An image can go back in two ways. `--input` edits it. A path after the prompt steers a new image.
+- `--input photo.png` edits that image.
+- A path after the prompt steers a new image in its style. The file itself is left alone.
 
 ## Edit an image: `--input`
 
@@ -31,7 +32,7 @@ genimg "a raccoon character in exactly this paper-cut style and palette, one cen
 ![A raccoon in the same paper-cut style](../assets/raccoon-ref.webp){ width="300" }
 </div>
 
-A new subject in the reference's style and palette. The reference itself is not edited.
+A new subject in the reference's style and palette.
 
 ## Both at once
 
@@ -57,5 +58,5 @@ $ genimg "preserve this room; apply the approved design direction" \
 | OpenAI GPT Image | up to 16 images, PNG, JPG or WEBP, 50 MB each |
 | Codex | input and references; Codex decides how to use them |
 
-For several views of one subject, edit the same source once per view instead of chaining: each
-chained edit drifts further. The [image-to-app](../skills/image-to-app.md) skill works this way.
+Each chained edit drifts further, so for several views of one subject, edit the same source once
+per view. The [image-to-app](../skills/image-to-app.md) skill works this way.

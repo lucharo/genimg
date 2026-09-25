@@ -1,13 +1,14 @@
 # Models
 
-Pass `--model` an alias or the provider's model id. `genimg models` lists them with their status for
-your credentials, cached for 5 days (`--refresh` probes again); `--aliases` adds the long names.
+- Pass `--model` an alias below or the provider's own model id.
+- `genimg models` shows which ones your credentials list. It caches for 5 days; `--refresh`
+  probes again.
 
 ## Gemini
 
 | Alias | Model id | Cost per image by `--resolution` | Aspect ratios | `--thinking` |
 | --- | --- | --- | --- | --- |
-| `gdm:nbp` | [`gemini-3-pro-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image) | 1K $0.134 · 2K $0.134 · 4K $0.24 | classic | |
+| `gdm:nbp` | [`gemini-3-pro-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image) | 1K $0.134 · 2K $0.134 · 4K $0.24 | classic | ❌ |
 | `gdm:nb2` | [`gemini-3.1-flash-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image) | 512 $0.045 · 1K $0.067 · 2K $0.101 · 4K $0.151 | extended | `minimal` `high` |
 | `gdm:nb2-lite` | [`gemini-3.1-flash-lite-image`](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image) | 1K $0.034 | extended | `minimal` `high` |
 
@@ -33,14 +34,15 @@ genimg rejects any other pair before the request:
 
 | `--resolution` | `1:1` | `4:3` / `3:4` | `16:9` / `9:16` |
 | --- | --- | --- | --- |
-| 1K | 1024×1024 | 1024×768 | |
+| 1K | 1024×1024 | 1024×768 | ❌ |
 | 2K | 2048×2048 | 2048×1536 | 2048×1152 |
-| 4K | 2880×2880 | | 3840×2160 |
+| 4K | 2880×2880 | ❌ | 3840×2160 |
 
-Cost follows pixel count and quality. GPT Image 2 and 2.5 count output tokens the way
-OpenAI's calculator does, so a wide 2K image can cost less than a 1K square. The older
-models use OpenAI's per-image price for 1024×1024.
-`--dry-run` prints the estimate for any combination:
+- On GPT Image 2 and 2.5 a wide 2K image can cost less than a 1K square.
+- `--dry-run` prints the estimate for any combination.
+
+Cost follows pixel count and quality: GPT Image 2 and 2.5 count output tokens the way OpenAI's
+calculator does, and the older models use OpenAI's per-image price for 1024×1024.
 
 ```console
 $ genimg "a lighthouse at dusk" \
@@ -70,9 +72,9 @@ genimg records an API-equivalent price range for Codex runs, for comparison only
 
 ## Other ids
 
-An id that is not in the tables still works when its shape is recognised: `gpt-image-*`
-goes to OpenAI and `gemini-*-image*` to Google, dated snapshots included. `gdm:imagen4`
-errors and points to `gdm:nb2`, because Google retired Imagen 4.
+- An id missing from the tables still works if it matches `gpt-image-*` (OpenAI) or
+  `gemini-*-image*` (Google), dated snapshots included.
+- `gdm:imagen4` errors and points to `gdm:nb2`, because Google retired Imagen 4.
 
 ## Prices last checked
 

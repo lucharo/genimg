@@ -1,7 +1,8 @@
 # Draw Studio
 
-Sketch on an image, then have a model redraw it. Draw Studio is a browser canvas that genimg
-serves from your own computer.
+- Sketch on an image and a model redraws it.
+
+Draw Studio is a browser canvas that genimg serves from your own computer.
 
 ```bash
 genimg draw --model oai:gi2.5 fox-sketch.webp
@@ -16,9 +17,9 @@ genimg draw --model oai:gi2.5 fox-sketch.webp
 2. Mark what you want and describe it in the prompt.
 3. **Generate** sends the canvas to the model. Put the result back on the canvas for another pass.
 
-Results save to `~/.genimg/generations/`; **All** lists earlier ones. The controls follow the
-model. **codex:image** uses your [Codex subscription](../guide/codex-subscription.md) instead
-of an API key. `--no-open` prints the URL instead of opening a browser.
+- Results save to `~/.genimg/generations/`; **All** lists earlier ones.
+- **codex:image** draws on your [Codex subscription](../guide/codex-subscription.md), no API key.
+- `--no-open` prints the URL instead of opening a browser.
 
 ## Draw from an iPad
 
@@ -54,25 +55,25 @@ URL on the iPad.
 genimg draw --host "$(ipconfig getifaddr en0)"
 ```
 
-Anyone who can reach a `--host` address can generate with your credentials and open every image
-in `~/.genimg/generations` and the images you loaded. There is no login, so press Ctrl-C when you
-finish.
+There is no login: anyone who can reach a `--host` address can generate with your credentials
+and open your images. Press Ctrl-C when you finish.
 
 ## Draw Studio or the CLI?
 
 | Need | Draw Studio | CLI |
 | --- | --- | --- |
-| Sketch or annotate | Yes | Pass a file with `--input` |
+| Sketch or annotate | ✅ | Pass a file with `--input` |
 | Several variants | One per Generate | `--num` |
-| Deliberate diversity | No | `--diverse`, `--deltas` |
+| Deliberate diversity | ❌ | `--diverse`, `--deltas` |
 | Review grid | Generated panel | `--grid`, `genimg grid` |
 
 ## Security boundary
 
-- The server binds to `127.0.0.1`, or to the one address given with `--host`. It refuses
-  `0.0.0.0`, a Host header naming anything but a loopback name or that address, and cross-site
-  POSTs.
-- There is no login. With `--host`, anyone who can reach the address can generate, list your
-  generation history, and open those images and the ones you loaded.
-- Provider keys stay with genimg; the page never receives them.
-- The model runs at the provider, which receives your prompt and canvas.
+- By default only this computer can reach the Studio.
+- With `--host`, anyone who can reach the address can generate, list your generation history, and
+  open those images and the ones you loaded. There is no login.
+- Your provider keys never reach the page.
+- The provider receives your prompt and canvas.
+
+The server binds to `127.0.0.1` or the one `--host` address. It refuses `0.0.0.0`, a Host header
+naming anything but a loopback name or that address, and cross-site POSTs.

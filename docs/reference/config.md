@@ -30,8 +30,6 @@ Keys and service-account paths stay in your environment, never in this file.
 
 ## Auth modes
 
-OpenAI runs through its own API or Azure. Google runs through a Gemini API key or Vertex AI.
-
 | `provider` | `auth` | Route | Credentials | Settings |
 | --- | --- | --- | --- | --- |
 | `openai` | `direct` | OpenAI API | `OPENAI_API_KEY` | |
@@ -47,9 +45,11 @@ project (`vertex_adc`).
 
 ## Which profile runs
 
+- `genimg auth` shows the winner in its `source` column.
+
+The first match wins:
+
 1. `--profile NAME`
 2. `--auth MODE` (OpenAI), reusing that mode's profile settings
 3. The provider's first profile
 4. Environment auto-detection
-
-`genimg auth` shows the winner in its `source` column.
