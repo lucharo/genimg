@@ -9,7 +9,7 @@ description: Generate and edit raster images with the genimg CLI (OpenAI GPT Ima
 
 ## Before the first call
 
-1. Load the `genimg-preferences` skill if it exists. Its taste overrides this skill's defaults; the current request overrides both. When the user states a lasting preference about their images, record it as [references/preferences.md](references/preferences.md) describes.
+1. Load the `genimg-preferences` skill if it exists. Its taste overrides this skill's defaults; the current request overrides both. When the user states a lasting preference for all their images, record it as [references/preferences.md](references/preferences.md) describes.
 2. Pass `-m` on every call. genimg has no built-in model; `genimg models get-default` shows one the user saved.
 3. If a provider is not authenticated, `genimg auth --modes` names the env vars each auth mode reads; `genimg setup` is an interactive wizard for the user to run. `genimg auth --check` proves each provider answers with a tiny live generation; adding `--json` skips that probe.
 4. Preflight any call with `-n > 1`, `-q high` or `-r 4K` with `--dry-run`: it prints model, resolved size, cost and planned paths without calling the API.
@@ -73,7 +73,7 @@ description: Generate and edit raster images with the genimg CLI (OpenAI GPT Ima
 1. Generate to real `-o` paths. The output stem plus index (`gemini_3`, `gpt_1`) is each candidate's stable ID; never rename or renumber one someone has seen, and give a later round a new stem. Keep `selection-manifest.md` with run, model, delta, original index, filename and status (liked, rejected).
 2. Put every candidate in one grid and open it before asking anything: `-g --open` for one run, `genimg grid a.png b.png … -o cmp.html --open` across runs or providers. A generation grid lands under `~/.genimg/grids/`; use the path the CLI prints. To open without stealing focus on macOS, drop `--open` and run `open -g <grid.html>`. An arbitrary-file grid shows filenames rather than per-run metadata, so the manifest stays the source of truth.
 3. Hand the grid back as a `file://` link: `[grid.html](file:///abs/path/grid.html)`.
-4. For 3 to 20 strong candidates, point the user at the grid's **Tournament** button (pairwise picks, n−1 for a winner, one more for a top 3) and ask them to paste back **Copy result (JSON)**: winner, ranking and every pick, by grid number, filename, and model when a sidecar knows it.
+4. For 3 to 20 strong candidates, point the user at the grid's **Tournament** button (pairwise picks, n−1 for a winner, one more for a top 3 unless there are exactly three) and ask them to paste back **Copy result (JSON)**: winner, ranking and every pick, by grid number, filename, and model when a sidecar knows it.
 
 The step is done when the user has chosen from images on screen. For a broad spread of serious options (a brief, three to six directions, several providers, recombining the winners), load `genimg-visual-exploration` if it is installed. Without it, run a Gemini spread of four to six (`-n 5 -d` or tailored `--deltas`), add one to three `oai:gi2` variants with explicit deltas when typography or UI matters, and compare all of them in one grid. If a provider or model changes after a failure, say so before presenting results.
 
