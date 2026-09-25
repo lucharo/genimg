@@ -37,9 +37,32 @@ Approach content analysis as a **world-class instructional designer**:
 | **Data/Metrics** | Statistics, KPIs, measurements | dashboard, periodic-table | corporate-memphis, technical-schematic |
 | **Cycle/Loop** | Recurring processes, feedback loops | circular-flow | craft-handmade, technical-schematic |
 | **System/Structure** | Components, architecture, anatomy | structural-breakdown, bento-grid | technical-schematic, ikea-manual |
-| **Journey/Narrative** | Stories, user flows, milestones | winding-roadmap, story-mountain | storybook-watercolor, comic-strip |
+| **Journey/Narrative** | Stories, user flows, milestones | winding-roadmap, story-mountain, comic-strip | storybook-watercolor |
 | **Overview/Summary** | Multiple topics, feature highlights | bento-grid, periodic-table, dense-modules | chalkboard, bold-graphic |
 | **Product/Buying Guide** | Multi-dimension comparisons, specs, pitfalls | dense-modules | morandi-journal, pop-laboratory, retro-pop-grid, retro-popup-pop |
+
+When one pair must be picked without other signals, start from these defaults:
+
+| Content | Layout and style |
+| --- | --- |
+| Timeline/history | `linear-progression` + `craft-handmade` |
+| Step-by-step | `linear-progression` + `ikea-manual` |
+| A vs B | `binary-comparison` + `corporate-memphis` |
+| Hierarchy | `hierarchical-layers` + `craft-handmade` |
+| Overlap | `venn-diagram` + `craft-handmade` |
+| Conversion | `funnel` + `corporate-memphis` |
+| Cycles | `circular-flow` + `craft-handmade` |
+| Technical | `structural-breakdown` + `technical-schematic` |
+| Metrics | `dashboard` + `corporate-memphis` |
+| Educational | `bento-grid` + `chalkboard` |
+| Journey | `winding-roadmap` + `storybook-watercolor` |
+| Categories | `periodic-table` + `bold-graphic` |
+| Product guide | `dense-modules` + `morandi-journal` |
+| Technical guide | `dense-modules` + `pop-laboratory` |
+| Trendy guide | `dense-modules` + `retro-pop-grid` |
+| Retro pop guide | `dense-modules` + `retro-popup-pop` |
+| Educational diagram | `hub-spoke` + `hand-drawn-edu` |
+| Process tutorial | `linear-progression` + `hand-drawn-edu` |
 
 ### 2. Learning Objective Identification
 

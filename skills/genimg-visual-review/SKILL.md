@@ -1,6 +1,6 @@
 ---
 name: genimg-visual-review
-description: "Hand back finished work as a one-page HTML review: before → after, real evidence (screenshots, diffs, terminal output), what stays unverified, and at most one action, optionally led by a genimg infographic. Use after building or changing something when the user asks to see it working, recap what shipped, walk through a PR, or get a visual diagnosis before fixes. Quick screenshot checks mid-task stay in chat."
+description: "Hand back finished work as a one-page HTML review of before and after, backed by real evidence and optionally led by a genimg infographic. Use after building or changing something when the user asks to see it working, recap what shipped, walk through a PR, or get a visual diagnosis before fixes. Quick screenshot checks mid-task stay in chat."
 ---
 
 # Visual review

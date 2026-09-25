@@ -1,6 +1,6 @@
 ---
 name: image-to-app
-description: "Visual interview that turns an app idea into a chosen design, then a working app. Show distinct visual directions for a mobile or web app, let the user pick one, break it into its views, iterate, then build and verify against the images. Use for image-to-app or image-to-web work, exploring UI directions with genimg before coding, or turning mockups into an app."
+description: "Design a mobile or web app by visual interview with genimg, then build it and verify it against the accepted images. Use when the user wants to see what an app could look like before coding, or to turn generated mockups into a working app."
 ---
 
 # Image to app
@@ -9,7 +9,7 @@ A visual interview. You show, the user picks, you narrow. Every round puts image
 
 ## Set up the interview
 
-Load `genimg` for the CLI mechanics. The interview itself is Matt Pocock's `grill-with-docs`. It is user-invoked only, so do what it does and load its two parts: `grilling` (numbered rounds, each question with your recommended answer) and `domain-modeling` (the app's vocabulary in `CONTEXT.md`, each hard-to-reverse decision as an ADR). If they are not installed, ask the user to install them, then continue:
+Load `genimg` for the CLI mechanics. Run the interview with Matt Pocock's `grilling` (numbered rounds, each question with your recommended answer) and `domain-modeling` (the app's vocabulary in `CONTEXT.md`, each hard-to-reverse decision as an ADR); together they are his user-invoked `grill-with-docs`. If they are not installed, ask the user to install them, then continue:
 
 ```bash
 npx skills add mattpocock/skills -s grill-with-docs grilling domain-modeling
@@ -23,7 +23,7 @@ Open with one grilling round: what the app is for, who uses it, and whether it i
 
 If the user brings mockups or an already chosen design, treat those as the accepted images: record them in `selection-manifest.md`, ask whether they want alternatives, and otherwise go straight to Views.
 
-Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single `-n` call; #1 keeps the plain base prompt.
+Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single call with `-n` set to the line count plus one; #1 keeps the plain base prompt. The example has three lines.
 
 ```bash
 genimg "a SINGLE mobile app home screen for <app>, one phone screen filling the frame, NOT a grid" \
@@ -32,6 +32,8 @@ genimg grid directions_*.png -o directions.html --open
 ```
 
 Give each direction a stable name (`quiet-ledger`, `night-market`) and record prompt, model and index in `selection-manifest.md`. With the grid open, ask the pick as a grilling round, then copy the accepted image to `<name>-01-home.png`. When the answer combines directions, write the synthesis out: which shell, components, type and spacing come from which direction.
+
+Done when one direction, or a written synthesis, is accepted.
 
 ### 2. Views
 
@@ -56,7 +58,7 @@ Hand the implementer the accepted images, the synthesis, `CONTEXT.md`, the ADRs 
 
 ## Verify
 
-Run the functional checks, then compare the running app with the accepted images side by side, in the same states: the main viewport and one narrow one for a web app, the target device for a mobile app. Use [visual-qa.md](references/visual-qa.md). Label each claim with its rung on this ladder; no rung proves the one above it:
+Run the functional checks, then compare the running app with the accepted images side by side, in the same states (the main viewport and one narrow one for a web app, the target device for a mobile app), using [visual-qa.md](references/visual-qa.md). Label each claim with its rung on this ladder; no rung proves the one above it:
 
 1. **Visual direction**: the accepted images.
 2. **Fixture-backed prototype**: layout and interaction on declared substitute data.
@@ -67,7 +69,6 @@ Fix the largest mismatch first. Stop after two or three review rounds unless a g
 
 ## Done when
 
-- Every agreed view has an accepted image and the user confirmed the set.
-- `CONTEXT.md` and the ADRs record the decisions.
-- The app matches the images at the platform's sizes (desktop and narrow for a web app, the target device for a mobile app), interactions work with realistic state, and persisted state survives a cold reload.
+- The interview is done, and `CONTEXT.md` and the ADRs record its decisions.
+- The app matches the images at the platform's sizes, interactions work with realistic state, and persisted state survives a cold reload.
 - The evidence rung agreed with the user was reached (a mobile app needs **Installed runtime**), and the report names it and any fixture-backed part.
