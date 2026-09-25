@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 import questionary
 from rich.console import Console
+from rich.markup import escape
 
 from . import config, providers, registry
 from .auth.base import AuthProfile, SecretSpec
@@ -24,6 +25,12 @@ console = Console()
 
 
 # ────────────────────── helpers ──────────────────────
+
+def _profile_line(name: str, table: dict) -> str:
+  """One summary line per saved profile. Escaped, or Rich reads `[profiles.x]` as a style tag and drops it."""
+  extras = ", ".join(f"{k}={v}" for k, v in table.items() if k not in ("provider", "auth"))
+  return escape(f"  [profiles.{name}] {table['provider']} / {table['auth']}" + (f"  ({extras})" if extras else ""))
+
 
 def _is_remote() -> bool:
   return bool(os.getenv("SSH_CONNECTION") or os.getenv("SSH_CLIENT"))
@@ -303,8 +310,7 @@ def run_setup() -> None:
   config.save(cfg)
   console.print(f"\n[green]saved[/green] {config.CONFIG_PATH}")
   for name, table in cfg["profiles"].items():
-    extras = ", ".join(f"{k}={v}" for k, v in table.items() if k not in ("provider", "auth"))
-    console.print(f"  [profiles.{name}] {table['provider']} / {table['auth']}" + (f"  ({extras})" if extras else ""))
+    console.print(_profile_line(name, table))
   if cfg.get("default_model"):
     console.print(f"  default model: {cfg['default_model']}")
   configured = [t["provider"] for t in cfg["profiles"].values()]
