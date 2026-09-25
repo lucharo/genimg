@@ -188,7 +188,8 @@ class GoogleProvider(Provider):
       return ModelSpec("google", model_id, region="global", quality_rank=0)
     return None
 
-  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None) -> float | None:
+  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None,
+            aspect: str | None = None) -> float | None:
     table = _PER_IMAGE.get(_stable_id(model_id))
     if not table:
       return None

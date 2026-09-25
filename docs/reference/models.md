@@ -40,11 +40,20 @@ model is explained rather than silently changed: `genimg models set-default gdm:
 
 ## Pricing
 
-Estimates are coarse per-image figures from the providers' public rates and are shown as
-estimates. GPT Image 2.5 is deliberately unpriced: OpenAI publishes token rates but excludes
-2.5 from its per-image calculator, so its cost is recorded as unknown and excluded from
-spend totals. Codex subscription runs are billed against your Codex allowance; genimg
-records a theoretical API-equivalent range for comparison only.
+Estimates are per-image figures shown as estimates. GPT Image 2 and 2.5 count image-output
+tokens the way OpenAI's [calculator](https://developers.openai.com/api/docs/guides/image-generation#calculating-costs)
+does, at the exact width and height genimg requests, priced at $30 per million; 2.5 has its
+own, cheaper grid (its `high` costs what GPT Image 2's `medium` does), and a wide 2K render
+can cost less than a 1K square. Real API `usage` matched the calculator to the token on
+2026-09-19. Estimates exclude text input ($5 per million tokens, well under a cent per
+prompt). Older GPT Image models use OpenAI's legacy per-image table at its three documented
+sizes, scaled by pixel area elsewhere. Google is a flat per-image rate by resolution. Codex
+subscription runs are billed against your Codex allowance; genimg records a theoretical
+API-equivalent range for comparison only.
+
+Totals from `genimg cost` recorded before 2026-09-25 overstate 2K and 4K GPT Image 2 renders,
+which used a flat 2.5x / 6x multiplier: a 2K 16:9 medium render was saved as $0.1325 where the
+token count gives $0.0424. Older sidecars are not rewritten.
 
 Availability varies by account and deployment; some ids are api.openai.com only and absent
 from a given Azure resource. `genimg models --refresh` re-checks; an exact-model generation

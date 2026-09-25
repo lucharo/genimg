@@ -65,8 +65,9 @@ def test_generation_preserves_credentials_and_records_observed_model(credentiall
   assert output["provenance"]["verification"] == "not_performed"
   assert meta["billing"] == "subscription"
   assert meta["cost_usd_estimated"] is None
-  assert meta["api_equivalent_cost"]["usd_min"] == 0.006
-  assert meta["api_equivalent_cost"]["usd_max"] == 0.211
+  # gpt-image-2 at 1024x1024: 196 low tokens and 7024 high tokens at $30/M.
+  assert meta["api_equivalent_cost"]["usd_min"] == 0.00588
+  assert meta["api_equivalent_cost"]["usd_max"] == 0.21072
   assert "API equivalent" in result.output
   assert history.total_spent() == (0.0, 0)
 
@@ -128,7 +129,7 @@ def test_partial_generation_estimate_counts_delivered_outputs(tmp_path):
     spec=registry.resolve("oai:gi2")[1], paths=[path], n=3, cost_usd=0.159)
   assert meta["billing"] == "api"
   assert meta["api_equivalent_cost"] == {
-    "usd_min": 0.053, "usd_max": 0.053, "priced_images": 1, "images": 1,
+    "usd_min": 0.05268, "usd_max": 0.05268, "priced_images": 1, "images": 1,
   }
 
 

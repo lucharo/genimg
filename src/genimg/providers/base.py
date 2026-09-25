@@ -102,12 +102,14 @@ class Provider(ABC):
     """Structural inference for an unregistered id; None when the shape isn't ours."""
     return None
 
-  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None) -> float | None:
+  def price(self, model_id: str, quality: str | None = None, resolution: str | None = None,
+            aspect: str | None = None) -> float | None:
     """Rough per-image USD, or None when unknown (subscription, unpriced model)."""
     return None
 
   def price_table(self, model_id: str) -> dict[str, dict[str, float]]:
-    """quality ("" when n/a) → resolution ("" when n/a) → USD. Used by the Draw Studio."""
+    """quality ("" when n/a) → resolution ("" when n/a) → USD at the default aspect, plus a
+    "resolution|aspect" key per size the provider prices differently. Used by the Draw Studio."""
     caps = self.capabilities(model_id)
     qualities = list(caps.qualities) or [""]
     resolutions = sorted(caps.resolutions, key=_res_order) or [""]
@@ -118,6 +120,10 @@ class Provider(ABC):
         usd = self.price(model_id, q or None, r or None)
         if usd is not None:
           row[r] = usd
+      for res, asp in sorted(caps.sizes, key=lambda k: (_res_order(k[0]), k[1])):
+        usd = self.price(model_id, q or None, res, asp)
+        if usd is not None and usd != row.get(res):
+          row[f"{res}|{asp}"] = usd
       if row:
         table[q] = row
     return table

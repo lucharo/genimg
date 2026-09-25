@@ -25,11 +25,12 @@ _COST_BY_EDGE = {1024: 0.04, 2048: 0.13, 4096: 0.24}
 
 
 def estimate_cost(img_path: Path, provider: str | None = None, quality: str | None = None,
-                  model_id: str | None = None, resolution: str | None = None) -> float:
+                  model_id: str | None = None, resolution: str | None = None,
+                  aspect: str | None = None) -> float:
   if provider and model_id:
     from .providers import get
     try:
-      priced = get(provider).price(model_id, quality, resolution)
+      priced = get(provider).price(model_id, quality, resolution, aspect)
     except ValueError:
       priced = None
     if priced is not None:
@@ -292,7 +293,8 @@ def render(images: list[Path], output: Path, *, embed: bool = True,
     items.append({"src": src, "label": label, "filename": p.name, "copyText": text,
                   "delta": deltas_by_name.get(p.name, "")})
     costs.append(estimate_cost(p, provider=provider, quality=quality,
-                               model_id=(meta or {}).get("model_id"), resolution=(meta or {}).get("resolution")))
+                               model_id=(meta or {}).get("model_id"), resolution=(meta or {}).get("resolution"),
+                               aspect=(meta or {}).get("aspect_ratio")))
 
   # Single source of truth for cost: prefer the CLI's size/quality-aware estimate.
   meta_cost = (meta or {}).get("cost_usd_estimated")
