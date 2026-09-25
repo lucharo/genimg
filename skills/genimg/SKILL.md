@@ -84,6 +84,7 @@ Keep stable candidate IDs (`gemini-01`, `gpt-02`) across every shortlist and gri
 
 - **Show before you ask.** Open the candidates and let the user look before any "which do you want?"; a pick-one question with nothing on screen gets rejected.
 - **Prefer the native grid.** `genimg grid a.png b.png … -o comparison.html --open` covers candidates from several runs or providers, with the carousel and selection affordances. An arbitrary-file grid shows filenames, not per-run metadata, so the manifest stays the source of truth.
+- **Many strong candidates? Point the user at Tournament.** Grids of 3 to 20 images have a Tournament button: pairwise picks, N−1 for a winner and one more for a top 3. Ask the user to paste back **Copy result (JSON)**: winner, ranking and every pick, by grid number (`#3`), filename, and model when a genimg sidecar knows it.
 - **Hand back a clickable link.** Give any local HTML as a markdown `file://` link, `[grid.html](file:///abs/path/grid.html)`; users reopen it.
 - **For the Claude Code preview panel, embed images as base64.** The panel sandboxes the page, so a relative `<img src="sibling.png">` renders blank there. Inline `data:image/png;base64,…`. A normal browser tab loads relative paths fine.
 - **Crop a chosen PNG with Pillow** by scanning rows for the first and last dark pixels (`r/g/b < ~210`) plus a margin. `getbbox()` fails on anti-aliased near-white edges.
