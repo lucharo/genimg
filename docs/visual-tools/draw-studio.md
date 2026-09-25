@@ -25,9 +25,10 @@ genimg draw --model oai:gi2.5 fox-sketch.webp
 
 - Draw with a finger or Apple Pencil while the Studio runs on your Mac.
 
-<figure markdown>
-  ![Draw Studio in Safari on an iPad, with the fox doodle on the canvas](../assets/draw-studio-ipad.webp){ width="420" }
-  <figcaption>The iPad Pro 13-inch simulator, which shares the Mac's localhost. The moon was drawn by touch.</figcaption>
+<!-- Zensical rewrites a video's src relative to this file but leaves poster relative to the page URL. -->
+<figure>
+  <video src="../assets/demos/draw-ipad.mp4" poster="../../assets/demos/draw-ipad.webp" autoplay loop muted playsinline controls title="Draw Studio in Safari on an iPad in landscape: load the fox sketch, draw a party hat on it, add a line to the prompt"></video>
+  <figcaption>The iPad Pro 13-inch simulator, which shares the Mac's localhost. Everything was done by touch; the clip stops before <b>Generate</b>.</figcaption>
 </figure>
 
 | Method | Requires | Pros | Cons |
