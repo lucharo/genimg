@@ -462,7 +462,7 @@ def _make_handler(studio: Studio):
       except json.JSONDecodeError:
         return self._send(400, "application/json", json.dumps({"error": "bad json"}))
       image = data.get("image") or None
-      prompt = (data.get("prompt") or (DEFAULT_PROMPT if image else "")).strip()
+      prompt = (data.get("prompt") or "").strip() or (DEFAULT_PROMPT if image else "")
       if not image and not prompt:
         return self._send(400, "application/json", json.dumps({"error": "no image or prompt"}))
       model = data.get("model") or studio.default_model
