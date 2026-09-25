@@ -1,4 +1,4 @@
 interface:
   display_name: "Image to App"
-  short_description: "Turn visual directions into verified apps"
-  default_prompt: "Use $image-to-app to turn selected image references into a working, visually verified app."
+  short_description: "Visual interview from app idea to verified app"
+  default_prompt: "Use $image-to-app to interview me visually about an app, then build the design I pick."
