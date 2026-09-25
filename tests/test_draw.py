@@ -580,6 +580,9 @@ class BootJsonTests(unittest.TestCase):
     self.assertIn("function updatePromptChipState", draw.PAGE)
     self.assertIn("updatePromptChipState();", draw.PAGE)
 
+  def test_loading_a_source_over_a_drawing_asks_first(self) -> None:
+    self.assertIn("if(hasContent()&&!confirm(`Replace the canvas with ${name}? Your drawing will be lost.`))return;", draw.PAGE)
+
   def test_auto_aspect_refreshes_visible_resolution_options(self) -> None:
     self.assertIn("function sizeControlKey", draw.PAGE)
     self.assertIn("sizeControlKey()!==S.sizeControlKey", draw.PAGE)

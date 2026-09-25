@@ -1096,7 +1096,12 @@ const BOOT = /*__BOOT__*/;
     const files=(e.dataTransfer&&e.dataTransfer.files)?Array.from(e.dataTransfer.files):[];
     files.filter(f=>f.type.startsWith("image/")).forEach((f,i)=>{const rd=new FileReader();rd.onload=()=>addImage(rd.result,at?[at[0]+i*40,at[1]+i*40]:null);rd.readAsDataURL(f);});
   }
-  function loadSource(idx){ S.strokes=[]; S.items=[]; S.selectedId=null; renderToolbar(); addImage("/src/"+idx,null,true); }
+  function hasContent(){ return S.items.length>0||S.strokes.length>0; }
+  function loadSource(idx){
+    const name=(BOOT.sources[idx]||{}).name||"this image";
+    if(hasContent()&&!confirm(`Replace the canvas with ${name}? Your drawing will be lost.`))return;
+    S.strokes=[]; S.items=[]; S.selectedId=null; renderToolbar(); addImage("/src/"+idx,null,true);
+  }
 
   const SERVER_UNREACHABLE = "Draw Studio server is no longer reachable. Relaunch `genimg draw`, then Retry.";
   async function apiJson(url,options){
