@@ -1,29 +1,8 @@
 # Choosing a model
 
-Which model to reach for, and what it costs you in money and time.
+Pick by job, then check what each model costs in money and time.
 
-<!-- Charts and table regenerate from scripts/model_benchmarks.csv with `uv run scripts/model_charts.py`. -->
-
-## Quality against cost
-
-![Scatter of quality score against cost per image. Four models sit on the best-for-the-price line: oai:gi1-mini at medium, gdm:nb2-lite, gdm:nb2 and oai:gi2.5 at max. The rest cost more for the same or lower score.](../assets/charts/cost-quality-light.svg#only-light)
-![Scatter of quality score against cost per image. Four models sit on the best-for-the-price line: oai:gi1-mini at medium, gdm:nb2-lite, gdm:nb2 and oai:gi2.5 at max. The rest cost more for the same or lower score.](../assets/charts/cost-quality-dark.svg#only-dark)
-
-Circles are Google, squares are OpenAI. The line joins the models that nothing else beats on both
-price and score. `oai:gi1.5` and `gdm:nbp` land on the same spot.
-
-OpenAI prices follow `-q`. Artificial Analysis scored GPT Image 2.5 at `max`, which costs $0.211. At
-genimg's default `medium` it costs $0.013, but no benchmark has scored that setting yet.
-
-## Quality against speed
-
-![Scatter of quality score against median generation time. gdm:nb2-lite takes about 3 seconds, gdm:nb2 about 9, oai:gi2.5-flare at max about 55 and oai:gi2.5 at max about 109; those four form the fastest-for-the-quality line.](../assets/charts/speed-quality-light.svg#only-light)
-![Scatter of quality score against median generation time. gdm:nb2-lite takes about 3 seconds, gdm:nb2 about 9, oai:gi2.5-flare at max about 55 and oai:gi2.5 at max about 109; those four form the fastest-for-the-quality line.](../assets/charts/speed-quality-dark.svg#only-dark)
-
-Median time for one 1024×1024 image. `oai:gi1` and `oai:gi1-mini` are missing because Artificial
-Analysis publishes no generation time for them.
-
-## Pick by job
+<!-- Charts and the numbers table regenerate from scripts/model_benchmarks.csv with `uv run scripts/model_charts.py`. -->
 
 | Job | Model |
 | --- | --- |
@@ -33,9 +12,30 @@ Analysis publishes no generation time for them.
 | Cheap, fast exploration | `gdm:nb2`, or `gdm:nb2-lite` at about 3 s |
 | Top benchmark score, time no object | `oai:gi2.5` |
 
+## Quality against cost
+
+![Quality against cost. Best for the price: oai:gi1-mini, gdm:nb2-lite, gdm:nb2, oai:gi2.5.](../assets/charts/cost-quality-light.svg#only-light)
+![Quality against cost. Best for the price: oai:gi1-mini, gdm:nb2-lite, gdm:nb2, oai:gi2.5.](../assets/charts/cost-quality-dark.svg#only-dark)
+
+Quality: [Artificial Analysis text-to-image leaderboard](https://artificialanalysis.ai/image/leaderboard/text-to-image),
+25 Sep 2026. Cost: genimg's price table at 1024×1024, from [OpenAI](https://developers.openai.com/api/docs/pricing)
+and [Gemini API](https://ai.google.dev/gemini-api/docs/pricing) pricing.
+
+Artificial Analysis scores one `--quality` per model. genimg's default, `--quality medium`, is
+unscored: $0.013 for `oai:gi2.5` and `oai:gi2.5-flare`, 16 times less than `max`. `--quality auto`
+lets OpenAI choose; genimg prices it as `medium`. Every price: [Models](models.md#openai).
+
+## Quality against speed
+
+![Quality against generation time. Fastest for the quality: gdm:nb2-lite, gdm:nb2, oai:gi2.5-flare, oai:gi2.5.](../assets/charts/speed-quality-light.svg#only-light)
+![Quality against generation time. Fastest for the quality: gdm:nb2-lite, gdm:nb2, oai:gi2.5-flare, oai:gi2.5.](../assets/charts/speed-quality-dark.svg#only-dark)
+
+Quality and median time for one 1024×1024 image: [Artificial Analysis](https://artificialanalysis.ai/image/models),
+25 Sep 2026. It has no time for `oai:gi1` or `oai:gi1-mini`.
+
 ??? note "The numbers behind the charts"
 
-    | Model | `-q` | Cost | Time | Artificial Analysis | Arena |
+    | Model | `--quality` | Cost | Time | Artificial Analysis | Arena |
     | --- | --- | ---: | ---: | ---: | ---: |
     | `oai:gi2.5` | max | $0.211 | 109 s | 1196 (#1) | 1424 (#1) |
     | `oai:gi2.5-flare` | max | $0.211 | 55 s | 1190 (#2) | 1401 (#2) |
@@ -47,29 +47,14 @@ Analysis publishes no generation time for them.
     | `oai:gi1` | high | $0.167 | n/a | 1011 (#34) | 1116 (#47) |
     | `oai:gi1-mini` | medium | $0.011 | n/a | 914 (#86) | 1110 (#52) |
 
-    `-q`, cost and time match the Artificial Analysis run. Arena scored `oai:gi2` at `medium` and
-    names no setting for the rest. Arena lists `gdm:nb2` only with web search on and `oai:gi1.5`
-    only as a "high-fidelity" variant, so neither is mapped. Its `gdm:nbp` score is the 1K entry.
-    Artificial Analysis gives each score a 95% margin of about ±9 points, so `oai:gi2.5` and
-    `oai:gi2.5-flare` are a statistical tie.
-
-## Sources
-
-Data as of 25 September 2026:
-
-- Quality and time: [Artificial Analysis text-to-image leaderboard](https://artificialanalysis.ai/image/leaderboard/text-to-image)
-  and [model comparison](https://artificialanalysis.ai/image/models).
-- Second opinion: [Arena text-to-image leaderboard](https://arena.ai/leaderboard/text-to-image), votes to 24 September.
-- Cost: genimg's price table at 1024×1024, as `--dry-run` prints it, checked against
-  [OpenAI pricing](https://developers.openai.com/api/docs/pricing) and
-  [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing). Every size and quality is in [Models](models.md).
+    Arena: [text-to-image leaderboard](https://arena.ai/leaderboard/text-to-image), votes to
+    24 September. Arena scored `oai:gi2` at `medium` and `gdm:nbp` at 1K, and names no setting for
+    the rest. n/a means it lists only a variant genimg does not use. Artificial Analysis scores
+    within about ±9 points tie.
 
 ## Benchmarks worth checking
 
-- [Arena text-to-image](https://arena.ai/leaderboard/text-to-image) and
-  [image edit](https://arena.ai/leaderboard/image-edit). Formerly LMArena. People vote between two
-  anonymous images.
-- [Artificial Analysis text-to-image](https://artificialanalysis.ai/image/leaderboard/text-to-image)
-  and [image editing](https://artificialanalysis.ai/image/leaderboard/editing). Blind votes too, plus
-  price and generation time per model. Their [methodology](https://artificialanalysis.ai/image/methodology)
-  says how they measure.
+- [Arena image edit](https://arena.ai/leaderboard/image-edit), formerly LMArena. People vote
+  between two anonymous images.
+- [Artificial Analysis image editing](https://artificialanalysis.ai/image/leaderboard/editing),
+  and their [methodology](https://artificialanalysis.ai/image/methodology).
