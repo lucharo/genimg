@@ -10,7 +10,7 @@
 | Keep it elsewhere | `export GENIMG_CONFIG_HOME=DIR` |
 
 ```toml
-default_model        = "gdm:nb2"   # used when -m is omitted
+default_model        = "gdm:nb2"   # used when --model is omitted
 default_quality      = "medium"
 default_aspect_ratio = "16:9"      # skipped if the model can't use it
 default_resolution   = "2K"        # same

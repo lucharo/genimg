@@ -14,33 +14,44 @@ genimg auth      # the codex row should show ✓ ChatGPT login
 
 ## Generate
 
-Select it with `-m codex:image`:
+Select it with `--model codex:image`:
 
 ```bash
-genimg "a simple black triangle on white" -m codex:image -a 1:1 -o triangle.png
-genimg "replace the triangle with an outlined circle" -i triangle.png -m codex:image -o circle.png
+genimg "a simple black triangle on white" \
+  --model codex:image \
+  --aspect-ratio 1:1 \
+  --output triangle.png
+genimg "replace the triangle with an outlined circle" \
+  --input triangle.png \
+  --model codex:image \
+  --output circle.png
 ```
 
-Input and reference images, `-n`, `-d` and `--deltas` work as usual, and every output lands in
-`genimg history`.
+Input and reference images, `--num`, `--diverse` and `--deltas` work as usual, and every output
+lands in `genimg history`.
 
 ## What you don't control
 
 Codex picks the image model and size:
 
 ```console
-$ genimg "a simple black triangle on white" -m codex:image -a 1:1 -o triangle.png --dry-run
+$ genimg "a simple black triangle on white" \
+    --model codex:image \
+    --aspect-ratio 1:1 \
+    --output triangle.png \
+    --dry-run
 genimg codex/subscription codex:image → codex:image
   prompt   "a simple black triangle on white"
   params   n=1 a=1:1
-  cost     Codex subscription (usage limits apply)  id=20260925_093120_3583e4
+  cost     Codex subscription (usage limits apply)  id=20260925_114052_912a4c
   runtime  Codex subscription selects the image model and size; aspect ratio is a prompt request.
   output   triangle.png
 dry-run: no API call made.
 ```
 
-`-a` only asks for a shape in the prompt, so check the result. genimg rejects `-q`, `-r` and
-`--mode batch`. For a pinned model, quality and size, use the OpenAI API (`-m oai:gi2`).
+`--aspect-ratio` only asks for a shape in the prompt, so check the result. genimg rejects
+`--quality`, `--resolution` and `--mode batch`. For a pinned model, quality and size, use the
+OpenAI API (`--model oai:gi2`).
 
 ## Cost and limits
 

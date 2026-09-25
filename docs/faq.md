@@ -2,17 +2,17 @@
 
 ## Can I use my ChatGPT subscription instead of an API key?
 
-Yes. Sign in with `codex login`, then pass `-m codex:image`. Codex picks the image model and size,
+Yes. Sign in with `codex login`, then pass `--model codex:image`. Codex picks the image model and size,
 so use an API model when you need those controls. See [Codex subscription](guide/codex-subscription.md).
 
 ## Why does genimg ask me to choose a model?
 
-genimg has no built-in default model. Pass `-m`, or save a default with
+genimg has no built-in default model. Pass `--model`, or save a default with
 `genimg models set-default gdm:nb2`.
 
 ## Where are my images saved?
 
-Without `-o`, in `~/.genimg/generations/`. Each generation also gets a JSON record (prompt, model,
+Without `--output`, in `~/.genimg/generations/`. Each generation also gets a JSON record (prompt, model,
 settings, estimated cost) in `~/.genimg/metadata/`. `genimg history` lists them and
 `genimg history view` browses them.
 

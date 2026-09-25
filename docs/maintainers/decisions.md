@@ -4,7 +4,7 @@ Three choices shape the code. Keep them unless you mean to change the decision i
 
 ## No built-in default model
 
-Without `-m` or a saved default, genimg stops and says how to pick a model. A hardcoded default
+Without `--model` or a saved default, genimg stops and says how to pick a model. A hardcoded default
 could name a model a fresh key cannot reach, and the very first command would fail. `genimg setup`
 offers to save a default, so the guided path still ends in a command with no flags.
 

@@ -38,10 +38,15 @@ winner, the ranking and every pick, by grid number, file name and model.
 
 ## Grids from a generation
 
-Add `-g` to write a grid with the images:
+Add `--grid` to write a grid with the images:
 
 ```bash
-genimg "a minimal fox logo" -m oai:gi2.5-flare -n 4 -d -g --open
+genimg "a minimal fox logo" \
+  --model oai:gi2.5-flare \
+  --num 4 \
+  --diverse \
+  --grid \
+  --open
 ```
 
 It also shows the prompt, model, estimated cost and each card's
