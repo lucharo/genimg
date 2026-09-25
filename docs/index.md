@@ -22,9 +22,19 @@ genimg setup
 ## One prompt, four takes
 
 ```bash
-genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
-  --deltas "line art, block print, brush stroke" -o fox.png -g --open
+genimg "a minimal fox logo, NOT a grid" \
+  --model oai:gi2.5 \
+  --num 4 \
+  --deltas "line art, block print, brush stroke" \
+  --output fox.png \
+  --grid
 ```
+
+??? example "Watch it run"
+
+    <video src="assets/demos/generate.mp4" poster="assets/demos/generate.webp" controls preload="none" loop muted playsinline title="genimg writing four fox logos and a grid from one command"></video>
+
+    A real run. The 30-second wait plays at 6x speed.
 
 ![The HTML grid genimg opened: four fox logos labelled base prompt, line art, block print and brush stroke](assets/grid.webp){ width="720" }
 
