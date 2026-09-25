@@ -28,8 +28,8 @@ Compare the rendered app with the accepted references in matched states.
 
 ## Viewports and themes
 
-- Main desktop viewport.
-- One narrow viewport with deliberate overflow or reflow behavior.
+- Web app: the main desktop viewport and one narrow viewport with deliberate overflow or reflow behavior.
+- Mobile app: the target device, including a cold launch of the installed build.
 - Exactly one scroll owner per axis, with an obvious affordance when more content is available.
 - System, Light, and Dark theme behavior when the product supports them.
 - Reduced-motion behavior for non-essential animation.

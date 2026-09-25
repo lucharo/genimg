@@ -15,7 +15,7 @@ Load `genimg` for the CLI mechanics. The interview itself is Matt Pocock's `gril
 npx skills add mattpocock/skills -s grill-with-docs grilling domain-modeling
 ```
 
-Open with one grilling round: what the app is for, who uses it, and whether it is a **mobile app** or a **web app**. Settle the platform before the first image; it fixes the frame for every render (`-a 9:16` for a phone screen, `-a 16:9` for a desktop window; `oai:gi2` needs `-r 2K` for both). Render with a model the user can run (their saved default, or one `genimg auth` shows ready); the commands below use `oai:gi2` as an example, and the `genimg` skill lists each model's sizes.
+Open with one grilling round: what the app is for, who uses it, and whether it is a **mobile app** or a **web app**. Settle the platform before the first image; it fixes the frame for every render (`-a 9:16` for a phone screen, `-a 16:9` for a desktop window; `oai:gi2` needs `-r 2K` for both). Render with a model the user can run (their saved default, or one `genimg models` lists for their credentials); the commands below use `oai:gi2` as an example, and the `genimg` skill lists each model's sizes.
 
 ## The loop
 
