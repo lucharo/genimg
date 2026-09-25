@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Multi-provider image generation CLI (Gemini + OpenAI)"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "skills/genimg-infographic/LICENSE"]
 dependencies = [
   # typer<0.26: 0.26 dropped its top-level click dep AND refactored TyperGroup,
   # breaking _DefaultGroup's default-command routing (cli.py). click is pinned
@@ -23,6 +25,12 @@ dependencies = [
   "c2pa-python>=0.37.10,<0.38",
   "tomli-w>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/lucharo/genimg"
+Documentation = "https://lucharo.github.io/genimg/"
+Source = "https://github.com/lucharo/genimg"
+Issues = "https://github.com/lucharo/genimg/issues"
 
 [project.scripts]
 genimg = "genimg.cli:app"
