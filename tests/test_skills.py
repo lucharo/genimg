@@ -82,6 +82,26 @@ class BundledSkillTests(unittest.TestCase):
     self.assertEqual(result.exit_code, 0, result.output)
     self.assertIn("skills/genimg-infographic", result.output)
 
+  def test_bare_skills_prints_the_npx_install_hint(self) -> None:
+    result = CliRunner().invoke(cli._app, ["skills"])
+
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertEqual(
+      result.output,
+      "Install the bundled skills into your agent:\n"
+      "  npx skills add lucharo/genimg\n"
+      "Needs Node.js (for npx).\n",
+    )
+
+  def test_retired_installer_verbs_are_not_commands(self) -> None:
+    """`npx skills` is the only install path (issue #5); the old verbs must not linger."""
+    for verb in ("install", "update", "uninstall", "list"):
+      with self.subTest(verb=verb):
+        result = CliRunner().invoke(cli._app, ["skills", verb])
+
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn("No such command", result.output)
+
   def test_port_contains_no_old_backend_contract(self) -> None:
     skill = cli._skill_sources()["genimg-infographic"]
     text = "\n".join(

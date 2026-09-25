@@ -839,8 +839,10 @@ def config_edit():
 
 # ────────────────────── skills sub-typer ──────────────────────
 
+SKILLS_INSTALL_COMMAND = "npx skills add lucharo/genimg"
+
 skills_app = typer.Typer(
-  help="Install bundled skills into agent harnesses (claude/codex/cursor/opencode).",
+  help=f"Bundled agent skills. Install them with `{SKILLS_INSTALL_COMMAND}`.",
   context_settings={"help_option_names": ["-h", "--help"]},
   invoke_without_command=True,
   no_args_is_help=False,
@@ -851,14 +853,7 @@ _app.add_typer(skills_app, name="skills")
 @skills_app.callback(invoke_without_command=True)
 def _skills_root(ctx: typer.Context):
   if ctx.invoked_subcommand is None:
-    skills_list()
-
-_AGENT_SKILL_ROOTS = {
-  "claude":   Path.home() / ".claude" / "skills",
-  "codex":    Path.home() / ".codex" / "skills",
-  "cursor":   Path.home() / ".cursor" / "skills",
-  "opencode": Path.home() / ".opencode" / "skills",
-}
+    typer.echo(f"Install the bundled skills into your agent:\n  {SKILLS_INSTALL_COMMAND}\nNeeds Node.js (for npx).")
 
 
 def _skill_sources() -> dict[str, Path]:
@@ -881,15 +876,6 @@ def _skill_sources() -> dict[str, Path]:
   raise FileNotFoundError("skill assets not found in package")
 
 
-def _resolve_agents(agent: str) -> list[str]:
-  if agent == "all":
-    return list(_AGENT_SKILL_ROOTS)
-  if agent not in _AGENT_SKILL_ROOTS:
-    console.print(f"[red]unknown agent {agent!r}. Choose: {', '.join(_AGENT_SKILL_ROOTS)} or 'all'.[/red]")
-    raise typer.Exit(1)
-  return [agent]
-
-
 def _resolve_skill_names(skill: str, sources: dict[str, Path]) -> list[str]:
   if skill == "all":
     return list(sources)
@@ -910,94 +896,6 @@ def skills_path(
       console.print(str(sources[skill_name]), soft_wrap=True)
     else:
       console.print(f"{skill_name}: {sources[skill_name]}", soft_wrap=True)
-
-
-@skills_app.command("install", help="Symlink bundled skills into one or more agent skill dirs.")
-def skills_install(
-  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "claude",
-  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
-  force: Annotated[bool, typer.Option("--force", help="Replace existing symlinks.")] = False,
-):
-  sources = _skill_sources()
-  for name in _resolve_agents(agent):
-    root = _AGENT_SKILL_ROOTS[name]
-    for skill_name in _resolve_skill_names(skill, sources):
-      src = sources[skill_name]
-      target = root / skill_name
-      target.parent.mkdir(parents=True, exist_ok=True)
-      if target.exists() or target.is_symlink():
-        if not force:
-          console.print(f"[yellow]{name}/{skill_name}:[/yellow] {target} exists (use --force or `skills update {name} {skill_name}`)")
-          continue
-        target.unlink() if target.is_symlink() else _rm_tree(target)
-      # NOTE (deferred): symlink into the (possibly uv-tool-managed) package dir. A `uv tool`
-      # upgrade can recreate that dir and break the link — re-run `genimg skills update`. A
-      # copy-based install would survive upgrades but needs its own staleness detection.
-      target.symlink_to(src)
-      console.print(f"[green]installed → {name}/{skill_name}:[/green] {target}")
-
-
-@skills_app.command("update", help="Re-link bundled skills in one or more agent dirs.")
-def skills_update(
-  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
-  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
-):
-  sources = _skill_sources()
-  for name in _resolve_agents(agent):
-    root = _AGENT_SKILL_ROOTS[name]
-    for skill_name in _resolve_skill_names(skill, sources):
-      src = sources[skill_name]
-      target = root / skill_name
-      if not (target.exists() or target.is_symlink()):
-        continue  # silently skip uninstalled
-      target.parent.mkdir(parents=True, exist_ok=True)
-      if target.is_symlink() and target.resolve() == src.resolve():
-        console.print(f"[dim]{name}/{skill_name}: already current[/dim]")
-        continue
-      target.unlink() if target.is_symlink() else _rm_tree(target)
-      target.symlink_to(src)
-      console.print(f"[green]updated → {name}/{skill_name}:[/green] {target}")
-
-
-@skills_app.command("uninstall", help="Remove bundled skill symlinks from one or more agent dirs.")
-def skills_uninstall(
-  agent: Annotated[str, typer.Argument(help="claude | codex | cursor | opencode | all")] = "all",
-  skill: Annotated[str, typer.Argument(help="Bundled skill name or 'all'.")] = "all",
-):
-  sources = _skill_sources()
-  for name in _resolve_agents(agent):
-    root = _AGENT_SKILL_ROOTS[name]
-    for skill_name in _resolve_skill_names(skill, sources):
-      target = root / skill_name
-      if not (target.exists() or target.is_symlink()):
-        console.print(f"[dim]{name}/{skill_name}: not installed[/dim]")
-        continue
-      target.unlink() if target.is_symlink() else _rm_tree(target)
-      console.print(f"[green]removed ← {name}/{skill_name}:[/green] {target}")
-
-
-@skills_app.command("list", help="Show install state across all known agents.")
-def skills_list():
-  sources = _skill_sources()
-  table = Table(title="skill installs")
-  table.add_column("agent", style="cyan")
-  table.add_column("skill")
-  table.add_column("target", style="dim")
-  table.add_column("status")
-  for agent_name, root in _AGENT_SKILL_ROOTS.items():
-    for skill_name, src in sources.items():
-      target = root / skill_name
-      if target.is_symlink() and target.resolve() == src.resolve():
-        status = "[green]installed[/green]"
-      elif target.exists() or target.is_symlink():
-        status = "[yellow]other (link mismatch)[/yellow]"
-      else:
-        status = "[dim]not installed[/dim]"
-      table.add_row(agent_name, skill_name, str(target), status)
-  console.print(table)
-  for skill_name, src in sources.items():
-    console.print(f"[dim]source {skill_name}: {src}[/dim]")
-  console.print("[dim]install: `genimg skills install` (all) or `genimg skills install codex genimg`[/dim]")
 
 
 # ────────────────────── helpers ──────────────────────
@@ -1173,11 +1071,6 @@ def _color_status(s: str) -> str:
 
 def _status_counts_as_available(s: str) -> bool:
   return s in {"listed", "working"}
-
-
-def _rm_tree(p: Path) -> None:
-  import shutil
-  shutil.rmtree(p)
 
 
 def app() -> None:
