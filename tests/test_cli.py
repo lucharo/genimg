@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -336,3 +338,48 @@ class DryRunAuthPreflightTests(unittest.TestCase):
     self.assertEqual(exit_code, 0, output)
     self.assertNotIn("auth ✗", output)
     self.assertTrue(output.endswith("dry-run: no API call made."), output)
+
+
+class PipedOutputTests(unittest.TestCase):
+  """An agent's shell: stdout piped, COLUMNS unset. Ids, env-var names and paths print whole."""
+
+  def setUp(self) -> None:
+    self._home = tempfile.TemporaryDirectory()
+    self.home = Path(self._home.name)
+
+  def tearDown(self) -> None:
+    self._home.cleanup()
+
+  def _run(self, *args: str, **env_extra: str) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("COLUMNS", "LINES", "GENIMG_HOME", "GENIMG_CONFIG_HOME")
+           and not any(t in k for t in ("OPENAI", "GEMINI", "GOOGLE", "AZURE", "CLAUDE_GCP"))}
+    env.update(HOME=str(self.home), **env_extra)
+    return subprocess.run([sys.executable, "-m", "genimg", *args], env=env, capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL, timeout=60)
+
+  def test_history_output_path_is_not_folded(self) -> None:
+    out = "/tmp/" + "/".join(["deeply-nested-folder"] * 3) + "/20260925_120000_abcdef.png"
+    meta_dir = self.home / ".genimg" / "metadata"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "20260925_120000_abcdef.json").write_text(json.dumps({
+      "id": "20260925_120000_abcdef", "time": "2026-09-25T12:00:00", "alias": "oai:gi2",
+      "model_id": "gpt-image-2", "prompt": "a red fox curled up asleep in fresh snow under a pine tree",
+      "n": 1, "cost_usd_estimated": 0.0527, "outputs": [{"path": out}],
+    }))
+    result = self._run("history", "-n", "1")
+    self.assertEqual(result.returncode, 0, result.stderr)
+    self.assertIn(out, result.stdout)
+
+  def test_auth_modes_env_var_names_are_not_truncated(self) -> None:
+    result = self._run("auth", "--modes")
+    self.assertEqual(result.returncode, 0, result.stderr)
+    for name in ("GOOGLE_APPLICATION_CREDENTIALS", "AZURE_OPENAI_API_KEY"):
+      self.assertIn(name, result.stdout)
+
+  def test_dry_run_output_paths_stay_on_one_line(self) -> None:
+    target = "/tmp/" + "/".join(["deeply-nested-folder"] * 6) + "/fox.png"
+    result = self._run("a fox", "-m", "oai:gi2", "-n", "2", "-o", target, "--dry-run", OPENAI_API_KEY="k")
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    for i in (1, 2):
+      self.assertIn(target.replace("fox.png", f"fox_{i}.png"), result.stdout)

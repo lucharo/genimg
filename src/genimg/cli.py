@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import difflib
+import os
+import sys
 import time
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -31,7 +33,15 @@ from .auth import resolve as auth_resolve
 from .generate import generate as run_generate
 from .interfaces import GenerateRequest, IImageGen
 
-console = Console()
+
+def _console() -> Console:
+  """Piped output with no COLUMNS (an agent's shell) gets 200 columns, not Rich's fallback of
+  80, which cuts model ids, env-var names and paths mid-word."""
+  piped = not sys.stdout.isatty() and not os.environ.get("COLUMNS")
+  return Console(width=200 if piped else None)
+
+
+console = _console()
 
 # One-word prompts that read as a command, never as a prompt: with a default model saved,
 # `genimg help` would otherwise buy an image of the word "help". Maps word → what to run.
@@ -350,7 +360,7 @@ def _run(
       'or pass your own subject-appropriate deltas: --deltas "isometric, blueprint, macro photo" (or --deltas @file, one per line)'
     )
   if planned_grid:
-    console.print(f"  [dim]grid[/dim]     {_short_path(planned_grid)}")
+    console.print(f"  [dim]grid[/dim]     {_rich_escape(_short_path(planned_grid))}", soft_wrap=True)
   if effective_q == "high":
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
@@ -545,7 +555,7 @@ def models_set_default(alias: Annotated[str, typer.Argument(help="Alias or canon
   if alias != canonical:
     console.print(f"[dim]resolved {alias!r} → {canonical}[/dim]")
   console.print(f"[green]default →[/green] {canonical} ({spec.provider} / {spec.model_id})")
-  console.print(f"[dim]saved to {config.CONFIG_PATH}[/dim]")
+  console.print(f"[dim]saved to {_rich_escape(str(config.CONFIG_PATH))}[/dim]", soft_wrap=True)
 
 
 @models_app.command("get-default", help="Show the current default model.")
@@ -730,7 +740,7 @@ def _show_history(limit: int, summary: bool, json_out: bool = False) -> None:
   table.add_column("prompt", ratio=3, overflow="fold")
   table.add_column("made/req", justify="right")
   table.add_column("cost", justify="right")
-  table.add_column("output", style="dim", ratio=2, overflow="fold")
+  table.add_column("output", style="dim", ratio=2, overflow="fold", no_wrap=True)  # prompt wraps first
   for e in entries:
     paths = e.get("outputs", [])
     first = paths[0] if paths else None
@@ -1011,7 +1021,7 @@ def _print_planned_paths(paths: list[Path]) -> None:
   label = "output" if len(paths) == 1 else "outputs"
   for i, path in enumerate(paths):
     row_label = label if i == 0 else ""
-    console.print(f"  [dim]{row_label:<7}[/dim]  {_short_path(path)}")
+    console.print(f"  [dim]{row_label:<7}[/dim]  {_rich_escape(_short_path(path))}", soft_wrap=True)
 
 
 def _progress_label(n: int, grid: bool, mode: str | None = None) -> str:
