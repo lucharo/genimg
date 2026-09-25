@@ -1,7 +1,7 @@
-# List the models your credentials reach (free). Render: CROP_HEIGHT=630 scripts/demos/render.sh models
+# Screenshot of the models your credentials reach (free). Render: STILL=1 CROP_HEIGHT=551 scripts/demos/render.sh models
 Output ".vhs/models-frames/"
-Set Width 1470
-Set Height 760
+Set Width 1640
+Set Height 700
 Source "scripts/demos/common.tape"
 
 Type "genimg models"

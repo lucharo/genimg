@@ -32,6 +32,12 @@ For Vertex, point that variable at a service-account JSON, or use
 genimg setup
 ```
 
+<!-- Zensical rewrites a video's src relative to this file but leaves poster relative to the page URL. -->
+
+??? example "Watch the wizard"
+
+    <video src="assets/demos/setup.mp4" poster="../assets/demos/setup.webp" controls preload="none" loop muted playsinline title="genimg setup picking the Gemini key, the OpenAI key and Codex, then a default model"></video>
+
 The wizard finds credentials already in your environment and checks each provider with a free
 live call. It saves a profile only when that check passes. Keys stay in your environment; only
 settings such as an Azure endpoint go to [config.toml](reference/config.md).
@@ -43,8 +49,7 @@ genimg auth      # one row per provider: mode, credential, ready
 genimg models    # which models each provider lists for your credentials
 ```
 
-<!-- Zensical rewrites a video's src relative to this file but leaves poster relative to the page URL. -->
-<video src="assets/demos/models.mp4" poster="../assets/demos/models.webp" autoplay loop muted playsinline title="genimg models listing Google, OpenAI and Codex models"></video>
+![genimg models: a table of aliases, model ids, providers and status for Codex, Google and OpenAI](assets/demos/models.webp)
 
 ## Pick a model
 
@@ -72,27 +77,32 @@ Preview the request first. `--dry-run` shows the model, cost and output path wit
 the API:
 
 ```bash
-genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png --dry-run
+genimg "a paper-cut fox in a birch forest, warm palette" \
+  --model gdm:nb2 \
+  --output fox.png \
+  --dry-run
 ```
 
 ```text
 genimg google/direct@google gdm:nb2 → gemini-3.1-flash-image
   prompt   "a paper-cut fox in a birch forest, warm palette"
   params   n=1
-  cost     $0.0670 (estimate)  id=20260925_092702_04e909
+  cost     $0.0670 (estimate)  id=20260925_120805_48c7fa
   output   fox.png
 dry-run: no API call made.
 ```
 
-The same preview for the four takes on the [home page](index.md):
+??? example "Watch a dry run of the four takes on the home page"
 
-<video src="assets/demos/dry-run.mp4" poster="../assets/demos/dry-run.webp" autoplay loop muted playsinline title="genimg --dry-run planning four fox logos and a grid"></video>
+    <video src="assets/demos/dry-run.mp4" poster="../assets/demos/dry-run.webp" controls preload="none" loop muted playsinline title="genimg --dry-run planning four fox logos and a grid"></video>
 
 The first line reads provider, auth mode, profile, alias and model id. Drop `--dry-run` to
 generate:
 
 ```bash
-genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png
+genimg "a paper-cut fox in a birch forest, warm palette" \
+  --model gdm:nb2 \
+  --output fox.png
 ```
 
 Every run is recorded. `genimg history` lists past generations and `genimg cost` totals the
