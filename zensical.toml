@@ -11,11 +11,7 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { "genimg" = "index.md" },
-  { "Getting started" = [
-    { "Install" = "getting-started/install.md" },
-    { "Authentication" = "getting-started/auth.md" },
-    { "Your first image" = "getting-started/first-image.md" },
-  ] },
+  { "Getting started" = "getting-started.md" },
   { "For agents" = "agents.md" },
   { "Guide" = [
     { "Diverse images" = "guide/diversity.md" },

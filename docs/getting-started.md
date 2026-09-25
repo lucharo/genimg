@@ -1,0 +1,95 @@
+# Getting started
+
+## Install
+
+```bash
+uv tool install genimg
+genimg --version
+```
+
+Needs [uv](https://docs.astral.sh/uv/) and Python 3.11, 3.12 or 3.13. Upgrade with
+`uv tool upgrade genimg`.
+
+## Which providers you can reach
+
+You need at least one of these.
+
+| Route | Auth mode | What you need |
+| --- | --- | --- |
+| OpenAI via its own API | `direct` | `OPENAI_API_KEY` |
+| OpenAI via Azure OpenAI | `azure` | `AZURE_OPENAI_API_KEY`<br>`AZURE_OPENAI_ENDPOINT` |
+| Google via a Gemini API key | `direct` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
+| Google via GCP Vertex AI | `vertex` | `GOOGLE_APPLICATION_CREDENTIALS` |
+| Codex with a ChatGPT subscription | `subscription` | the [Codex CLI](guide/codex-subscription.md) and `codex login` |
+
+For Vertex, point that variable at a service-account JSON, or use
+`gcloud auth application-default login` (the `vertex_adc` mode).
+`genimg auth --modes` prints every mode from your installed version.
+
+## Connect
+
+```bash
+genimg setup
+```
+
+The wizard finds credentials already in your environment and checks each provider with a free
+live call. It saves a profile only when that check passes. Keys stay in your environment; only
+settings such as an Azure endpoint go to [config.toml](reference/config.md).
+
+Check the result at any time. Neither command generates an image:
+
+```bash
+genimg auth      # one row per provider: mode, credential, ready
+genimg models    # which models each provider lists for your credentials
+```
+
+## Pick a model
+
+genimg has no built-in default model. Pass `-m`, or save a default.
+
+| Alias | Provider | Use it for |
+| --- | --- | --- |
+| `gdm:nb2` | Google | Fast, cheap exploration; follows layouts and diagrams well |
+| `gdm:nbp` | Google | Photographic and painterly quality |
+| `gdm:nb2-lite` | Google | The cheapest Gemini model, 1K only |
+| `oai:gi2` | OpenAI | Legible text, logos and UI |
+| `oai:gi2.5` | OpenAI | GPT Image 2.5: cheaper than `oai:gi2`, adds `xhigh` and `max` quality |
+| `oai:gi2.5-flare` | OpenAI | GPT Image 2.5 Flare, same quality levels |
+| `codex:image` | Codex | Your ChatGPT subscription, no API key; Codex picks the model |
+
+Older models and every alias are in the [models reference](reference/models.md).
+
+```bash
+genimg models set-default gdm:nb2
+```
+
+## Your first image
+
+Preview the request first. `--dry-run` shows the model, cost and output path without calling
+the API:
+
+```bash
+genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png --dry-run
+```
+
+```text
+genimg google/direct@google gdm:nb2 → gemini-3.1-flash-image
+  prompt   "a paper-cut fox in a birch forest, warm palette"
+  params   n=1
+  cost     $0.0670 (estimate)  id=20260925_092702_04e909
+  output   fox.png
+dry-run: no API call made.
+```
+
+The first line reads provider, auth mode, profile, alias and model id. Drop `--dry-run` to
+generate:
+
+```bash
+genimg "a paper-cut fox in a birch forest, warm palette" -m gdm:nb2 -o fox.png
+```
+
+Every run is recorded. `genimg history` lists past generations and `genimg cost` totals the
+estimated spend.
+
+Next: [get several different takes](guide/diversity.md), or let your
+[coding agent](agents.md) drive genimg.
