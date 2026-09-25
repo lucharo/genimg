@@ -24,8 +24,9 @@ genimg grid a.png b.png c.png -o review.html --open         # any existing files
 - Metadata panel: model, parameters, input and ordered references, per-image cost, the
   reported C2PA generator when an image carries content credentials.
 
-View, prompt visibility and carousel index persist in the URL, so a link to `#carousel-2`
-opens on that image.
+View, prompt visibility and carousel index persist in the URL query string, so a link to
+`review.html?view=carousel&i=2` opens the carousel on the second image and survives a reload.
+A `#carousel-2` fragment is not read; the page opens in grid view.
 
 ## Where grids go
 
