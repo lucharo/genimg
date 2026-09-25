@@ -289,3 +289,26 @@ class BlankPromptTests(unittest.TestCase):
         result = CliRunner().invoke(cli._app, [prompt, "-m", "gdm:nb2", "--dry-run"])
         self.assertEqual(result.exit_code, 2, result.output)
         self.assertEqual(result.output.strip(), "error: prompt is empty")
+
+
+class DefaultQualityTests(unittest.TestCase):
+  def _dry_run(self, *args: str) -> tuple[int, str]:
+    with patch.object(cli.config, "load", return_value={"default_quality": "xhigh"}), \
+         patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH):
+      result = CliRunner().invoke(cli._app, ["a fox", *args, "--dry-run"])
+    return result.exit_code, " ".join(result.output.split())
+
+  def test_saved_quality_the_model_cannot_use_is_skipped(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2")
+    self.assertEqual(exit_code, 0, output)
+    self.assertIn("q=medium (default)", output)
+
+  def test_saved_quality_the_model_can_use_applies(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2.5")
+    self.assertEqual(exit_code, 0, output)
+    self.assertIn("q=xhigh (default)", output)
+
+  def test_explicit_quality_the_model_cannot_use_still_fails(self) -> None:
+    exit_code, output = self._dry_run("-m", "oai:gi2", "-q", "xhigh")
+    self.assertEqual(exit_code, 1, output)
+    self.assertIn("--quality for gpt-image-2 must be one of", output)

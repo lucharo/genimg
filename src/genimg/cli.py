@@ -258,8 +258,8 @@ def _run(
     caps, resolution, aspect_ratio,
     user_cfg.get("default_resolution"), user_cfg.get("default_aspect_ratio"),
   )
-  if caps.qualities:
-    quality = quality or user_cfg.get("default_quality")
+  if quality is None and user_cfg.get("default_quality") in caps.qualities:
+    quality = user_cfg["default_quality"]  # a saved quality this model cannot use is skipped
 
   _validate_provider_flags(
     provider, caps, quality=quality, region=region, project=project, auth=auth,
