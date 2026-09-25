@@ -25,7 +25,9 @@ genimg "a minimal fox logo, NOT a grid" -m oai:gi2.5-flare -n 4 \
 
 ![The HTML grid genimg opened: four fox logos labelled base prompt, line art, block print and brush stroke](docs/assets/grid.webp)
 
-Add the skills to Claude Code, Codex, Cursor or OpenCode with `npx skills add lucharo/genimg`.
+Add the skills to Claude Code, Codex, Cursor or OpenCode with `npx skills add lucharo/genimg`:
+`genimg` plus workflows for infographics, visual exploration, visual review and image-to-app.
+Pick some with `-s`, e.g. `npx skills add lucharo/genimg -s genimg genimg-infographic`.
 
 ## Docs
 
