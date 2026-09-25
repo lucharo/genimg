@@ -50,6 +50,13 @@ def _retired_imagen_error() -> ValueError:
     "Use gdm:nb2 (Gemini 3.1 Flash Image) instead."
   )
 
+
+def _retired_gemini_25_error() -> ValueError:
+  return ValueError(
+    "gemini-2.5-flash-image retires on October 2, 2026 and genimg no longer supports it. "
+    "Use gdm:nb2 (Gemini 3.1 Flash Image) instead."
+  )
+
 def _infer_spec(model_id: str) -> ModelSpec | None:
   """Infer a spec for a well-formed but unregistered model id from its shape.
 
@@ -79,6 +86,9 @@ def resolve(name: str) -> tuple[str, ModelSpec]:
   key = name
   if key in _RETIRED_IMAGEN_ALIASES or key.lower().startswith("imagen-"):
     raise _retired_imagen_error()
+  # Checked before structural inference, which would otherwise accept this gemini-*-image id.
+  if key.lower().startswith("gemini-2.5-flash-image"):
+    raise _retired_gemini_25_error()
   while key in _REGISTRY:
     if key in seen:
       raise ValueError(f"alias cycle for {name!r}")

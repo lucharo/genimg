@@ -49,5 +49,5 @@ Mac's Tailscale or Wi-Fi address for Safari. See
 
 ## Does Draw Studio work offline? Can I host it?
 
-No to both. It runs on your machine but sends prompts and images to the provider. There is no hosted,
-multi-user version.
+No to both. It runs on your machine but sends prompts and images to the provider. `--host` shares
+your running Studio with your own devices for a session; there is no hosted, multi-user version.

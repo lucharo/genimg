@@ -11,8 +11,8 @@ A back-and-forth in pictures: the agent shows, you pick, it narrows, then it bui
    same style.
 4. **Iterate.** Each round shows the set and asks a few numbered questions until every
    screen is accepted.
-5. **Build.** The agent builds the app and checks it against the images at desktop and
-   phone widths.
+5. **Build.** The agent builds the app and checks it against the images on the platform you
+   chose.
 
 The questions come from Matt Pocock's
 [grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs),

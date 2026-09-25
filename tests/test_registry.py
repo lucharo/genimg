@@ -68,6 +68,11 @@ class SignatureInferenceTests(unittest.TestCase):
     with self.assertRaisesRegex(ValueError, "Imagen 4 was retired.*gdm:nb2"):
       registry.resolve("imagen-4.0-generate-001")
 
+  def test_retired_gemini_25_full_id_is_refused_not_inferred(self) -> None:
+    # gemini-2.5-flash-image has the gemini-*-image shape that inference accepts.
+    with self.assertRaisesRegex(ValueError, "gemini-2.5-flash-image retires.*gdm:nb2"):
+      registry.resolve("gemini-2.5-flash-image")
+
   def test_registered_bare_id_keeps_curated_spec(self) -> None:
     # a registered id keeps its curated rank/region, not the inferred rank 0
     _, spec = registry.resolve("gpt-image-2")

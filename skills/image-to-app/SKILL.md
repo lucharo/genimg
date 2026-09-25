@@ -15,11 +15,13 @@ Load `genimg` for the CLI mechanics. The interview itself is Matt Pocock's `gril
 npx skills add mattpocock/skills -s grill-with-docs grilling domain-modeling
 ```
 
-Open with one grilling round: what the app is for, who uses it, and whether it is a **mobile app** or a **web app**. Settle the platform before the first image; it fixes the frame for every render (`-a 9:16` for a phone screen, `-a 16:9` for a desktop window; `oai:gi2` needs `-r 2K` for both).
+Open with one grilling round: what the app is for, who uses it, and whether it is a **mobile app** or a **web app**. Settle the platform before the first image; it fixes the frame for every render (`-a 9:16` for a phone screen, `-a 16:9` for a desktop window; `oai:gi2` needs `-r 2K` for both). Render with a model the user can run (their saved default, or one `genimg models` lists for their credentials); the commands below use `oai:gi2` as an example, and the `genimg` skill lists each model's sizes.
 
 ## The loop
 
 ### 1. Directions
+
+If the user brings mockups or an already chosen design, treat those as the accepted images: record them in `selection-manifest.md`, ask whether they want alternatives, and otherwise go straight to Views.
 
 Render three to five visual directions of the app's main screen, each one a whole design system: palette, type, density, component language. Write one direction per line in `directions.txt` and run a single `-n` call; #1 keeps the plain base prompt.
 
@@ -54,7 +56,7 @@ Hand the implementer the accepted images, the synthesis, `CONTEXT.md`, the ADRs 
 
 ## Verify
 
-Run the functional checks, then compare the running app with the accepted images side by side, in the same states, at the main viewport and one narrow one. Use [visual-qa.md](references/visual-qa.md). Label each claim with its rung on this ladder; no rung proves the one above it:
+Run the functional checks, then compare the running app with the accepted images side by side, in the same states: the main viewport and one narrow one for a web app, the target device for a mobile app. Use [visual-qa.md](references/visual-qa.md). Label each claim with its rung on this ladder; no rung proves the one above it:
 
 1. **Visual direction**: the accepted images.
 2. **Fixture-backed prototype**: layout and interaction on declared substitute data.
@@ -67,5 +69,5 @@ Fix the largest mismatch first. Stop after two or three review rounds unless a g
 
 - Every agreed view has an accepted image and the user confirmed the set.
 - `CONTEXT.md` and the ADRs record the decisions.
-- The app matches the images at desktop and narrow sizes, interactions work with realistic state, and persisted state survives a cold reload.
-- The report names the evidence rung reached and any fixture-backed part.
+- The app matches the images at the platform's sizes (desktop and narrow for a web app, the target device for a mobile app), interactions work with realistic state, and persisted state survives a cold reload.
+- The evidence rung agreed with the user was reached (a mobile app needs **Installed runtime**), and the report names it and any fixture-backed part.
