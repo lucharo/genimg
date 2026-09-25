@@ -1,15 +1,15 @@
 # Preview a four-take run without calling the API (free). Render: scripts/demos/render.sh dry-run
 Output ".vhs/dry-run-frames/"
-Set Width 1000
-Set Height 590
+Set Width 1220
+Set Height 740
 Source "scripts/demos/common.tape"
 
 Type `genimg "a minimal fox logo, NOT a grid" \` Enter
-Type `-m oai:gi2.5 \` Enter
-Type `-n 4 \` Enter
+Type `--model oai:gi2.5 \` Enter
+Type `--num 4 \` Enter
 Type `--deltas "line art, block print, brush stroke" \` Enter
-Type `-o fox.png \` Enter
-Type `-g \` Enter
+Type `--output fox.png \` Enter
+Type `--grid \` Enter
 Type `--dry-run`
 Sleep 800ms
 Enter

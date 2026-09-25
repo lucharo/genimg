@@ -2,7 +2,7 @@
 # Record a clip from the repository root with scripts/demos/render.sh <clip>.
 Set Shell bash
 Set FontFamily "JetBrains Mono"
-Set FontSize 18
+Set FontSize 22
 Set Padding 28
 Set Framerate 24
 Set TypingSpeed 35ms

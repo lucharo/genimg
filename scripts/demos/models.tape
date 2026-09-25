@@ -1,7 +1,7 @@
 # List the models your credentials reach (free). Render: scripts/demos/render.sh models
 Output ".vhs/models-frames/"
-Set Width 1300
-Set Height 560
+Set Width 1470
+Set Height 760
 Source "scripts/demos/common.tape"
 
 Type "genimg models"
