@@ -235,3 +235,46 @@ class StandaloneGridTests(unittest.TestCase):
       self.assertIsInstance(result.exception, SystemExit)
       self.assertIn("no images found", result.output)
       self.assertFalse(out.exists())
+
+
+_READY_AUTH = AuthInfo("direct", "env", "-", "GEMINI_API_KEY", True)
+
+
+class CommandLikePromptTests(unittest.TestCase):
+  """With a default model saved, a one-word prompt that reads as a command must not generate."""
+
+  def _invoke(self, *args: str):
+    with patch.object(cli.config, "load", return_value={"default_model": "gdm:nb2"}), \
+         patch.object(cli.auth_resolve, "info", return_value=_READY_AUTH), \
+         patch.object(cli, "run_generate") as run_generate:
+      result = CliRunner().invoke(cli._app, list(args))
+    return result, run_generate
+
+  def test_reserved_words_and_subcommand_typos_are_refused(self) -> None:
+    cases = {"help": "genimg --help", "version": "genimg --version", "list": "genimg models",
+             "login": "genimg setup", "modles": "genimg models", "Histroy": "genimg history"}
+    for word, suggestion in cases.items():
+      with self.subTest(word=word):
+        result, run_generate = self._invoke(word)
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertEqual(
+          " ".join(result.output.split()),
+          f"error: unknown command '{word}'; did you mean '{suggestion}'? "
+          f'To generate an image of that word, run genimg -- "{word}"',
+        )
+        run_generate.assert_not_called()
+
+  def test_double_dash_makes_the_word_a_prompt(self) -> None:
+    for word in ("modles", "models"):
+      with self.subTest(word=word):
+        result, _ = self._invoke("--", word, "--dry-run")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(f'prompt "{word}"', " ".join(result.output.split()))
+        self.assertIn("dry-run: no API call made", result.output)
+
+  def test_multi_word_and_ordinary_prompts_are_unaffected(self) -> None:
+    for prompt in ("help me draw a fox", "fox"):
+      with self.subTest(prompt=prompt):
+        result, _ = self._invoke(prompt, "--dry-run")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(f'prompt "{prompt}"', " ".join(result.output.split()))

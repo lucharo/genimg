@@ -1,6 +1,7 @@
 """Typer CLI. `genimg PROMPT [opts]` is the default action; subcommands are utilities."""
 from __future__ import annotations
 
+import difflib
 import time
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -32,6 +33,18 @@ from .interfaces import GenerateRequest, IImageGen
 
 console = Console()
 
+# One-word prompts that read as a command, never as a prompt: with a default model saved,
+# `genimg help` would otherwise buy an image of the word "help". Maps word → what to run.
+_COMMAND_WORDS = {
+  "help": "genimg --help", "version": "genimg --version",
+  "list": "genimg models", "ls": "genimg models",
+  "login": "genimg setup", "logout": "genimg setup", "init": "genimg setup",
+  "status": "genimg auth", "whoami": "genimg auth",
+  "settings": "genimg config", "profiles": "genimg config",
+  "install": "genimg --help", "uninstall": "genimg --help",
+  "update": "genimg --help", "upgrade": "genimg --help",
+}
+
 
 class _DefaultGroup(typer.core.TyperGroup):
   """Group that routes unknown first positional to a hidden default command,
@@ -39,13 +52,37 @@ class _DefaultGroup(typer.core.TyperGroup):
   default_cmd_name = "_run"
   subcommand_metavar = '"PROMPT" [OPTIONS] | SUBCOMMAND'
 
+  def parse_args(self, ctx, args):
+    # `genimg -- WORD` makes WORD a prompt even when it is a command name or a reserved word.
+    ctx.meta["genimg_literal_prompt"] = bool(args) and args[0] == "--"
+    return super().parse_args(ctx, args)
+
   def resolve_command(self, ctx, args):
-    try:
-      return super().resolve_command(ctx, args)
-    except click.UsageError:
-      args = list(args)
-      args.insert(0, self.default_cmd_name)
-      return super().resolve_command(ctx, args)
+    if not ctx.meta.get("genimg_literal_prompt"):
+      try:
+        return super().resolve_command(ctx, args)
+      except click.UsageError:
+        self._refuse_command_like_prompt(args[0])
+    return super().resolve_command(ctx, [self.default_cmd_name, *args])
+
+  def _refuse_command_like_prompt(self, word: str) -> None:
+    """Exit 2 when a one-word prompt is a reserved word or close to a subcommand."""
+    if len(word.split()) != 1:
+      return
+    lowered = word.lower()
+    suggestion = _COMMAND_WORDS.get(lowered)
+    if suggestion is None:
+      visible = [name for name, cmd in self.commands.items() if not cmd.hidden]
+      close = difflib.get_close_matches(lowered, visible, n=1, cutoff=0.75)
+      suggestion = f"genimg {close[0]}" if close else None
+    if suggestion is None:
+      return
+    console.print(
+      f"[red]error:[/red] unknown command {_rich_escape(repr(word))}; did you mean '{suggestion}'? "
+      f'To generate an image of that word, run genimg -- "{_rich_escape(word)}"',
+      soft_wrap=True,
+    )
+    raise typer.Exit(2)
 
   def get_help(self, ctx):
     """Render group help + default command's named option panels (so `genimg -h` shows everything).
