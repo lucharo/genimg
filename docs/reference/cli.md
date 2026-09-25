@@ -34,8 +34,8 @@ the installed version.
 | `--dry-run` | | | Print model, size, cost and output path; no API call. |
 
 genimg rejects a flag the model cannot use before it calls the provider, even on `--dry-run`.
-`codex:image` takes `-a` only, as a request in the prompt. A saved default the model cannot
-use is skipped; an explicit flag is never dropped.
+[Model-specific options](model-options.md) shows which flags each model family takes. A saved
+default the model cannot use is skipped; an explicit flag is never dropped.
 
 ## Verbs
 
