@@ -127,7 +127,7 @@ def _run(
   model: Annotated[str | None, typer.Option("-m", "--model", rich_help_panel=_PANEL_CORE,
     help="Model alias (gdm:nb2, oai:gi2, ...) or canonical id. Defaults to the user-set default; if none, pass -m or run `genimg setup`.")] = None,
   profile: Annotated[str | None, typer.Option("--profile", rich_help_panel=_PANEL_CORE,
-    help="Auth profile name from config.toml ([profiles.NAME]). Default: the provider's configured profile, else env auto-detection.")] = None,
+    help="Auth profile name from config.toml (\\[profiles.NAME]). Default: the provider's configured profile, else env auto-detection.")] = None,
   name: Annotated[str | None, typer.Option("--name", rich_help_panel=_PANEL_CORE,
     help="Optional human-readable generation name (duplicates allowed).")] = None,
   input: Annotated[Path | None, typer.Option("-i", "--input", rich_help_panel=_PANEL_CORE,
@@ -164,11 +164,11 @@ def _run(
   thinking_level: Annotated[str | None, typer.Option("--thinking", rich_help_panel=_PANEL_GOOGLE,
     help="minimal | high. Gemini 3.1 Flash Image only; high trades latency for more reasoning.")] = None,
   auth: Annotated[str | None, typer.Option("--auth", rich_help_panel=_PANEL_OPENAI,
-    help="azure | native — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
+    help="azure | direct — force an OpenAI auth mode for this run (default: profile, else env auto-detect).")] = None,
   region: Annotated[str | None, typer.Option("--region", rich_help_panel=_PANEL_GOOGLE,
     help="Override registry region (e.g. global, us-central1).")] = None,
   project: Annotated[str | None, typer.Option("--project", rich_help_panel=_PANEL_GOOGLE,
-    help="GCP project for Vertex (else config.gcp_project / GOOGLE_CLOUD_PROJECT / SA-JSON / gcloud).")] = None,
+    help="GCP project for Vertex (else the profile's project / GOOGLE_CLOUD_PROJECT / SA-JSON / gcloud).")] = None,
   dry_run: Annotated[bool, typer.Option("--dry-run", rich_help_panel=_PANEL_OUTPUT,
     help="Print model + estimated cost + params, don't call the API.")] = False,
 ):
@@ -209,8 +209,6 @@ def _run(
 
   provider = providers.get(spec.provider)
   caps = provider.capabilities(spec.model_id)
-  if auth == "direct":
-    auth = "native"  # pre-profile spelling
 
   # Apply config defaults for generation params (flag → config → built-in).
   resolution_was_explicit = resolution is not None

@@ -37,8 +37,7 @@ _LEGACY_MODES = {
   "google_direct":     ("google", "direct"),
   "google_vertex":     ("google", "vertex"),
   "google_vertex_adc": ("google", "vertex_adc"),
-  "openai_native":     ("openai", "native"),
-  "openai_direct":     ("openai", "native"),
+  "openai_direct":     ("openai", "direct"),
   "openai_azure":      ("openai", "azure"),
   "codex":             ("codex", "subscription"),
 }

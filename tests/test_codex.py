@@ -239,13 +239,13 @@ def test_setup_codex_choice(fake_codex, use):
 
 
 def test_setup_drops_unavailable_codex_and_its_default():
-  cfg = {"profiles": {"openai": {"provider": "openai", "auth": "native"}, "codex": dict(_CODEX_PROFILE)},
+  cfg = {"profiles": {"openai": {"provider": "openai", "auth": "direct"}, "codex": dict(_CODEX_PROFILE)},
          "default_model": "codex:image"}
   with patch.object(auth, "login_status", return_value=(False, "Log in")), \
        patch.object(setup.questionary, "confirm") as confirm:
     assert setup._setup_provider(providers.get("codex"), cfg) is False
   confirm.assert_not_called()
-  assert cfg == {"profiles": {"openai": {"provider": "openai", "auth": "native"}}}
+  assert cfg == {"profiles": {"openai": {"provider": "openai", "auth": "direct"}}}
 
 
 @pytest.mark.parametrize("available", [False, True])

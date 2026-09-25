@@ -95,7 +95,7 @@ class GenerationMetadataTests(unittest.TestCase):
     runner = CliRunner()
     with (
       patch.object(cli.config, "load", return_value={}),
-      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("native", "env", "-", "OPENAI_API_KEY", True)),
+      patch.object(cli.auth_resolve, "info", return_value=AuthInfo("direct", "env", "-", "OPENAI_API_KEY", True)),
     ):
       result = runner.invoke(cli._app, [
         "prompt", "-m", "oai:gi2", "--name", "   ", "--dry-run",
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
 class ProfileFlagTests(unittest.TestCase):
   def test_unknown_profile_fails_before_dry_run_banner(self) -> None:
-    with patch.object(cli.config, "load", return_value={"profiles": {"work": {"provider": "openai", "auth": "native"}}}):
+    with patch.object(cli.config, "load", return_value={"profiles": {"work": {"provider": "openai", "auth": "direct"}}}):
       result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "nope", "--dry-run"])
     self.assertEqual(result.exit_code, 1, result.output)
     output = " ".join(result.output.split())
@@ -134,6 +134,22 @@ class ProfileFlagTests(unittest.TestCase):
       result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--profile", "work", "--dry-run"])
     self.assertEqual(result.exit_code, 0, result.output)
     self.assertIn("openai/azure@work", result.output)
+
+
+class AuthFlagTests(unittest.TestCase):
+  def test_auth_direct_forces_openai_api_key_mode(self) -> None:
+    with patch.object(cli.config, "load", return_value={}), \
+         patch.dict("os.environ", {"OPENAI_API_KEY": "k", "AZURE_OPENAI_ENDPOINT": "https://x.openai.azure.com"}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--auth", "direct", "--dry-run"])
+    self.assertEqual(result.exit_code, 0, result.output)
+    self.assertIn("genimg openai/direct ", result.output)
+
+  def test_auth_native_is_rejected(self) -> None:
+    with patch.object(cli.config, "load", return_value={}), \
+         patch.dict("os.environ", {"OPENAI_API_KEY": "k"}):
+      result = CliRunner().invoke(cli._app, ["prompt", "-m", "oai:gi2", "--auth", "native", "--dry-run"])
+    self.assertEqual(result.exit_code, 1, result.output)
+    self.assertIn("--auth must be one of azure, direct, got 'native'", " ".join(result.output.split()))
 
 
 class CorruptConfigTests(unittest.TestCase):

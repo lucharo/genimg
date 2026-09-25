@@ -42,17 +42,17 @@ class OpenAIResolutionTests(_CleanEnv):
     self.assertIsInstance(p, ao.OpenAIAzure)
     self.assertEqual((p.name, p.source, p.endpoint()), ("work", "profile:work", "https://x.openai.azure.com"))
 
-  def test_config_native_profile_pins_api_openai_com(self) -> None:
+  def test_config_direct_profile_pins_api_openai_com(self) -> None:
     os.environ["OPENAI_BASE_URL"] = "https://proxy.example/v1"
-    p = resolve.resolve("openai", cfg=_cfg(oai={"provider": "openai", "auth": "native"}))
-    self.assertIsInstance(p, ao.OpenAINative)
-    self.assertEqual(p.base_url(), ao.NATIVE_BASE_URL)
+    p = resolve.resolve("openai", cfg=_cfg(oai={"provider": "openai", "auth": "direct"}))
+    self.assertIsInstance(p, ao.OpenAIDirect)
+    self.assertEqual(p.base_url(), ao.DIRECT_BASE_URL)
 
-  def test_env_native_honours_proxy_base_url(self) -> None:
+  def test_env_direct_honours_proxy_base_url(self) -> None:
     os.environ["OPENAI_API_KEY"] = "k"
     os.environ["OPENAI_BASE_URL"] = "https://proxy.example/v1"
     p = resolve.resolve("openai", cfg={})
-    self.assertIsInstance(p, ao.OpenAINative)
+    self.assertIsInstance(p, ao.OpenAIDirect)
     self.assertEqual((p.source, p.base_url()), ("env", "https://proxy.example/v1"))
 
   def test_env_fallback_azure(self) -> None:
@@ -65,10 +65,10 @@ class OpenAIResolutionTests(_CleanEnv):
   def test_forced_mode_reuses_configured_settings(self) -> None:
     os.environ["OPENAI_API_KEY"] = "k"
     cfg = _cfg(az={"provider": "openai", "auth": "azure", "endpoint": "https://x.openai.azure.com"},
-               oai={"provider": "openai", "auth": "native"})
+               oai={"provider": "openai", "auth": "direct"})
     p = resolve.resolve("openai", force_mode="azure", cfg=cfg)
     self.assertEqual((p.mode, p.source, p.settings), ("azure", "flag", {"endpoint": "https://x.openai.azure.com"}))
-    self.assertEqual(resolve.resolve("openai", force_mode="native", cfg=cfg).source, "flag")
+    self.assertEqual(resolve.resolve("openai", force_mode="direct", cfg=cfg).source, "flag")
 
   def test_named_profile_must_match_provider(self) -> None:
     cfg = _cfg(g={"provider": "google", "auth": "direct"})
@@ -88,9 +88,20 @@ class OpenAIResolutionTests(_CleanEnv):
     self.assertEqual((info.mode, info.ok), ("unset", False))
     self.assertIn("magic", info.hint)
 
+  def test_native_profile_is_an_unknown_mode(self) -> None:
+    os.environ["OPENAI_API_KEY"] = "k"  # env would work; the old spelling must not fall through to it
+    cfg = _cfg(oai={"provider": "openai", "auth": "native"})
+    with self.assertRaisesRegex(RuntimeError, "unknown auth mode 'native'"):
+      resolve.resolve("openai", cfg=cfg)
+
+  def test_native_forced_mode_is_rejected(self) -> None:
+    os.environ["OPENAI_API_KEY"] = "k"
+    with self.assertRaisesRegex(RuntimeError, r"openai has no auth mode 'native'; choose azure, direct\."):
+      resolve.resolve("openai", force_mode="native", cfg={})
+
   def test_profile_flag_wins_over_auth_flag(self) -> None:
     cfg = _cfg(az={"provider": "openai", "auth": "azure", "endpoint": "https://x.openai.azure.com"})
-    p = resolve.resolve("openai", profile_name="az", force_mode="native", cfg=cfg)
+    p = resolve.resolve("openai", profile_name="az", force_mode="direct", cfg=cfg)
     self.assertEqual((p.mode, p.source), ("azure", "profile:az"))
 
   def test_codex_without_login_reports_its_own_hint(self) -> None:
@@ -102,11 +113,11 @@ class OpenAIResolutionTests(_CleanEnv):
     with self.assertRaisesRegex(RuntimeError, "AZURE_OPENAI_API_KEY / OPENAI_API_KEY"):
       resolve.resolve("openai", cfg={})
 
-  def test_get_client_force_direct_alias(self) -> None:
+  def test_get_client_force_direct(self) -> None:
     os.environ["OPENAI_API_KEY"] = "k"
     with patch.object(config, "load", return_value={}):
       client = ao.get_client(force="direct")
-    self.assertEqual(str(client.base_url), ao.NATIVE_BASE_URL + "/")
+    self.assertEqual(str(client.base_url), ao.DIRECT_BASE_URL + "/")
 
 
 class GoogleResolutionTests(_CleanEnv):
