@@ -28,7 +28,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/lucharo/genimg"
-Documentation = "https://lucharo.github.io/genimg/"
+Documentation = "https://genimg.luischav.es/"
 Source = "https://github.com/lucharo/genimg"
 Issues = "https://github.com/lucharo/genimg/issues"
 
