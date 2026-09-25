@@ -197,9 +197,12 @@ genimg skills path [SKILL]
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | Usage or config error: bad flag combination, unknown model or profile |
-| `2` | The parser rejected an option, or a generation failed |
+| `1` | Usage or config error: bad flag combination, unknown model or profile, auth not ready on `--dry-run` |
+| `2` | The parser rejected the command line, or a generation failed |
 
+- A one-word prompt that reads as a command (`help`, `list`, a typo of `models`) exits `2` instead
+  of generating. `genimg -- WORD` generates it.
+- An empty prompt exits `2`.
 - A `2` alone does not prove a request reached the provider.
 - `--json` forms print only JSON. Other output is for people and may shorten your home directory to
   `~`.
