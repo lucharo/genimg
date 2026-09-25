@@ -852,6 +852,14 @@ def grid_cmd(
   if not images:
     console.print("[red]error:[/red] no images found in the given path(s).")
     raise typer.Exit(1)
+  from PIL import Image
+  for image in images:  # the extension is a name, not the content: an empty bad.png would be a broken card
+    try:
+      with Image.open(image):
+        pass  # reads the header only
+    except OSError:
+      console.print(f"[red]error:[/red] not a readable image: {_rich_escape(str(image))}", soft_wrap=True)
+      raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))
   # No cost_total — provenance of arbitrary input files is unknown, so any estimate
   # would be misleading. The footer is omitted rather than guessed.

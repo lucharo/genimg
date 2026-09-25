@@ -230,6 +230,19 @@ class StandaloneGridTests(unittest.TestCase):
       self.assertIn("not an image", result.output)
       self.assertFalse(out.exists())
 
+  def test_an_image_name_on_bytes_that_are_not_an_image_is_refused(self) -> None:
+    for content in (b"", b"not a png"):
+      with self.subTest(content=content), tempfile.TemporaryDirectory() as td:
+        (Path(td) / "good.webp").write_bytes(self.FOX.read_bytes())
+        bad = Path(td) / "bad.png"
+        bad.write_bytes(content)
+        out = Path(td) / "grid.html"
+        result = CliRunner().invoke(cli._app, ["grid", td, "--output", str(out)])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertEqual(" ".join(result.output.split()), f"error: not a readable image: {bad.resolve()}")
+        self.assertFalse(out.exists())
+
   def test_a_directory_without_images_is_refused_cleanly(self) -> None:
     with tempfile.TemporaryDirectory() as td:
       out = Path(td) / "grid.html"
