@@ -861,9 +861,9 @@ def grid_cmd(
   from PIL import Image
   for image in images:  # the extension is a name, not the content: an empty bad.png would be a broken card
     try:
-      with Image.open(image):
-        pass  # reads the header only
-    except OSError:
+      with Image.open(image) as im:
+        im.load()  # decode the pixels: a valid header over a truncated or corrupt payload is broken too
+    except (OSError, SyntaxError, ValueError):
       console.print(f"[red]error:[/red] not a readable image: {_rich_escape(str(image))}", soft_wrap=True)
       raise typer.Exit(1)
   target = output or metadata.auto_grid_path(metadata.make_id("grid", "standalone"))

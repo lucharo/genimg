@@ -231,7 +231,13 @@ class StandaloneGridTests(unittest.TestCase):
       self.assertFalse(out.exists())
 
   def test_an_image_name_on_bytes_that_are_not_an_image_is_refused(self) -> None:
-    for content in (b"", b"not a png"):
+    import io
+
+    from PIL import Image
+    png = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 80, 20)).save(png, format="PNG")
+    truncated = png.getvalue()[: len(png.getvalue()) // 2]  # valid header, corrupt pixel data
+    for content in (b"", b"not a png", truncated):
       with self.subTest(content=content), tempfile.TemporaryDirectory() as td:
         (Path(td) / "good.webp").write_bytes(self.FOX.read_bytes())
         bad = Path(td) / "bad.png"

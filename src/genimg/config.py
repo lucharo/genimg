@@ -110,15 +110,16 @@ def clear_default_model() -> None:
   save(data)
 
 
-def _editor_command(editor: str, *, windows: bool = os.name == "nt") -> list[str]:
-  """$EDITOR as argv. It is a command line (EDITOR="code --wait"), unless it names an existing file
-  (a path with spaces). Windows splits without POSIX escapes, so C:\\...\\notepad.exe keeps its
-  backslashes, and drops the quotes around a quoted path."""
+def _editor_command(editor: str, *, windows: bool = os.name == "nt") -> list[str] | str:
+  """$EDITOR as a command. It is a command line (EDITOR="code --wait"), unless it names an existing
+  file (a path with spaces). On POSIX it is split like a shell would. On Windows it stays one string
+  for CreateProcess, so the editor parses its own arguments the Windows way: backslashes, quoted
+  paths and quoted option values (--user-data-dir="C:\\Editor Data") all survive."""
   import shlex
   if os.path.isfile(editor):
     return [editor]
   if windows:
-    return [part.strip('"') for part in shlex.split(editor, posix=False)]
+    return editor
   return shlex.split(editor)
 
 
@@ -128,4 +129,7 @@ def open_in_editor() -> None:
   editor = _editor_command(os.getenv("EDITOR") or "") or ["vi"]
   CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
   CONFIG_PATH.touch(exist_ok=True)
-  subprocess.run([*editor, str(CONFIG_PATH)])
+  if isinstance(editor, str):
+    subprocess.run(f"{editor} {subprocess.list2cmdline([str(CONFIG_PATH)])}")
+  else:
+    subprocess.run([*editor, str(CONFIG_PATH)])
