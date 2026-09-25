@@ -12,7 +12,7 @@ description: Generate and edit raster images with the genimg CLI (OpenAI GPT Ima
 1. Load the `genimg-preferences` skill if it exists. Its taste overrides this skill's defaults; the current request overrides both. When the user states a lasting preference for all their images, record it as [references/preferences.md](references/preferences.md) describes.
 2. Pass `-m` on every call. genimg has no built-in model; `genimg models get-default` shows one the user saved.
 3. If a provider is not authenticated, `genimg auth --modes` names the env vars each auth mode reads; `genimg setup` is an interactive wizard for the user to run. `genimg auth --check` runs a tiny live generation on the Google and OpenAI providers' fixed canary models (Codex: login only), which proves the provider, not the model you pick; adding `--json` skips that probe.
-4. Preflight any call with `-n > 1`, `-q high` or `-r 4K` with `--dry-run`: it prints model, resolved size, cost and planned paths without calling the API.
+4. Preflight any call with `-n > 1`, `-q high` or `-r 4K` with `--dry-run`: it prints model, resolved size, cost and planned paths without calling the API, and exits 1 with an `auth ✗` line when the run would fail on auth.
 
 ## Choosing a model
 

@@ -355,7 +355,13 @@ def _run(
     console.print("[yellow]heads-up:[/yellow] -q high on gpt-image-2 is 30-90s/image. Try -q medium or -q low for speed.")
 
   if dry_run:
+    # Dry-run is the preflight: a run that would fail on auth says so and exits 1.
+    if not auth_info.ok:
+      hint = auth_info.hint or "not ready; see `genimg auth`."
+      console.print(f"  [dim]auth[/dim]     [red]✗[/red] {_rich_escape(hint)}", soft_wrap=True)
     console.print("[dim]dry-run: no API call made.[/dim]")
+    if not auth_info.ok:
+      raise typer.Exit(1)
     return
 
   t0 = time.time()

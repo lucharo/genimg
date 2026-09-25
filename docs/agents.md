@@ -31,7 +31,7 @@ skills to install into this project; `--global` installs for your user instead, 
 | --- | --- |
 | `genimg auth --json` | which providers are ready |
 | `genimg models --json` | which models your credentials list |
-| `genimg PROMPT … --dry-run` | model, size, cost and paths, with no API call |
+| `genimg PROMPT … --dry-run` | model, size, cost and paths, with no API call; exit `1` and an `auth ✗` line when auth is not ready |
 | `genimg history --json` | past generations: prompt, model, paths, cost |
 | `genimg grid *.png` | an HTML page for a human to pick from |
 | `~/.genimg/metadata/<id>.json` | one generation: absolute paths, prompt, parameters, per-image deltas, cost |

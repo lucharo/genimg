@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -157,7 +158,7 @@ class ModelOptionDryRunTests(unittest.TestCase):
 
   def _dry_run(self, *args: str) -> tuple[int, str]:
     with patch.object(cli.config, "load", return_value={}), \
-         patch.dict("os.environ", {"OPENAI_API_KEY": "k"}):
+         patch.object(cli.auth_resolve, "info", return_value=AuthInfo("direct", "env", "-", "OPENAI_API_KEY", True)):
       result = CliRunner().invoke(cli._app, ["prompt", *args, "--dry-run"])
     return result.exit_code, " ".join(result.output.split())
 
@@ -312,3 +313,26 @@ class DefaultQualityTests(unittest.TestCase):
     exit_code, output = self._dry_run("-m", "oai:gi2", "-q", "xhigh")
     self.assertEqual(exit_code, 1, output)
     self.assertIn("--quality for gpt-image-2 must be one of", output)
+
+
+class DryRunAuthPreflightTests(unittest.TestCase):
+  """Real auth resolution (OpenAI direct mode reads only env), no network."""
+
+  def _dry_run(self, env: dict[str, str]) -> tuple[int, str]:
+    with patch.object(cli.config, "load", return_value={}), patch.dict("os.environ", env):
+      for var in ("OPENAI_API_KEY", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "OPENAI_BASE_URL"):
+        if var not in env:
+          os.environ.pop(var, None)
+      result = CliRunner().invoke(cli._app, ["a fox", "-m", "oai:gi2", "--auth", "direct", "--dry-run"])
+    return result.exit_code, " ".join(result.output.split())
+
+  def test_auth_not_ready_fails_the_preflight_with_the_auth_hint(self) -> None:
+    exit_code, output = self._dry_run({})
+    self.assertEqual(exit_code, 1, output)
+    self.assertIn("auth ✗ Direct mode needs OPENAI_API_KEY in env. dry-run: no API call made.", output)
+
+  def test_ready_auth_adds_no_auth_line(self) -> None:
+    exit_code, output = self._dry_run({"OPENAI_API_KEY": "k"})
+    self.assertEqual(exit_code, 0, output)
+    self.assertNotIn("auth ✗", output)
+    self.assertTrue(output.endswith("dry-run: no API call made."), output)

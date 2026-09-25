@@ -27,7 +27,7 @@ genimg "PROMPT" [REF_PATHS...] [OPTIONS]
 | `--output` | `-o` | path | Default `~/.genimg/generations/<id>.png`, with `_1` to `_n` for several takes. |
 | `--grid` | `-g` | | With 2 or more takes, also writes an HTML grid. |
 | `--open` | | | Opens the grid, or the image, in the browser. |
-| `--dry-run` | | | Prints model, size, cost and output path. No API call. |
+| `--dry-run` | | | Prints model, size, cost and output path. No API call. Exits `1` when auth is not ready. |
 | `--quality` | `-q` | `low medium high auto`; GPT Image 2.5 adds `xhigh max` | OpenAI only. Default `medium`. |
 | `--auth` | | `azure` \| `direct` | OpenAI only. Forces an auth mode for this run. |
 | `--thinking` | | `minimal` \| `high` | Gemini 3.1 Flash Image and Flash Lite Image only. |
