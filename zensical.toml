@@ -30,6 +30,7 @@ nav = [
   { "Reference" = [
     { "CLI" = "reference/cli.md" },
     { "Models" = "reference/models.md" },
+    { "Choosing a model" = "reference/choosing-a-model.md" },
     { "config.toml" = "reference/config.md" },
   ] },
   { "FAQ" = "faq.md" },

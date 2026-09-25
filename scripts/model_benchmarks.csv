@@ -1,0 +1,28 @@
+alias,metric,value,rank,listed_as,setting,as_of,source_url,note
+oai:gi2.5,aa_elo,1196,1,GPT Image 2.5 Sunburst (max),max,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi2.5-flare,aa_elo,1190,2,GPT Image 2.5 Flare (max),max,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi2,aa_elo,1171,3,GPT Image 2 (high),high,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+gdm:nb2,aa_elo,1123,6,Nano Banana 2 (Gemini 3.1 Flash Image),,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi1.5,aa_elo,1104,8,GPT Image 1.5 (high),high,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+gdm:nbp,aa_elo,1101,11,Nano Banana Pro (Gemini 3 Pro Image),,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+gdm:nb2-lite,aa_elo,1093,13,Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image),,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi1,aa_elo,1011,34,GPT Image 1 (high),high,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi1-mini,aa_elo,914,86,GPT Image 1 Mini (medium),medium,2026-09-25,https://artificialanalysis.ai/image/leaderboard/text-to-image,
+oai:gi2.5,aa_seconds,109.1,,GPT Image 2.5 Sunburst (max),max,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+oai:gi2.5-flare,aa_seconds,55.2,,GPT Image 2.5 Flare (max),max,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+oai:gi2,aa_seconds,118.9,,GPT Image 2 (high),high,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+gdm:nb2,aa_seconds,8.9,,Nano Banana 2 (Gemini 3.1 Flash Image),,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+oai:gi1.5,aa_seconds,28.6,,GPT Image 1.5 (high),high,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+gdm:nbp,aa_seconds,16.9,,Nano Banana Pro (Gemini 3 Pro Image),,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+gdm:nb2-lite,aa_seconds,3.3,,Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image),,2026-09-25,https://artificialanalysis.ai/image/models,median of the trailing 3 days at 1024x1024
+oai:gi1,aa_seconds,,,GPT Image 1 (high),high,2026-09-25,https://artificialanalysis.ai/image/models,Artificial Analysis publishes no generation time for it
+oai:gi1-mini,aa_seconds,,,GPT Image 1 Mini (medium),medium,2026-09-25,https://artificialanalysis.ai/image/models,Artificial Analysis publishes no generation time for it
+oai:gi2.5,arena_score,1424,1,gpt-image-2.5-sunburst,,2026-09-24,https://arena.ai/leaderboard/text-to-image,preliminary
+oai:gi2.5-flare,arena_score,1401,2,gpt-image-2.5-flare,,2026-09-24,https://arena.ai/leaderboard/text-to-image,preliminary
+oai:gi2,arena_score,1383,3,gpt-image-2 (medium),medium,2026-09-24,https://arena.ai/leaderboard/text-to-image,
+gdm:nb2-lite,arena_score,1250,13,gemini-3.1-flash-lite-image (nano-banana-2-lite),,2026-09-24,https://arena.ai/leaderboard/text-to-image,
+gdm:nbp,arena_score,1234,16,gemini-3-pro-image-preview (nano-banana-pro),,2026-09-24,https://arena.ai/leaderboard/text-to-image,the 1K preview entry; a separate 2K entry scores 1247
+oai:gi1,arena_score,1116,47,gpt-image-1,,2026-09-24,https://arena.ai/leaderboard/text-to-image,
+oai:gi1-mini,arena_score,1110,52,gpt-image-1-mini,,2026-09-24,https://arena.ai/leaderboard/text-to-image,
+gdm:nb2,arena_score,,,gemini-3.1-flash-image (nano-banana-2) [web-search],,2026-09-24,https://arena.ai/leaderboard/text-to-image,listed only with web search on; genimg does not enable it
+oai:gi1.5,arena_score,,,gpt-image-1.5-high-fidelity,,2026-09-24,https://arena.ai/leaderboard/text-to-image,listed only as a high-fidelity variant; genimg does not set fidelity
