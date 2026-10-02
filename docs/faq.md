@@ -65,3 +65,19 @@ Yes. Without a terminal on stdin, `genimg setup` asks nothing: it saves each pro
 already in the environment and passes a free check, and exits `1` if none does. `--model gdm:nb2`
 also saves a default. Keys are never passed as arguments. See
 [Getting started](getting-started.md).
+
+## How do I install the skills?
+
+With the [skills](https://github.com/vercel-labs/skills) CLI, which needs Node.js:
+
+```bash
+npx skills add lucharo/genimg
+```
+
+`npx skills update` refreshes them. `genimg skills` only prints this command; there is no install
+subcommand, so one tool owns your skill links. See [Skills](skills/index.md).
+
+## Which Python versions does genimg support?
+
+3.11 to 3.14, and CI runs the tests on all four. `uv tool install genimg` picks a supported Python
+for you.
