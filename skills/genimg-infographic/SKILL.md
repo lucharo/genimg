@@ -1,6 +1,6 @@
 ---
 name: genimg-infographic
-description: "Turn a text, file, URL or topic into one publication-ready raster infographic with GenIMG. Use when the user asks for an infographic, visual summary, high-density visual guide, 信息图 or 可视化. Skip it for charts whose numbers must plot exactly (draw those in code)."
+description: "Turn a text, file, URL or topic into one publication-ready raster infographic with GenIMG. Use whenever the user asks for an infographic or an explainer image (a picture that explains a result, plan, process or concept), a visual summary, a high-density visual guide, 信息图 or 可视化, even when they do not name GenIMG. Skip it for charts whose numbers must plot exactly (draw those in code)."
 ---
 
 # GenIMG Infographic
