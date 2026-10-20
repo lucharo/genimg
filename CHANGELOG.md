@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/lucharo/genimg/compare/genimg-v0.1.1...genimg-v0.1.2) (2026-10-20)
+
+
+### Documentation
+
+* **faq:** how to install the skills, and which Python versions are supported ([#106](https://github.com/lucharo/genimg/issues/106)) ([7247866](https://github.com/lucharo/genimg/commit/7247866301f5919125b6b60a40efb9b7377bfc1b))
+* **skills:** genimg-infographic fires for any infographic or explainer image request ([#108](https://github.com/lucharo/genimg/issues/108)) ([0d27d11](https://github.com/lucharo/genimg/commit/0d27d11954e377cbacff1a939ce7e853fe8327b1))
+
 ## [0.1.1](https://github.com/lucharo/genimg/compare/genimg-v0.1.0...genimg-v0.1.1) (2026-09-25)
 
 
