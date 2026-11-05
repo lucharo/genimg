@@ -31,6 +31,13 @@ default, run `genimg models set-default gdm:nb2`.
 Yes, as `oai:gi2.5` (Sunburst) or `oai:gi2.5-flare`, with an OpenAI or Azure OpenAI key. Whether
 your account or deployment serves them varies; `genimg models` shows what it lists.
 
+## Can I use GPT Image 2.6?
+
+Yes, as `oai:gi2.6` (Sunburst) or `oai:gi2.6-flare`, with all five quality options from
+`low` to `max`, plus `auto`. Azure needs deployments with the exact model ids
+`gpt-image-2.6-sunburst` and `gpt-image-2.6-flare`; availability varies by region and account.
+Use an OpenAI direct profile where Azure does not yet offer them.
+
 ## Draw Studio says `Failed to fetch`
 
 Run `genimg draw` again and open the URL it prints. The tab has probably outlived its local server.

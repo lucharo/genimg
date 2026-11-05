@@ -27,6 +27,10 @@ _REGISTRY: dict[str, ModelSpec | str] = {
   # Availability varies by account and Azure deployment — run `genimg models` to see
   # what your credentials can actually reach. Some ids (e.g. gpt-image-1.5) may be
   # OpenAI-direct only and absent from a given Azure resource.
+  "oai:gpt-image-2.6-sunburst": ModelSpec("openai", "gpt-image-2.6-sunburst", quality_rank=10),
+  "oai:gi2.6":            "oai:gpt-image-2.6-sunburst",
+  "oai:gpt-image-2.6-flare": ModelSpec("openai", "gpt-image-2.6-flare", quality_rank=9),
+  "oai:gi2.6-flare":      "oai:gpt-image-2.6-flare",
   "oai:gpt-image-2.5-sunburst": ModelSpec("openai", "gpt-image-2.5-sunburst", quality_rank=10),
   "oai:gi2.5":            "oai:gpt-image-2.5-sunburst",
   "oai:gpt-image-2.5-flare": ModelSpec("openai", "gpt-image-2.5-flare", quality_rank=9),

@@ -27,10 +27,11 @@ listings can keep advertising a `-preview` id after it stops serving.
     ```
 
 2. Add a price if you want cost estimates. Google prices live in `_PER_IMAGE` in
-   `providers/google.py`. GPT Image 2 and 2.5 use token grids in `_TOKEN_GRID` in
+   `providers/google.py`. GPT Image 2, 2.5 and 2.6 use token grids in `_TOKEN_GRID` in
    `providers/openai.py`, copied from
    [OpenAI's cost calculator](https://developers.openai.com/api/docs/guides/image-generation);
-   older OpenAI models use `_LEGACY_PER_IMAGE`. An unpriced model shows `unknown`.
+   older OpenAI models use `_LEGACY_PER_IMAGE`. GPT Image 2.6 shares the 2.5 grid and applies
+   its own billable-token multipliers after pixel-count rounding. An unpriced model shows `unknown`.
 3. If the model takes different sizes or qualities, update the provider's `capabilities()`, and
    `quality_options()` for OpenAI. The CLI and Draw Studio both read them.
 4. Add a resolve test in `tests/test_registry.py`, and a price test in `tests/test_cost.py`.
