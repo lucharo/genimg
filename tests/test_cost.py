@@ -20,6 +20,21 @@ MEASURED_TOKENS = [
 
 
 class OpenAITokenTests(unittest.TestCase):
+  def test_gpt_image_26_billable_tokens_match_provider_calculator(self) -> None:
+    # OpenAI's GptImageTokenCalculator, read 2026-11-05: 2.6 multiplies
+    # the 2.5 grid's low by 4.2 and medium by 3.3, then rounds to nearest.
+    for model in ("gpt-image-2.6-sunburst", "gpt-image-2.6-flare-2026-11-04"):
+      with self.subTest(model=model):
+        self.assertEqual(oai.token_family(model), "gpt-image-2.6")
+        self.assertEqual(
+          {q: oai.output_tokens(model, 1024, 1024, q)
+           for q in ("low", "medium", "high", "xhigh", "max", "auto")},
+          {"low": 823, "medium": 1449, "high": 1756,
+           "xhigh": 3122, "max": 7024, "auto": 1449},
+        )
+        self.assertAlmostEqual(oai.price_at(model, 1024, 1024, "medium"), 0.04347)
+        self.assertEqual(oai.quality_options(model), ["low", "medium", "high", "xhigh", "max", "auto"])
+
   def test_measured_token_counts(self) -> None:
     for model, width, height, quality, expected in MEASURED_TOKENS:
       with self.subTest(model=model, size=f"{width}x{height}", quality=quality):

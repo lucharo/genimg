@@ -22,6 +22,18 @@ class RegistryResolveTests(unittest.TestCase):
     alias, _ = registry.resolve("oai:gi2")
     self.assertEqual(alias, "oai:gpt-image-2")
 
+  def test_gpt_image_26_aliases_and_bare_ids(self) -> None:
+    for short, model, rank in (
+      ("oai:gi2.6", "gpt-image-2.6-sunburst", 10),
+      ("oai:gi2.6-flare", "gpt-image-2.6-flare", 9),
+    ):
+      for name in (short, model, f"oai:{model}"):
+        with self.subTest(name=name):
+          self.assertEqual(
+            registry.resolve(name),
+            (f"oai:{model}", registry.ModelSpec("openai", model, quality_rank=rank)),
+          )
+
   def test_resolve_bare_model_id(self) -> None:
     _, spec = registry.resolve("gpt-image-2")
     self.assertEqual(spec.model_id, "gpt-image-2")

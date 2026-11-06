@@ -20,6 +20,8 @@
 
 | Alias | Model id | Cost per 1K square image by `--quality` |
 | --- | --- | --- |
+| `oai:gi2.6` | [`gpt-image-2.6-sunburst`](https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst) | low $0.025 · medium $0.043 · high $0.053 · xhigh $0.094 · max $0.211 |
+| `oai:gi2.6-flare` | [`gpt-image-2.6-flare`](https://developers.openai.com/api/docs/models/gpt-image-2.6-flare) | low $0.025 · medium $0.043 · high $0.053 · xhigh $0.094 · max $0.211 |
 | `oai:gi2.5` | [`gpt-image-2.5-sunburst`](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst) | low $0.006 · medium $0.013 · high $0.053 · xhigh $0.094 · max $0.211 |
 | `oai:gi2.5-flare` | [`gpt-image-2.5-flare`](https://developers.openai.com/api/docs/models/gpt-image-2.5-flare) | low $0.006 · medium $0.013 · high $0.053 · xhigh $0.094 · max $0.211 |
 | `oai:gi2` | [`gpt-image-2`](https://developers.openai.com/api/docs/models/gpt-image-2) | low $0.006 · medium $0.053 · high $0.211 |
@@ -29,7 +31,7 @@
 
 `--quality` defaults to `medium`; `auto` is estimated as `medium`.
 
-GPT Image 2 and 2.5 take any size in this table; GPT Image 1, 1.5 and 1 mini take only 1K `1:1`.
+GPT Image 2, 2.5 and 2.6 take any size in this table; GPT Image 1, 1.5 and 1 mini take only 1K `1:1`.
 genimg rejects any other pair before the request:
 
 | `--resolution` | `1:1` | `4:3` / `3:4` | `16:9` / `9:16` |
@@ -38,11 +40,13 @@ genimg rejects any other pair before the request:
 | 2K | 2048×2048 | 2048×1536 | 2048×1152 |
 | 4K | 2880×2880 | ❌ | 3840×2160 |
 
-- On GPT Image 2 and 2.5 a wide 2K image can cost less than a 1K square.
+- On GPT Image 2, 2.5 and 2.6 a wide 2K image can cost less than a 1K square.
 - `--dry-run` prints the estimate for any combination.
 
-Cost follows pixel count and quality: GPT Image 2 and 2.5 count output tokens the way OpenAI's
-calculator does, and the older models use OpenAI's per-image price for 1024×1024.
+Cost follows pixel count and quality: GPT Image 2, 2.5 and 2.6 count billable output tokens the way
+OpenAI's calculator does, and the older models use OpenAI's per-image price for 1024×1024.
+GPT Image 2.6 applies a 4.2× multiplier at `low` and 3.3× at `medium` after the 2.5 grid's
+token calculation; higher qualities use the same counts as 2.5.
 
 ```console
 $ genimg "a lighthouse at dusk" \
@@ -82,6 +86,7 @@ genimg records an API-equivalent price range for Codex runs, for comparison only
 | --- | --- | --- |
 | Google | [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing), [Vertex AI pricing](https://cloud.google.com/vertex-ai/generative-ai/pricing) | 25 September 2026 |
 | OpenAI | [API pricing](https://developers.openai.com/api/docs/pricing), [image cost calculator](https://developers.openai.com/api/docs/guides/image-generation#calculating-costs) | 24 September 2026 |
+| GPT Image 2.6 | [API pricing](https://developers.openai.com/api/docs/pricing), [image cost calculator](https://developers.openai.com/api/docs/guides/image-generation#calculating-costs) | 5 November 2026 |
 | Codex | [Codex pricing](https://learn.chatgpt.com/docs/pricing) | 25 September 2026 |
 
 Prices are estimates. Your bill depends on tier, batch discounts and the exact pixels returned.
