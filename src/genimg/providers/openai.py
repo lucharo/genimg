@@ -22,7 +22,7 @@ from ..interfaces import GenerateRequest, IImageGen, ProbeResult
 from .base import Capabilities, Provider
 from .listing import error_results, listed_model_ids, results_from_model_ids
 
-# 2D map: (resolution, aspect) → WxH for gpt-image-2 and 2.5. Each entry honors the
+# 2D map: (resolution, aspect) → WxH for gpt-image-2, 2.5 and 2.6. Each entry honors the
 # requested aspect EXACTLY (no 3:2 substitutions for 4:3 or 16:9).
 # Constraints: edges mult of 16, max edge ≤3840, total px in [655_360, 8_294_400].
 # Combos NOT in this map are rejected by the CLI (Capabilities.supports_size) and by
@@ -44,7 +44,7 @@ _SIZE_MAP = {
   ("4K", "9:16"): "2160x3840",
 }
 # GPT Image 1, 1 mini and 1.5 take only 1024x1024, 1536x1024 and 1024x1536; arbitrary WxH is
-# gpt-image-2 and 2.5 only (`size` in
+# gpt-image-2, 2.5 and 2.6 (`size` in
 # https://developers.openai.com/api/reference/resources/images/methods/generate, read 2026-09-25).
 # Of genimg's (resolution, aspect) pairs, only 1K 1:1 lands on one of those sizes.
 _LEGACY_SIZE_MAP = {("1K", "1:1"): "1024x1024"}
@@ -59,7 +59,7 @@ _INPUT_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _MAX_INPUT_MB = 50
 _MAX_INPUTS = 16
 
-# GPT Image 2 and 2.5 are priced per image-output token. The count comes from OpenAI's own
+# GPT Image 2, 2.5 and 2.6 are priced per image-output token. The count comes from OpenAI's own
 # calculator (the script behind
 # https://developers.openai.com/api/docs/guides/image-generation#calculating-costs, served as
 # /_astro/GptImageTokenCalculator.react.<hash>.js; read 2026-09-24): edge * round(edge / aspect)
@@ -71,7 +71,11 @@ _MAX_INPUTS = 16
 _TOKEN_GRID = {
   "gpt-image-2":   {"low": 16, "medium": 48, "high": 96},
   "gpt-image-2.5": {"low": 16, "medium": 24, "high": 48, "xhigh": 64, "max": 96},
+  "gpt-image-2.6": {"low": 16, "medium": 24, "high": 48, "xhigh": 64, "max": 96},
 }
+# OpenAI's calculator, read 2026-11-05 (GptImageTokenCalculator.react.C8YeiYNa.js),
+# applies these billable-token multipliers after the grid's pixel-count rounding.
+_GPT_IMAGE_26_MULTIPLIERS = {"low": 4.2, "medium": 3.3}
 OUTPUT_USD_PER_M = 30.0
 # Pixel-count range the API accepts; an output outside it was not produced at that size.
 _PIXEL_RANGE = (655_360, 8_294_400)
@@ -94,11 +98,14 @@ _LEGACY_PER_IMAGE = {
   },
 }
 _GPT_IMAGE_25 = re.compile(r"gpt-image-2\.5-(sunburst|flare)(-\d{4}-\d{2}-\d{2})?")
+_GPT_IMAGE_26 = re.compile(r"gpt-image-2\.6-(sunburst|flare)(-\d{4}-\d{2}-\d{2})?")
 _GPT_IMAGE_2 = re.compile(r"gpt-image-2(-\d{4}-\d{2}-\d{2})?")
 
 
 def token_family(model_id: str) -> str | None:
   """Calculator family for a model id (dated snapshots included), or None."""
+  if _GPT_IMAGE_26.fullmatch(model_id):
+    return "gpt-image-2.6"
   if _GPT_IMAGE_25.fullmatch(model_id):
     return "gpt-image-2.5"
   if _GPT_IMAGE_2.fullmatch(model_id):
@@ -123,7 +130,11 @@ def output_tokens(model_id: str, width: int, height: int, quality: str | None = 
   floor = math.floor(raw)
   # A half rounds to even, as the calculator does; everything else rounds to nearest.
   short_tokens = floor + floor % 2 if raw - floor == 0.5 else round(raw)
-  return math.ceil(edge * short_tokens * (2_000_000 + width * height) / 4_000_000)
+  tokens = math.ceil(edge * short_tokens * (2_000_000 + width * height) / 4_000_000)
+  if family == "gpt-image-2.6":
+    # JavaScript Math.round rounds positive halves up, unlike Python's round.
+    return math.floor(tokens * _GPT_IMAGE_26_MULTIPLIERS.get(_effective_quality(quality), 1) + 0.5)
+  return tokens
 
 
 def price_at(model_id: str, width: int, height: int, quality: str | None = None) -> float | None:
@@ -149,8 +160,8 @@ def api_size(width: int | None, height: int | None) -> bool:
 
 
 def quality_options(model_id: str) -> list[str]:
-  """Documented quality levels, including the 2.5 models' dated snapshots."""
-  if re.fullmatch(r"gpt-image-2\.5-(sunburst|flare)(-\d{4}-\d{2}-\d{2})?", model_id):
+  """Documented quality levels, including the 2.5/2.6 models' dated snapshots."""
+  if token_family(model_id) in ("gpt-image-2.5", "gpt-image-2.6"):
     return ["low", "medium", "high", "xhigh", "max", "auto"]
   return ["low", "medium", "high", "auto"]
 
